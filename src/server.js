@@ -11,6 +11,7 @@ initDb();
 
 const httpServer = createServer(app);
 const io = initSocket(httpServer);
+app.set('io', io);
 
 startListeners(io);
 

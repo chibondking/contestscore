@@ -27,6 +27,10 @@ function getDb() {
   return db;
 }
 
+function closeDb() {
+  if (db) { db.close(); db = null; }
+}
+
 function runMigrations() {
   db.exec(`CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY)`);
 
@@ -47,4 +51,4 @@ function runMigrations() {
   }
 }
 
-module.exports = { initDb, getDb };
+module.exports = { initDb, getDb, closeDb };

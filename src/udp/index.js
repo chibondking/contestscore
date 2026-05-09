@@ -2,7 +2,7 @@ const EventEmitter = require('events');
 const { createRadioListener } = require('./radioListener');
 const { createContactListener } = require('./contactListener');
 const { createScoreListener } = require('./scoreListener');
-const { upsertRadio, insertQso, insertScore, cacheCallsign } = require('../db/queries');
+const { upsertRadio, insertQso, deleteQso, insertScore, cacheCallsign } = require('../db/queries');
 const config = require('../../config/default.json');
 
 const emitter = new EventEmitter();
@@ -18,6 +18,11 @@ function startListeners(io) {
     io.emit('contact:new', data);
   });
 
+  emitter.on('contact:delete', (data) => {
+    deleteQso(data);
+    io.emit('contact:delete', data);
+  });
+
   emitter.on('score:update', (data) => {
     insertScore(data);
     io.emit('score:update', data);
@@ -28,11 +33,11 @@ function startListeners(io) {
     io.emit('lookup:result', data);
   });
 
-  const radioPorts = Number(process.env.UDP_RADIO_PORT) || config.udp.radioPort;
+  const radioPort = Number(process.env.UDP_RADIO_PORT) || config.udp.radioPort;
   const contactPort = Number(process.env.UDP_CONTACT_PORT) || config.udp.contactPort;
   const scorePort = Number(process.env.UDP_SCORE_PORT) || config.udp.scorePort;
 
-  createRadioListener(radioPorts, emitter);
+  createRadioListener(radioPort, emitter);
   createContactListener(contactPort, emitter);
   createScoreListener(scorePort, emitter);
 }

@@ -1,16 +1,23 @@
 const xml2js = require('xml2js');
 
-const parser = new xml2js.Parser({ explicitArray: false, trim: true });
+const PARSE_OPTS = { explicitArray: false, trim: true };
+
+function toBool(val) {
+  if (val == null) return 0;
+  const s = String(val).toLowerCase();
+  return s === 'true' || s === '1' ? 1 : 0;
+}
 
 async function parseScore(buf) {
-  const result = await parser.parseStringPromise(buf.toString());
+  const result = await xml2js.parseStringPromise(buf.toString(), PARSE_OPTS);
   const s = result.Score;
+  if (!s) throw new Error('Not a Score packet');
   return {
     contest:     s.contest || '',
     call:        s.call || '',
     operators:   s.operators || '',
     power:       s.power || '',
-    assisted:    s.assisted === '1' ? 1 : 0,
+    assisted:    toBool(s.assisted),
     transmitted: s.transmitted || '',
     band:        s.band || '',
     mode:        s.mode || '',
