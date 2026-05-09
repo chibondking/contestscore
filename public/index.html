@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>contestscore</title>
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body x-data="dashboard()" x-init="init()">
+
+  <header class="header">
+    <h1>contestscore</h1>
+    <span class="status" :class="connected ? 'status--ok' : 'status--err'">
+      <span x-text="connected ? 'live' : 'disconnected'"></span>
+    </span>
+  </header>
+
+  <main class="grid">
+
+    <section class="card" id="score">
+      <h2>Score</h2>
+      <div class="score-row">
+        <div class="metric">
+          <span class="metric__value" x-text="score.qsos ?? '—'"></span>
+          <span class="metric__label">QSOs</span>
+        </div>
+        <div class="metric">
+          <span class="metric__value" x-text="score.mults ?? '—'"></span>
+          <span class="metric__label">Mults</span>
+        </div>
+        <div class="metric">
+          <span class="metric__value" x-text="score.total ?? '—'"></span>
+          <span class="metric__label">Total</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="radios">
+      <h2>Radios</h2>
+      <template x-for="r in radios" :key="r.radio_nr">
+        <div class="radio-row">
+          <span class="radio-nr" x-text="'R' + r.radio_nr"></span>
+          <span class="radio-freq" x-text="r.freq ? (r.freq / 1000).toFixed(1) + ' kHz' : '—'"></span>
+          <span class="radio-mode" x-text="r.mode || '—'"></span>
+          <span class="radio-op" x-text="r.op_call || '—'"></span>
+          <span class="radio-run" x-show="r.is_running">RUN</span>
+        </div>
+      </template>
+      <p x-show="radios.length === 0" class="empty">No radio data yet</p>
+    </section>
+
+    <section class="card card--wide" id="log">
+      <h2>Recent QSOs</h2>
+      <table class="qso-table">
+        <thead>
+          <tr>
+            <th>Call</th><th>Band</th><th>Mode</th><th>Operator</th><th>Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="q in qsos.slice(0, 50)" :key="q.id ?? q.call + q.band">
+            <tr>
+              <td x-text="q.call"></td>
+              <td x-text="q.band"></td>
+              <td x-text="q.mode"></td>
+              <td x-text="q.operator"></td>
+              <td x-text="q.points"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+    </section>
+
+  </main>
+
+  <script type="module" src="/js/dashboard.js"></script>
+</body>
+</html>

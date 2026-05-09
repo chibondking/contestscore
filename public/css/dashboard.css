@@ -1,0 +1,131 @@
+:root {
+  --bg:       #0d1117;
+  --surface:  #161b22;
+  --border:   #30363d;
+  --text:     #e6edf3;
+  --muted:    #8b949e;
+  --green:    #3fb950;
+  --red:      #f85149;
+  --accent:   #58a6ff;
+  --run:      #d29922;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+  font-size: 1rem;
+  min-height: 100vh;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.header h1 {
+  font-size: 1.25rem;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+
+.status {
+  font-size: 0.75rem;
+  padding: 0.2em 0.6em;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.status--ok  { background: var(--green); color: #000; }
+.status--err { background: var(--red);   color: #fff; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.card--wide { grid-column: 1 / -1; }
+
+.card h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+
+/* Score */
+.score-row { display: flex; gap: 2rem; }
+
+.metric { display: flex; flex-direction: column; align-items: center; }
+
+.metric__value {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.metric__label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Radios */
+.radio-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+
+.radio-row:last-child { border-bottom: none; }
+
+.radio-nr   { color: var(--muted); width: 2rem; }
+.radio-freq { color: var(--text);  width: 9rem; }
+.radio-mode { color: var(--accent); width: 4rem; }
+.radio-op   { flex: 1; }
+.radio-run  { color: var(--run); font-size: 0.75rem; font-weight: bold; }
+
+/* QSO table */
+.qso-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.qso-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: normal;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.qso-table td {
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.qso-table tbody tr:last-child td { border-bottom: none; }
+
+.empty { color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }

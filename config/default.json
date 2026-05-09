@@ -1,0 +1,20 @@
+{
+  "http": {
+    "port": 3000
+  },
+  "udp": {
+    "radioPort": 12060,
+    "contactPort": 12061,
+    "scorePort": 12062
+  },
+  "db": {
+    "path": "./data/qsos.db"
+  },
+  "lookup": {
+    "provider": "none",
+    "qrz": {
+      "username": "",
+      "password": ""
+    }
+  }
+}
