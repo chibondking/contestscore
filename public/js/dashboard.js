@@ -165,25 +165,26 @@ function dashboard() {
     // Per-operator stats (QSO count, points, peak rate), the same breakdown
     // the original Node-RED dashboard showed for multi-op stations. Computed
     // client-side from the already-loaded qsos array, same approach as
-    // continentCounts() -- no new backend endpoint needed. Peak rate buckets
-    // each operator's own QSOs into 15-minute windows (same bucket size as
-    // charts.js's rateOverTime) and extrapolates the busiest one to QSOs/hr,
-    // so a short hot streak shows up even if that operator's overall average
-    // is modest.
-    operatorStats(bucketMinutes = 15) {
-      const bucketMs = bucketMinutes * 60000;
-      const perHour = 60 / bucketMinutes;
+    // continentCounts() -- no new backend endpoint needed. Peak rate keys
+    // off a 60-minute bucket (matching N1MM's own "hourly rate" convention
+    // and the main Rate card's slowest/steadiest window) rather than a
+    // short bucket that a single fast run could spike; peakRate10 is a
+    // secondary, noisier column for a short hot streak that a 60-minute
+    // window would smooth out.
+    operatorStats() {
       const byOp = new Map();
       for (const q of this.qsos) {
         const op = q.operator || '—';
-        if (!byOp.has(op)) byOp.set(op, { operator: op, qsos: 0, points: 0, buckets: new Map() });
+        if (!byOp.has(op)) byOp.set(op, { operator: op, qsos: 0, points: 0, buckets60: new Map(), buckets10: new Map() });
         const entry = byOp.get(op);
         entry.qsos += 1;
         entry.points += Number(q.points) || 0;
         const t = q.logged_at ? new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime() : NaN;
         if (!Number.isNaN(t)) {
-          const bucket = Math.floor(t / bucketMs) * bucketMs;
-          entry.buckets.set(bucket, (entry.buckets.get(bucket) || 0) + 1);
+          const b60 = Math.floor(t / 3600000) * 3600000;
+          entry.buckets60.set(b60, (entry.buckets60.get(b60) || 0) + 1);
+          const b10 = Math.floor(t / 600000) * 600000;
+          entry.buckets10.set(b10, (entry.buckets10.get(b10) || 0) + 1);
         }
       }
       return [...byOp.values()]
@@ -191,7 +192,10 @@ function dashboard() {
           operator: entry.operator,
           qsos: entry.qsos,
           points: entry.points,
-          peakRate: Math.round(Math.max(0, ...entry.buckets.values()) * perHour),
+          // A 60-minute bucket's own count already is the rate/hr -- no
+          // extrapolation needed, unlike the 10-minute column.
+          peakRate60: Math.max(0, ...entry.buckets60.values()),
+          peakRate10: Math.round(Math.max(0, ...entry.buckets10.values()) * 6),
         }))
         .sort((a, b) => b.qsos - a.qsos);
     },

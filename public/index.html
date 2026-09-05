@@ -62,7 +62,7 @@
       <p x-show="rate.length === 0" class="empty">Loading…</p>
     </section>
 
-    <section class="card" id="bridges" x-show="bridges.length > 0">
+    <section class="card card--compact" id="bridges" x-show="bridges.length > 0">
       <h2>Feed Status</h2>
       <template x-for="b in bridges" :key="b.station_id">
         <div class="bridge-row">
@@ -72,7 +72,7 @@
       </template>
     </section>
 
-    <section class="card" id="radios">
+    <section class="card card--compact" id="radios">
       <h2>Radios</h2>
       <!-- Band only, never the exact frequency -- for some contests,
            broadcasting the running frequency to anyone with the dashboard
@@ -90,12 +90,12 @@
       <p x-show="radios.length === 0" class="empty">No radio data yet</p>
     </section>
 
-    <section class="card" id="operators" x-show="qsos.length > 0">
+    <section class="card card--wide" id="operators" x-show="qsos.length > 0">
       <h2>Operators</h2>
       <table class="qso-table">
         <thead>
           <tr>
-            <th>Operator</th><th>QSOs</th><th>Points</th><th>Peak Rate</th>
+            <th>Operator</th><th>QSOs</th><th>Points</th><th>Peak Rate (60m)</th><th>Peak Rate (10m)</th>
           </tr>
         </thead>
         <tbody>
@@ -104,7 +104,8 @@
               <td x-text="op.operator"></td>
               <td x-text="op.qsos"></td>
               <td x-text="op.points"></td>
-              <td x-text="op.peakRate + '/hr'"></td>
+              <td x-text="op.peakRate60 + '/hr'"></td>
+              <td x-text="op.peakRate10 + '/hr'"></td>
             </tr>
           </template>
         </tbody>
@@ -155,8 +156,9 @@
 
   </main>
 
-  <footer class="footer" x-show="version.deployedAt">
-    <span x-text="'deployed ' + formatDeployTime(version.deployedAt) + (version.commit ? ' (' + version.commit + ')' : '')"></span>
+  <footer class="footer">
+    <span>Created by <a href="https://wt2p.us" target="_blank" rel="noopener">WT2P</a> &middot; <a href="https://github.com/chibondking/contestscore" target="_blank" rel="noopener">GitHub</a></span>
+    <span x-show="version.deployedAt" x-text="'deployed ' + formatDeployTime(version.deployedAt) + (version.commit ? ' (' + version.commit + ')' : '')"></span>
   </footer>
 
   <!-- Not type="module": dashboard() must land on the global scope for

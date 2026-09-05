@@ -99,6 +99,9 @@ body {
 }
 
 .footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   padding: 0.75rem 1.5rem;
   color: var(--muted);
   font-size: 0.75rem;
@@ -122,6 +125,12 @@ body {
 }
 
 .card--wide { grid-column: 1 / -1; }
+
+/* Caps these two cards' width within their grid track so the Operators
+   card (full-width, see .card--wide) reads as the larger, more prominent
+   panel -- Feed Status and Radios are secondary status at a glance, not
+   the thing a viewer is meant to study during a 48-hour contest. */
+.card--compact { max-width: 380px; }
 
 .card h2 {
   font-size: 0.8rem;
