@@ -5,7 +5,7 @@ const http = require('node:http');
 const { describe, it, before, after, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { initDb, closeDb } = require('../../src/db/index');
-const { resetStatements } = require('../../src/db/queries');
+const { resetStatements, insertScoreBreakdown } = require('../../src/db/queries');
 
 let server;
 let baseUrl;
@@ -70,6 +70,21 @@ describe('DELETE /api/db', () => {
       headers: { Authorization: 'Bearer secret123', 'X-Confirm': 'yes' },
     });
     assert.equal(res.status, 200);
+  });
+});
+
+describe('GET /api/score', () => {
+  it('aliases the raw score_total column as `total`, matching the socket score:update payload shape', async () => {
+    insertScoreBreakdown({
+      contest: 'CQ-WW-CW', call: 'WT2P', grid6: 'EN81LM', score_total: 1600,
+      breakdown: [{ band: 'ALL', mode: 'ALL', qsos: 40, points: 40, mults: 40, is_total: 1 }],
+    });
+    const res = await fetch(`${baseUrl}/api/score`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.total, 1600);
+    assert.equal(body.score_total, 1600);
+    assert.equal(body.grid6, 'EN81LM');
   });
 });
 

@@ -23,8 +23,16 @@ router.get('/qsos', (req, res) => {
 });
 
 // GET /api/score
+// Reshapes the raw score_snapshots row to match the socket `score:update`
+// payload's field names (src/udp/index.js) -- notably `total` for the raw
+// row's `score_total` column. The frontend (dashboard.js, admin.js) reads
+// `.total`, since that's what arrives live over the socket; without this
+// alias, the REST-only initial page load (before any live update lands)
+// shows the score total as blank/zero even though the DB has real data.
 router.get('/score', (req, res) => {
-  res.json(getLatestScore() || {});
+  const score = getLatestScore();
+  if (!score) return res.json({});
+  res.json({ ...score, total: score.score_total });
 });
 
 // GET /api/score/history

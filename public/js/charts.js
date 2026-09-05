@@ -2,11 +2,20 @@
 // x-data="charts()" is evaluated in global scope, and a module's top-level
 // declarations don't land there.
 function charts() {
+  // Chart.js instances live here, in a plain closure variable -- NOT as
+  // properties on the object below. Alpine wraps everything it returns from
+  // x-data in a reactive Proxy (it's Vue-based under the hood); a Chart.js
+  // instance stashed inside that Proxy gets its internal state/WeakMap
+  // lookups broken on subsequent access, so the first render works but later
+  // .update() calls silently no-op. Keeping them outside Alpine's reactivity
+  // entirely is the fix -- this is exactly why charts.html's periodic
+  // fetchData() poll never visibly redrew the chart.
+  let rateChart = null;
+  let scoreChart = null;
+
   return {
     qsos: [],
     scoreHistory: [],
-    rateChart: null,
-    scoreChart: null,
 
     async init() {
       await this.fetchData();
@@ -60,14 +69,14 @@ function charts() {
       const labels = points.map((p) => new Date(p.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       const values = points.map((p) => p.rate);
 
-      if (this.rateChart) {
-        this.rateChart.data.labels = labels;
-        this.rateChart.data.datasets[0].data = values;
-        this.rateChart.update();
+      if (rateChart) {
+        rateChart.data.labels = labels;
+        rateChart.data.datasets[0].data = values;
+        rateChart.update();
         return;
       }
 
-      this.rateChart = new Chart(canvas, {
+      rateChart = new Chart(canvas, {
         type: 'line',
         data: {
           labels,
@@ -93,14 +102,14 @@ function charts() {
       const labels = this.scoreHistory.map((s) => new Date(s.captured_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       const values = this.scoreHistory.map((s) => s.points);
 
-      if (this.scoreChart) {
-        this.scoreChart.data.labels = labels;
-        this.scoreChart.data.datasets[0].data = values;
-        this.scoreChart.update();
+      if (scoreChart) {
+        scoreChart.data.labels = labels;
+        scoreChart.data.datasets[0].data = values;
+        scoreChart.update();
         return;
       }
 
-      this.scoreChart = new Chart(canvas, {
+      scoreChart = new Chart(canvas, {
         type: 'line',
         data: {
           labels,

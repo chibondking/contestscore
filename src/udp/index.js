@@ -46,6 +46,7 @@ function startListeners(io) {
       points: total ? total.points : null,
       mults: total ? total.mults : null,
       total: data.score_total,
+      grid6: data.grid6,
       breakdown: data.breakdown,
     });
   });

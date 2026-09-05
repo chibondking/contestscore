@@ -146,6 +146,40 @@ function dashboard() {
       };
     },
 
+    // Per-operator stats (QSO count, points, peak rate), the same breakdown
+    // the original Node-RED dashboard showed for multi-op stations. Computed
+    // client-side from the already-loaded qsos array, same approach as
+    // continentCounts() -- no new backend endpoint needed. Peak rate buckets
+    // each operator's own QSOs into 15-minute windows (same bucket size as
+    // charts.js's rateOverTime) and extrapolates the busiest one to QSOs/hr,
+    // so a short hot streak shows up even if that operator's overall average
+    // is modest.
+    operatorStats(bucketMinutes = 15) {
+      const bucketMs = bucketMinutes * 60000;
+      const perHour = 60 / bucketMinutes;
+      const byOp = new Map();
+      for (const q of this.qsos) {
+        const op = q.operator || '—';
+        if (!byOp.has(op)) byOp.set(op, { operator: op, qsos: 0, points: 0, buckets: new Map() });
+        const entry = byOp.get(op);
+        entry.qsos += 1;
+        entry.points += Number(q.points) || 0;
+        const t = q.logged_at ? new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime() : NaN;
+        if (!Number.isNaN(t)) {
+          const bucket = Math.floor(t / bucketMs) * bucketMs;
+          entry.buckets.set(bucket, (entry.buckets.get(bucket) || 0) + 1);
+        }
+      }
+      return [...byOp.values()]
+        .map((entry) => ({
+          operator: entry.operator,
+          qsos: entry.qsos,
+          points: entry.points,
+          peakRate: Math.round(Math.max(0, ...entry.buckets.values()) * perHour),
+        }))
+        .sort((a, b) => b.qsos - a.qsos);
+    },
+
     // "R1" for the common single-station case (SO1R/SO2R); once more than
     // one distinct station is reporting (multi-op, separate physical
     // stations), prefix with the station name too, since radio_nr alone no
