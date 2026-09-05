@@ -73,11 +73,22 @@
     </section>
 
     <section class="card" id="radios">
-      <h2>Radios</h2>
+      <div class="card__header">
+        <h2>Radios</h2>
+        <!-- Hidden by default: for some contests, broadcasting the exact
+             running frequency to anyone with the dashboard URL amounts to
+             cheerleading/spotting your own run. A viewer who wants it back
+             (e.g. running the dashboard privately in the shack) can opt in;
+             the choice is remembered per-browser, not sent anywhere. -->
+        <label class="detail-toggle">
+          <input type="checkbox" x-model="showFreq" @change="saveShowFreq()">
+          Show frequency
+        </label>
+      </div>
       <template x-for="r in radios" :key="(r.station_name || '') + ':' + r.radio_nr">
         <div class="radio-row">
           <span class="radio-nr" x-text="radioLabel(r)"></span>
-          <span class="radio-freq" x-text="r.freq ? (r.freq / 1000).toFixed(1) + ' kHz' : '—'"></span>
+          <span class="radio-freq" x-show="showFreq" x-text="r.freq ? (r.freq / 1000).toFixed(1) + ' kHz' : '—'"></span>
           <span class="radio-mode" x-text="r.mode || '—'"></span>
           <span class="radio-op" x-text="r.op_call || '—'"></span>
           <span class="radio-run" x-show="r.is_running">RUN</span>

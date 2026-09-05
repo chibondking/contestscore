@@ -23,8 +23,19 @@ function dashboard() {
     // itself is still alive and not just frozen mid-render.
     lastUpdateAt: Date.now(),
     now: Date.now(),
+    // Off by default: for some contests, showing the exact running
+    // frequency to anyone with the dashboard URL amounts to cheerleading/
+    // spotting your own run. Per-viewer opt-in, remembered in localStorage
+    // rather than a server-side setting.
+    showFreq: false,
 
     init() {
+      try {
+        this.showFreq = localStorage.getItem('contestpulse_show_freq') === '1';
+      } catch {
+        // private browsing / storage disabled -- just default to hidden
+      }
+
       const socket = io();
 
       socket.on('connect',    () => { this.connected = true; this.touch(); });
@@ -99,6 +110,14 @@ function dashboard() {
 
     touch() {
       this.lastUpdateAt = Date.now();
+    },
+
+    saveShowFreq() {
+      try {
+        localStorage.setItem('contestpulse_show_freq', this.showFreq ? '1' : '0');
+      } catch {
+        // ignore -- not worth surfacing an error just for a remembered toggle
+      }
     },
 
     secondsSinceUpdate() {
