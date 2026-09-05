@@ -64,6 +64,18 @@ body {
 .status--ok  { background: var(--green); color: #000; }
 .status--err { background: var(--red);   color: #fff; }
 
+.detail-toggle {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+
 .grid-locator {
   color: var(--muted);
   font-size: 0.75rem;

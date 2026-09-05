@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ContestPulse Charts</title>
   <link rel="stylesheet" href="/css/dashboard.css">
-  <!-- Plain (non-deferred): Chart must exist as a global before Alpine's
+  <!-- Plain (non-deferred): Chart/io must exist as globals before Alpine's
        deferred script initializes and starts evaluating x-effect
-       expressions that call into it -- same reasoning as index.html. -->
+       expressions that call into them -- same reasoning as index.html. -->
+  <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
@@ -20,6 +21,14 @@
       <a href="/charts.html" class="nav__link nav__link--active">Charts</a>
       <a href="/admin.html" class="nav__link">Admin</a>
     </nav>
+    <!-- A 48-hour contest generates a lot of per-operator detail; default to
+         the at-a-glance set below and let a viewer who wants the full
+         per-operator time series opt into it, rather than showing both
+         all the time. -->
+    <label class="detail-toggle">
+      <input type="checkbox" x-model="detailed" @change="saveDetailed()">
+      Detailed view
+    </label>
   </header>
 
   <main class="grid">
@@ -48,29 +57,35 @@
       <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
     </section>
 
-    <section class="card card--wide" id="operator-rate-chart">
-      <h2>Rate by Operator</h2>
-      <div class="chart-box chart-box--trend">
-        <canvas id="operatorRateChart" x-effect="renderOperatorRateChart()"></canvas>
-      </div>
-      <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
-    </section>
+    <template x-if="detailed">
+      <div class="grid" style="padding: 0; grid-column: 1 / -1;">
 
-    <section class="card card--wide" id="operator-score-chart">
-      <h2>Score Contribution by Operator</h2>
-      <div class="chart-box chart-box--trend">
-        <canvas id="operatorScoreChart" x-effect="renderOperatorScoreChart()"></canvas>
-      </div>
-      <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
-    </section>
+        <section class="card card--wide" id="operator-rate-chart">
+          <h2>Rate by Operator</h2>
+          <div class="chart-box chart-box--trend">
+            <canvas id="operatorRateChart" x-effect="renderOperatorRateChart()"></canvas>
+          </div>
+          <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+        </section>
 
-    <section class="card card--wide" id="operator-mult-chart">
-      <h2>Multiplier Contribution by Operator</h2>
-      <div class="chart-box chart-box--trend">
-        <canvas id="operatorMultChart" x-effect="renderOperatorMultChart()"></canvas>
+        <section class="card card--wide" id="operator-score-chart">
+          <h2>Score Contribution by Operator</h2>
+          <div class="chart-box chart-box--trend">
+            <canvas id="operatorScoreChart" x-effect="renderOperatorScoreChart()"></canvas>
+          </div>
+          <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+        </section>
+
+        <section class="card card--wide" id="operator-mult-chart">
+          <h2>Multiplier Contribution by Operator</h2>
+          <div class="chart-box chart-box--trend">
+            <canvas id="operatorMultChart" x-effect="renderOperatorMultChart()"></canvas>
+          </div>
+          <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+        </section>
+
       </div>
-      <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
-    </section>
+    </template>
 
   </main>
 

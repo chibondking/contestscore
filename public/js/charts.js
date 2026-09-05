@@ -20,13 +20,54 @@ function charts() {
   return {
     qsos: [],
     scoreHistory: [],
+    // "At a glance" is the default for a 48-hour contest -- the full
+    // per-operator time-series breakdown is real detail a viewer can opt
+    // into, not something to show by default on every load. Per-viewer
+    // convenience, so localStorage (not a server-side setting) is the right
+    // place for it.
+    detailed: false,
 
     async init() {
+      try {
+        this.detailed = localStorage.getItem('contestpulse_charts_detailed') === '1';
+      } catch {
+        // private browsing / storage disabled -- just default to simple
+      }
       await this.fetchData();
-      // A historical trends view, not a live ticker -- a periodic refetch
-      // is enough here; contact:new/score:update don't need a socket wire-up
-      // for this page the way the main dashboard needs them.
+      // Live updates via socket, same events dashboard.js listens for --
+      // a 48-hour contest shouldn't need a manual refresh to see a chart
+      // move. The interval stays as a fallback in case an event is missed
+      // (e.g. a brief disconnect), not as the primary update path anymore.
+      const socket = io();
+      const refresh = () => this.fetchData();
+      socket.on('contact:new', refresh);
+      socket.on('contact:delete', refresh);
+      socket.on('score:update', refresh);
+      socket.on('db:cleared', refresh);
       setInterval(() => this.fetchData(), 30000);
+    },
+
+    saveDetailed() {
+      try {
+        localStorage.setItem('contestpulse_charts_detailed', this.detailed ? '1' : '0');
+      } catch {
+        // ignore -- not worth surfacing an error just for a remembered toggle
+      }
+    },
+
+    // Picks a bucket width from the actual span of logged QSOs so a 48-hour
+    // contest doesn't render ~200 tightly-packed 15-minute points where a
+    // 2-hour club contest would only need a couple. Snaps up to one of a
+    // few human-friendly sizes rather than an arbitrary computed value.
+    autoBucketMinutes() {
+      const times = this.qsos
+        .map((q) => q.logged_at && new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime())
+        .filter((t) => t && !Number.isNaN(t));
+      if (times.length < 2) return 15;
+      const spanMinutes = (Math.max(...times) - Math.min(...times)) / 60000;
+      const targetPoints = 60; // roughly this many points across the full span
+      const sizes = [5, 10, 15, 30, 60, 120];
+      return sizes.find((m) => spanMinutes / m <= targetPoints) || sizes[sizes.length - 1];
     },
 
     async fetchData() {
@@ -47,7 +88,7 @@ function charts() {
     // min windows but as a full-contest time series instead of "right now".
     // Computed client-side from the already-loaded qsos array rather than a
     // new backend endpoint.
-    rateOverTime(bucketMinutes = 15) {
+    rateOverTime(bucketMinutes = this.autoBucketMinutes()) {
       const bucketMs = bucketMinutes * 60000;
       const counts = new Map();
       for (const q of this.qsos) {
@@ -111,7 +152,7 @@ function charts() {
     // stored on the qso row) rather than score_snapshots' mults column --
     // that column is a per-broadcast contest total, not attributable to one
     // operator.
-    operatorTimeSeries(bucketMinutes = 15) {
+    operatorTimeSeries(bucketMinutes = this.autoBucketMinutes()) {
       const bucketMs = bucketMinutes * 60000;
       const perHour = 60 / bucketMinutes;
       const operators = [...new Set(this.qsos.map((q) => q.operator || '—'))];
@@ -162,10 +203,51 @@ function charts() {
       return { labels, series };
     },
 
+    // Total QSOs per operator, as of right now -- a bar chart, not a time
+    // series. This is the "at a glance" panel that stays visible outside
+    // detailed mode: over a 48-hour contest, "who's worked the most QSOs
+    // so far" is a snapshot question, not a trend a viewer needs to watch
+    // unfold minute by minute (that's what Detailed view's Rate by
+    // Operator is for).
+    operatorTotals() {
+      const totals = new Map();
+      for (const q of this.qsos) {
+        const op = q.operator || '—';
+        totals.set(op, (totals.get(op) || 0) + 1);
+      }
+      return [...totals.entries()]
+        .map(([operator, qsos]) => ({ operator, qsos }))
+        .sort((a, b) => b.qsos - a.qsos);
+    },
+
     renderOperatorQsoChart() {
-      operatorQsoChart = renderMultiSeriesChart(
-        operatorQsoChart, 'operatorQsoChart', this.operatorTimeSeries(), 'qsosOverTime',
-      );
+      const canvas = document.getElementById('operatorQsoChart');
+      if (!canvas || typeof Chart === 'undefined') return;
+
+      const totals = this.operatorTotals();
+      const labels = totals.map((t) => t.operator);
+      const values = totals.map((t) => t.qsos);
+      // Same fixed categorical order as the detailed per-operator line
+      // charts -- an operator's color stays consistent whether Detailed
+      // view is on or off.
+      const colors = totals.map((_, i) => CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length]);
+
+      if (operatorQsoChart) {
+        operatorQsoChart.data.labels = labels;
+        operatorQsoChart.data.datasets[0].data = values;
+        operatorQsoChart.data.datasets[0].backgroundColor = colors;
+        operatorQsoChart.update();
+        return;
+      }
+
+      operatorQsoChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{ label: 'QSOs', data: values, backgroundColor: colors, borderRadius: 4 }],
+        },
+        options: barChartOptions(),
+      });
     },
 
     renderOperatorRateChart() {
@@ -247,6 +329,16 @@ function renderMultiSeriesChart(existingChart, canvasId, { labels, series }, key
   const canvas = document.getElementById(canvasId);
   if (!canvas || typeof Chart === 'undefined') return existingChart;
 
+  // These three charts live inside charts.html's `x-if="detailed"` block,
+  // which destroys and recreates their <canvas> elements every time the
+  // toggle flips -- a stale chart instance bound to the now-removed canvas
+  // needs to be torn down rather than reused, or .update() would silently
+  // target a detached canvas while the freshly-mounted one stays blank.
+  if (existingChart && existingChart.canvas !== canvas) {
+    existingChart.destroy();
+    existingChart = null;
+  }
+
   const datasets = series.map((s) => ({
     label: s.operator,
     data: s[key],
@@ -280,6 +372,30 @@ function multiSeriesChartOptions() {
   const opts = trendChartOptions();
   opts.plugins.legend = { display: true, labels: { color: '#e6edf3' } };
   return opts;
+}
+
+// A categorical bar per operator, direct-labeled on the x-axis -- color
+// distinguishes bars but doesn't carry meaning alone (the axis label
+// already does), so no legend, matching the same reasoning as the
+// dashboard's continent tiles.
+function barChartOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 200 },
+    plugins: { legend: { display: false } },
+    scales: {
+      x: {
+        ticks: { color: '#8b949e' },
+        grid: { display: false },
+      },
+      y: {
+        beginAtZero: true,
+        ticks: { color: '#e6edf3', precision: 0 },
+        grid: { color: '#262626' },
+      },
+    },
+  };
 }
 
 function trendChartOptions() {
