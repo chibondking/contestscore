@@ -18,6 +18,28 @@ it's destructive), so two things are non-negotiable here:
    deliberately not in that allow-list, so the public hostname can never
    trigger a reset.
 
+## Redeploying after the initial setup
+
+Every push to `main` that passes the test suite auto-deploys via
+`.github/workflows/deploy.yml`: it SSHes in with a dedicated key and runs
+`/usr/local/bin/contestscore-deploy.sh` (git pull --ff-only, npm install,
+restart the service). That key is restricted server-side via a forced
+command in `wt2p`'s `~/.ssh/authorized_keys` -- even if it leaked, it could
+only ever run that one script, nothing else.
+
+To deploy manually from any other machine (your laptop, another shack
+computer -- deploying isn't tied to CI or to one machine), run
+`scripts/deploy.sh` from a clone of this repo, using your own normal SSH
+access to the box:
+
+```bash
+scripts/deploy.sh              # defaults to wt2p@147.224.142.162
+scripts/deploy.sh me@otherhost # or target a different box
+```
+
+Both paths run the exact same `/usr/local/bin/contestscore-deploy.sh` on the
+server -- the only difference is which SSH key gets you there.
+
 ## Getting N1MM's data to a remote box: ContestPulse (recommended)
 
 N1MM's UDP broadcasts don't route over the public internet -- broadcast

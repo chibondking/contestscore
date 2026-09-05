@@ -1,0 +1,53 @@
+name: deploy
+
+# Runs the Node test suite, then -- only on main, and only if tests pass --
+# deploys to scoreboard.wt2p.us over SSH using a dedicated, tightly-scoped
+# key. That key is restricted server-side via a forced command in
+# wt2p's ~/.ssh/authorized_keys (see /usr/local/bin/contestscore-deploy.sh),
+# so even if it leaked it could only ever run that one script -- not
+# arbitrary commands on the box.
+#
+# Manual deploys from any other machine work the same way, using your own
+# normal SSH access instead of this key: see scripts/deploy.sh.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - run: npm test
+
+  deploy:
+    # Never for a PR (including from a fork, where secrets aren't exposed
+    # anyway) and never for a push to any branch but main.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to scoreboard.wt2p.us
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          install -m 600 /dev/null ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # The server-side forced command ignores whatever we ask for here
+          # and always runs contestscore-deploy.sh -- see its header comment.
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" true
