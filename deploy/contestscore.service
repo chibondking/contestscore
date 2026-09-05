@@ -16,8 +16,8 @@ After=network.target
 Type=simple
 User=contestscore
 Group=contestscore
-WorkingDirectory=/opt/contestscore
-EnvironmentFile=/opt/contestscore/contestscore.env
+WorkingDirectory=/opt/contestscore/app
+EnvironmentFile=/opt/contestscore/app/contestscore.env
 ExecStart=/usr/bin/node src/server.js
 Restart=on-failure
 RestartSec=5
@@ -29,7 +29,7 @@ StandardError=journal
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/opt/contestscore/data
+ReadWritePaths=/opt/contestscore/app/data
 
 [Install]
 WantedBy=multi-user.target

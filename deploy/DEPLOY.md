@@ -36,27 +36,33 @@ change is needed once the logging PC can reach either overlay IP.
 
 1. Create a dedicated service user:
    ```
-   sudo useradd --system --home /opt/contestscore --shell /usr/sbin/nologin contestscore
-   sudo mkdir -p /opt/contestscore
-   sudo chown contestscore:contestscore /opt/contestscore
+   sudo useradd --system --create-home --home /opt/contestscore --shell /usr/sbin/nologin contestscore
    ```
 
-2. Clone and install as that user:
+2. Clone and install as that user (the app lives in an `app/` subdirectory of
+   the service user's home, so its `.env`/`data/` sit alongside it but the
+   git checkout itself stays a clean subtree):
    ```
-   sudo -u contestscore git clone https://github.com/chibondking/contestscore.git /opt/contestscore
-   cd /opt/contestscore
-   sudo -u contestscore npm install --production
-   sudo -u contestscore mkdir -p data
+   sudo -u contestscore git clone --branch main https://github.com/chibondking/contestscore.git /opt/contestscore/app
+   sudo -u contestscore bash -c 'cd /opt/contestscore/app && npm install --omit=dev'
+   sudo -u contestscore mkdir -p /opt/contestscore/app/data
    ```
+   (npm 11's install-script allowlist may warn that better-sqlite3's
+   postinstall didn't run -- check `node -e "require('better-sqlite3')"`
+   from that directory; if it fails to load, run
+   `npm install-scripts approve better-sqlite3 && npm install` and, if that
+   still needs a from-source build, `sudo apt install build-essential`.)
 
-3. Configure secrets -- copy `.env.example` to `/opt/contestscore/contestscore.env`,
-   fill in real values, and lock it down:
+3. Configure secrets -- copy `.env.example` to
+   `/opt/contestscore/app/contestscore.env`, fill in real values, and lock
+   it down:
    ```
-   sudo -u contestscore cp .env.example /opt/contestscore/contestscore.env
-   sudo -u contestscore nano /opt/contestscore/contestscore.env
+   sudo -u contestscore cp .env.example /opt/contestscore/app/contestscore.env
+   sudo -u contestscore nano /opt/contestscore/app/contestscore.env
    # set HTTP_HOST=127.0.0.1
+   # set DB_PATH=/opt/contestscore/app/data/qsos.db
    # set CONTESTSCORE_API_TOKEN, e.g. `openssl rand -hex 32`
-   sudo chmod 600 /opt/contestscore/contestscore.env
+   sudo chmod 600 /opt/contestscore/app/contestscore.env
    ```
 
 4. Install and start the service:
