@@ -6,11 +6,13 @@
   <title>ContestPulse</title>
   <link rel="stylesheet" href="/css/dashboard.css">
   <!-- Plain (non-deferred), same reasoning as dashboard.js not being
-       type="module": io must exist as a global before Alpine's deferred
-       script initializes. No Chart.js on this page -- the continent
-       breakdown is plain CSS/HTML (see world-map styles); only charts.html
-       renders actual charts. -->
+       type="module": io/Chart must exist as globals before Alpine's
+       deferred script initializes and starts evaluating x-effect
+       expressions that call into them. The continent breakdown stays plain
+       CSS/HTML (see world-map styles) -- Chart.js is only for the Score/
+       Rate cards' small sparklines. -->
   <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
 <body x-data="dashboard()" x-init="init()">
@@ -50,6 +52,9 @@
           <span class="metric__label">Total</span>
         </div>
       </div>
+      <div class="sparkline">
+        <canvas id="scoreSparkline" x-effect="renderScoreSparkline()"></canvas>
+      </div>
     </section>
 
     <section class="card card--large" id="rate">
@@ -63,6 +68,9 @@
         </template>
       </div>
       <p x-show="rate.length === 0" class="empty">Loading…</p>
+      <div class="sparkline">
+        <canvas id="rateSparkline" x-effect="renderRateSparkline()"></canvas>
+      </div>
     </section>
 
     <section class="card card--compact" id="radios">
@@ -79,6 +87,12 @@
           <span class="radio-nr" x-text="radioLabel(r)"></span>
           <span class="radio-freq" x-text="r.band || '—'"></span>
           <span class="radio-mode" x-text="r.mode || '—'"></span>
+          <!-- N1MM reports IsTransmitting independent of IsRunning (a S&P
+               radio transmits too, briefly, calling a station) -- red while
+               actually keying the transmitter, green at every other moment
+               (listening), so a multi-multi's whole radio list reads at a
+               glance without needing the band/mode text. -->
+          <span class="tx-dot" :class="r.is_transmitting ? 'tx-dot--tx' : 'tx-dot--rx'" :title="r.is_transmitting ? 'Transmitting' : 'Receiving'"></span>
           <span class="radio-op" x-text="r.op_call || '—'"></span>
           <span class="radio-run" x-show="r.is_running">RUN</span>
         </div>

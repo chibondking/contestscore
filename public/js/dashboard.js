@@ -1,7 +1,20 @@
 function dashboard() {
+  // Chart.js instances live here, in a plain closure variable -- NOT as
+  // Alpine data properties. Same reactivity trap as charts.js: Alpine
+  // deep-wraps returned x-data objects in a Proxy, which breaks Chart.js's
+  // internal state on a later .update() call. See charts.js's own comment
+  // for the full explanation.
+  let scoreSparkline = null;
+  let rateSparkline = null;
+
   return {
     connected: false,
     score: {},
+    // Full-contest score time series, just for the Score card's sparkline --
+    // fetched once and refreshed on score:update, same idea as charts.html's
+    // trend charts but shrunk down to fit the space Feed Status left behind
+    // when it moved into the header.
+    scoreHistory: [],
     radios: [],
     qsos: [],
     // Per-station ContestPulse (or other bridge) liveness, keyed by
@@ -69,6 +82,7 @@ function dashboard() {
 
       socket.on('score:update', (data) => {
         this.score = data;
+        this.fetchScoreHistory();
         this.touch();
       });
 
@@ -83,6 +97,7 @@ function dashboard() {
       socket.on('db:cleared', () => {
         this.qsos = [];
         this.score = {};
+        this.scoreHistory = [];
         this.radios = [];
         this.fetchRate(); // trailing windows should drop to zero, not linger
         this.touch();
@@ -199,18 +214,20 @@ function dashboard() {
 
     async fetchInitialState() {
       try {
-        const [qsos, score, radios, bridges, rate] = await Promise.all([
+        const [qsos, score, scoreHistory, radios, bridges, rate] = await Promise.all([
           fetch('/api/qsos').then((r) => r.json()),
           fetch('/api/score').then((r) => r.json()),
+          fetch('/api/score/history').then((r) => r.json()),
           fetch('/api/radios').then((r) => r.json()),
           fetch('/api/bridges').then((r) => r.json()),
           fetch('/api/rate').then((r) => r.json()),
         ]);
-        this.qsos    = qsos;
-        this.score   = score;
-        this.radios  = radios;
-        this.bridges = bridges;
-        this.rate    = rate;
+        this.qsos         = qsos;
+        this.score        = score;
+        this.scoreHistory = scoreHistory;
+        this.radios       = radios;
+        this.bridges      = bridges;
+        this.rate         = rate;
         this.touch();
       } catch (err) {
         console.error('Failed to load initial state:', err);
@@ -226,12 +243,116 @@ function dashboard() {
       }
     },
 
+    async fetchScoreHistory() {
+      try {
+        this.scoreHistory = await fetch('/api/score/history').then((r) => r.json());
+      } catch (err) {
+        console.error('Failed to refresh score history:', err);
+      }
+    },
+
+    // Same bucketing approach as charts.js's rateOverTime()/
+    // autoBucketMinutes(), shrunk down for a small in-card sparkline rather
+    // than a full trend chart -- still spans a 48-hour contest without
+    // rendering hundreds of cramped points.
+    autoBucketMinutes() {
+      const times = this.qsos
+        .map((q) => q.logged_at && new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime())
+        .filter((t) => t && !Number.isNaN(t));
+      if (times.length < 2) return 15;
+      const spanMinutes = (Math.max(...times) - Math.min(...times)) / 60000;
+      const sizes = [5, 10, 15, 30, 60, 120];
+      return sizes.find((m) => spanMinutes / m <= 30) || sizes[sizes.length - 1];
+    },
+
+    rateOverTime() {
+      const bucketMinutes = this.autoBucketMinutes();
+      const bucketMs = bucketMinutes * 60000;
+      const counts = new Map();
+      for (const q of this.qsos) {
+        const t = q.logged_at ? new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime() : NaN;
+        if (Number.isNaN(t)) continue;
+        const bucket = Math.floor(t / bucketMs) * bucketMs;
+        counts.set(bucket, (counts.get(bucket) || 0) + 1);
+      }
+      const perHour = 60 / bucketMinutes;
+      return [...counts.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, count]) => Math.round(count * perHour));
+    },
+
+    // Sparklines: no axes, no legend, no gridlines -- just the shape of the
+    // trend, filling the space Feed Status left behind when it moved into
+    // the header. Chart.js instances are kept in the closure variables
+    // above dashboard()'s return, not on `this` -- see the top-of-file
+    // comment for why.
+    renderScoreSparkline() {
+      const canvas = document.getElementById('scoreSparkline');
+      if (!canvas || typeof Chart === 'undefined') return;
+      const values = this.scoreHistory.map((s) => s.points);
+
+      if (scoreSparkline) {
+        scoreSparkline.data.labels = values.map((_, i) => i);
+        scoreSparkline.data.datasets[0].data = values;
+        scoreSparkline.update();
+        return;
+      }
+      scoreSparkline = new Chart(canvas, sparklineConfig(values, '#eb6834', 'rgba(235, 104, 52, 0.15)'));
+    },
+
+    renderRateSparkline() {
+      const canvas = document.getElementById('rateSparkline');
+      if (!canvas || typeof Chart === 'undefined') return;
+      const values = this.rateOverTime();
+
+      if (rateSparkline) {
+        rateSparkline.data.labels = values.map((_, i) => i);
+        rateSparkline.data.datasets[0].data = values;
+        rateSparkline.update();
+        return;
+      }
+      rateSparkline = new Chart(canvas, sparklineConfig(values, '#2a78d6', 'rgba(42, 120, 214, 0.15)'));
+    },
+
     async fetchVersion() {
       try {
         this.version = await fetch('/api/version').then((r) => r.json());
       } catch (err) {
         console.error('Failed to load version info:', err);
       }
+    },
+  };
+}
+
+// Minimal Chart.js config shared by the Score/Rate cards' sparklines --
+// same colors as charts.html's full trend charts (dataviz reference
+// palette slots 1/2) so a viewer sees the same series as the same color on
+// either page, but with every axis/legend/grid stripped since this is
+// decorative-but-informative filler for a card, not an analytical chart.
+function sparklineConfig(values, borderColor, backgroundColor) {
+  return {
+    type: 'line',
+    data: {
+      labels: values.map((_, i) => i),
+      datasets: [{
+        data: values,
+        borderColor,
+        backgroundColor,
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 200 },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { display: false },
+        y: { display: false, beginAtZero: true },
+      },
     },
   };
 }
