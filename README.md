@@ -209,10 +209,18 @@ For a deployment reachable outside your own LAN (e.g. a VPS fronted by
 nginx/Cloudflare Tunnel rather than reached directly by hostname), see
 [deploy/DEPLOY.md](deploy/DEPLOY.md) — it covers binding to localhost,
 requiring `CONTESTSCORE_API_TOKEN` on the destructive `DELETE /api/db`
-route (restricted to trusted source IPs too), and getting N1MM's data there
-via the **ContestPulse** bridge (`contestpulse/` — a small standalone binary
-that relays N1MM's UDP broadcasts over authenticated HTTPS, no VPN needed;
-Tailscale/ZeroTier is documented as an alternative).
+route, and getting N1MM's data there via the **ContestPulse** bridge
+(`contestpulse/` — a small standalone binary that relays N1MM's UDP
+broadcasts over authenticated HTTPS, no VPN needed; Tailscale/ZeroTier is
+documented as an alternative).
+
+## Admin page
+
+`public/admin.html` (linked from the dashboard footer) is a small UI for
+`DELETE /api/db` — paste the admin token, tick the confirmation box, reset.
+It shows the current QSO count and score total first so you can see what
+you're about to delete. The token itself is the only thing protecting this
+page's action; there's no separate login.
 
 ## ContestPulse
 

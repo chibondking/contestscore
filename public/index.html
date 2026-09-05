@@ -100,8 +100,9 @@
 
   </main>
 
-  <footer class="footer" x-show="version.deployedAt">
-    <span x-text="'deployed ' + formatDeployTime(version.deployedAt) + (version.commit ? ' (' + version.commit + ')' : '')"></span>
+  <footer class="footer">
+    <span x-show="version.deployedAt" x-text="'deployed ' + formatDeployTime(version.deployedAt) + (version.commit ? ' (' + version.commit + ')' : '')"></span>
+    &nbsp;&middot;&nbsp;<a href="/admin.html">admin</a>
   </footer>
 
   <!-- Not type="module": dashboard() must land on the global scope for

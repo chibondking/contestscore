@@ -11,12 +11,16 @@ it's destructive), so two things are non-negotiable here:
 
 1. The app binds to `127.0.0.1` only (`HTTP_HOST=127.0.0.1`) -- nginx is the
    only thing the internet can talk to.
-2. `DELETE /api/db` requires a bearer token (`CONTESTSCORE_API_TOKEN`) *and*
-   is restricted at the nginx layer to trusted source IPs (Tailscale /
-   ZeroTier ranges) -- see `nginx-scoreboard.wt2p.us.conf`. Cloudflare
-   Tunnel traffic always arrives at nginx as `127.0.0.1`, which is
-   deliberately not in that allow-list, so the public hostname can never
-   trigger a reset.
+2. `DELETE /api/db` (and `/api/ingest/*`) require a bearer token
+   (`CONTESTSCORE_API_TOKEN` -- a 64-char random secret). There's
+   deliberately no nginx-layer IP restriction on top: Cloudflare Tunnel
+   traffic always arrives at nginx as `127.0.0.1`, so an IP allow-list can't
+   distinguish "the admin's own device" from "anyone on the internet" once
+   traffic is going through the public hostname -- it would only have
+   given a false sense of an extra layer, not a real one, while also making
+   `public/admin.html` (the DB-reset UI) unusable from anywhere but a
+   Tailscale/ZeroTier-connected device. The token alone is the boundary;
+   treat it like a password.
 
 ## Redeploying after the initial setup
 
@@ -163,6 +167,7 @@ offline indicator -- that's ContestPulse-specific.
 
 8. Verify: `curl -I https://scoreboard.wt2p.us` should return the dashboard;
    `curl -X DELETE https://scoreboard.wt2p.us/api/db -H "X-Confirm: yes"`
-   from off-tailnet should get a plain nginx 403, never reach the app;
+   with no `Authorization` header should get a 401 from the app (or a 503 if
+   `CONTESTSCORE_API_TOKEN` isn't set yet -- fix that before going further);
    `curl https://scoreboard.wt2p.us/api/version` should return a recent
    `deployedAt`.

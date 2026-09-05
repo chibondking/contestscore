@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ContestPulse Admin</title>
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</head>
+<body x-data="admin()" x-init="init()">
+
+  <header class="header">
+    <h1>ContestPulse Admin</h1>
+    <a class="updated" href="/" style="margin-left:auto">&larr; dashboard</a>
+  </header>
+
+  <main class="grid">
+
+    <section class="card card--wide" id="reset">
+      <h2>Reset Contest Database</h2>
+      <p class="empty" style="margin-bottom:1rem">
+        Permanently deletes every logged QSO and the score history for this
+        instance. Radio state and the callsign lookup cache are also
+        cleared. This cannot be undone -- do this before a contest starts,
+        not during one.
+      </p>
+
+      <div class="score-row" style="margin-bottom:1rem">
+        <div class="metric">
+          <span class="metric__value" x-text="counts.qsos ?? '—'"></span>
+          <span class="metric__label">QSOs currently logged</span>
+        </div>
+        <div class="metric">
+          <span class="metric__value" x-text="counts.score ?? '—'"></span>
+          <span class="metric__label">Score total</span>
+        </div>
+      </div>
+
+      <label style="display:block; margin-bottom:0.75rem; font-size:0.85rem;">
+        Admin token
+        <input
+          type="password"
+          x-model="token"
+          @input="saveToken()"
+          placeholder="paste CONTESTSCORE_API_TOKEN"
+          style="display:block; width:100%; max-width:28rem; margin-top:0.25rem; padding:0.5rem; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-family:inherit;"
+        >
+      </label>
+
+      <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem; font-size:0.85rem;">
+        <input type="checkbox" x-model="confirmed">
+        I understand this permanently deletes all contest data and cannot be undone.
+      </label>
+
+      <button
+        @click="reset()"
+        :disabled="!token || !confirmed || resetting"
+        style="padding:0.6em 1.2em; border-radius:4px; border:none; font-family:inherit; font-weight:bold; cursor:pointer;"
+        :style="(!token || !confirmed || resetting) ? 'background:var(--border); color:var(--muted); cursor:not-allowed;' : 'background:var(--red); color:#fff;'"
+      >
+        <span x-text="resetting ? 'Resetting…' : 'Reset Database'"></span>
+      </button>
+
+      <p x-show="message" :style="'margin-top:1rem; color:' + (messageIsError ? 'var(--red)' : 'var(--green)')" x-text="message"></p>
+    </section>
+
+  </main>
+
+  <script src="/js/admin.js"></script>
+</body>
+</html>

@@ -248,7 +248,10 @@ Environment variables override config file. See `.env.example`.
   has sent a ContestPulse heartbeat
 - `DELETE /api/db` -- clear all QSOs (pre-contest reset, requires `X-Confirm:
   yes`, plus a bearer token if `CONTESTSCORE_API_TOKEN` is set -- see
-  `deploy/DEPLOY.md` for the public-deployment case)
+  `deploy/DEPLOY.md` for the public-deployment case). `public/admin.html` is
+  a small UI for this: paste the token, confirm, reset. Deliberately no
+  nginx-layer IP restriction on top of the token (see DEPLOY.md) -- the
+  token alone is the security boundary.
 - `POST /api/ingest/{radio,contact,score}` -- raw N1MM XML bytes from the
   ContestPulse bridge; requires `Authorization: Bearer <CONTESTSCORE_API_TOKEN>`
   and 503s if that env var isn't set (fails closed, no LAN-only fallback)
