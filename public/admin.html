@@ -9,14 +9,7 @@
 </head>
 <body x-data="admin()" x-init="init()">
 
-  <header class="header">
-    <h1>ContestPulse</h1>
-    <nav class="nav">
-      <a href="/" class="nav__link">Dashboard</a>
-      <a href="/charts.html" class="nav__link">Charts</a>
-      <a href="/admin.html" class="nav__link nav__link--active">Admin</a>
-    </nav>
-  </header>
+  <header class="header" data-page="admin"></header>
 
   <main class="grid">
 
@@ -70,10 +63,9 @@
 
   </main>
 
-  <footer class="footer">
-    <span>Created by <a href="https://wt2p.us" target="_blank" rel="noopener">WT2P</a> &middot; <a href="https://github.com/chibondking/contestscore" target="_blank" rel="noopener">GitHub</a></span>
-  </footer>
+  <footer class="footer"></footer>
 
+  <script src="/js/chrome.js"></script>
   <script src="/js/admin.js"></script>
 </body>
 </html>

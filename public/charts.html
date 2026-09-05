@@ -14,13 +14,7 @@
 </head>
 <body x-data="charts()" x-init="init()">
 
-  <header class="header">
-    <h1>ContestPulse</h1>
-    <nav class="nav">
-      <a href="/" class="nav__link">Dashboard</a>
-      <a href="/charts.html" class="nav__link nav__link--active">Charts</a>
-      <a href="/admin.html" class="nav__link">Admin</a>
-    </nav>
+  <header class="header" data-page="charts">
     <!-- A 48-hour contest generates a lot of per-operator detail; default to
          the at-a-glance set below and let a viewer who wants the full
          per-operator time series opt into it, rather than showing both
@@ -89,10 +83,9 @@
 
   </main>
 
-  <footer class="footer">
-    <span>Created by <a href="https://wt2p.us" target="_blank" rel="noopener">WT2P</a> &middot; <a href="https://github.com/chibondking/contestscore" target="_blank" rel="noopener">GitHub</a></span>
-  </footer>
+  <footer class="footer"></footer>
 
+  <script src="/js/chrome.js"></script>
   <script src="/js/charts.js"></script>
 </body>
 </html>

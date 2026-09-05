@@ -15,14 +15,17 @@
 </head>
 <body x-data="dashboard()" x-init="init()">
 
-  <header class="header">
-    <h1>ContestPulse</h1>
-    <nav class="nav">
-      <a href="/" class="nav__link nav__link--active">Dashboard</a>
-      <a href="/charts.html" class="nav__link">Charts</a>
-      <a href="/admin.html" class="nav__link">Admin</a>
-    </nav>
+  <header class="header" data-page="dashboard">
     <span class="grid-locator" x-show="score.grid6" x-text="score.grid6"></span>
+    <!-- Feed Status used to be its own card; a deployment only ever has one
+         bridge feeding it, so a full card was more real estate than the
+         information warranted. It lives here now, next to the connection
+         badge it's conceptually similar to (both are "is data getting to
+         this page" signals), freeing that grid slot for Score/Rate to grow
+         into (see .card--large below). -->
+    <template x-for="b in bridges" :key="b.station_id">
+      <span class="bridge-badge" :class="'bridge-badge--' + b.status" x-text="b.station_id + ': ' + b.status"></span>
+    </template>
     <span class="updated" x-text="'updated ' + secondsSinceUpdate() + 's ago'"></span>
     <span class="status" :class="connected ? 'status--ok' : 'status--err'">
       <span x-text="connected ? 'live' : 'disconnected'"></span>
@@ -31,7 +34,7 @@
 
   <main class="grid">
 
-    <section class="card" id="score">
+    <section class="card card--large" id="score">
       <h2>Score</h2>
       <div class="score-row">
         <div class="metric">
@@ -49,7 +52,7 @@
       </div>
     </section>
 
-    <section class="card" id="rate">
+    <section class="card card--large" id="rate">
       <h2>Rate</h2>
       <div class="score-row" x-show="rate.length > 0">
         <template x-for="r in rate" :key="r.minutes">
@@ -60,16 +63,6 @@
         </template>
       </div>
       <p x-show="rate.length === 0" class="empty">Loading…</p>
-    </section>
-
-    <section class="card card--compact" id="bridges" x-show="bridges.length > 0">
-      <h2>Feed Status</h2>
-      <template x-for="b in bridges" :key="b.station_id">
-        <div class="bridge-row">
-          <span class="bridge-station" x-text="b.station_id"></span>
-          <span class="bridge-badge" :class="'bridge-badge--' + b.status" x-text="b.status"></span>
-        </div>
-      </template>
     </section>
 
     <section class="card card--compact" id="radios">
@@ -157,7 +150,6 @@
   </main>
 
   <footer class="footer">
-    <span>Created by <a href="https://wt2p.us" target="_blank" rel="noopener">WT2P</a> &middot; <a href="https://github.com/chibondking/contestscore" target="_blank" rel="noopener">GitHub</a></span>
     <span x-show="version.deployedAt" x-text="'deployed ' + formatDeployTime(version.deployedAt) + (version.commit ? ' (' + version.commit + ')' : '')"></span>
   </footer>
 
@@ -168,6 +160,7 @@
        x-data throws "dashboard is not defined" and the whole component
        silently fails to initialize, which is consistent with every
        "field renders as undefined" symptom seen on this dashboard so far. -->
+  <script src="/js/chrome.js"></script>
   <script src="/js/dashboard.js"></script>
 </body>
 </html>

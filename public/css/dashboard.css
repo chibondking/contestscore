@@ -126,11 +126,16 @@ body {
 
 .card--wide { grid-column: 1 / -1; }
 
-/* Caps these two cards' width within their grid track so the Operators
-   card (full-width, see .card--wide) reads as the larger, more prominent
-   panel -- Feed Status and Radios are secondary status at a glance, not
-   the thing a viewer is meant to study during a 48-hour contest. */
+/* Caps this card's width within its grid track so the Operators card
+   (full-width, see .card--wide) reads as the larger, more prominent panel --
+   Radios is secondary status at a glance, not the thing a viewer is meant
+   to study during a 48-hour contest. */
 .card--compact { max-width: 380px; }
+
+/* Score and Rate are the headline numbers -- give them two grid tracks'
+   worth of width instead of the default single-card share, now that Feed
+   Status has moved into the header and freed up the row. */
+.card--large { grid-column: span 2; }
 
 .card h2 {
   font-size: 0.8rem;
@@ -159,21 +164,8 @@ body {
   letter-spacing: 0.1em;
 }
 
-/* Feed status (ContestPulse bridge heartbeats) */
-.bridge-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.95rem;
-}
-
-.bridge-row:last-child { border-bottom: none; }
-
-.bridge-station { color: var(--text); }
-
+/* Feed status (ContestPulse bridge heartbeats) -- lives in the header now,
+   next to the connection badge, not its own card (see index.html). */
 .bridge-badge {
   font-size: 0.7rem;
   font-weight: bold;
