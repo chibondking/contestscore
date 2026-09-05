@@ -149,17 +149,16 @@
 
         <div class="continent-panel" x-show="qsos.length > 0">
           <h3>By Continent</h3>
-          <!-- Rough relative geographic layout (not a precise projection --
-               continent-level only), shaded by QSO count. See
-               dashboard.js's continentCounts()/continentTileStyle(). -->
-          <div class="world-map">
-            <template x-for="code in ['NA','EU','AS','AF','OC','SA','AN']" :key="code">
-              <div class="world-map__tile" :class="'world-map__tile--' + code" :style="continentTileStyle(code)">
-                <span class="world-map__label" x-text="code"></span>
-                <span class="world-map__count" x-text="continentCounts()[code] || 0"></span>
-              </div>
-            </template>
-          </div>
+          <!-- Same sequential blue-alpha scheme as before (see dashboard.js's
+               continentCounts()/continentTileStyle()), just as plain rows
+               instead of a geographic grid -- the grid's layout never read
+               as an actual map, just an awkward crossword-shaped grid. -->
+          <template x-for="code in ['NA','EU','AS','AF','OC','SA','AN']" :key="code">
+            <div class="continent-row" :style="continentTileStyle(code)">
+              <span class="continent-row__label" x-text="code"></span>
+              <span class="continent-row__count" x-text="continentCounts()[code] || 0"></span>
+            </div>
+          </template>
         </div>
       </div>
     </section>

@@ -270,50 +270,31 @@ body {
 .chart-box { position: relative; width: 100%; }
 .chart-box--trend { height: 280px; }
 
-/* Continent breakdown -- rough relative geographic layout (not a precise
-   projection, continent-level only), tiles shaded by QSO count. See
-   dashboard.js's continentCounts()/continentTileStyle(). */
-.world-map {
-  display: grid;
-  grid-template-areas:
-    "na eu as"
-    ".  af oc"
-    "sa an .";
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-  gap: 0.4rem;
-  height: 180px;
-}
-
-.world-map__tile {
+/* Continent breakdown -- plain rows, shaded by QSO count (same sequential
+   blue-alpha scheme as before). See dashboard.js's continentCounts()/
+   continentTileStyle(). */
+.continent-row {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  border-radius: 6px;
-  background: var(--bg);
+  justify-content: space-between;
+  padding: 0.4rem 0.6rem;
+  margin-bottom: 0.4rem;
+  border-radius: 4px;
   border: 1px solid var(--border);
   transition: background 0.3s, border-color 0.3s;
 }
 
-.world-map__tile--NA { grid-area: na; }
-.world-map__tile--EU { grid-area: eu; }
-.world-map__tile--AS { grid-area: as; }
-.world-map__tile--AF { grid-area: af; }
-.world-map__tile--OC { grid-area: oc; }
-.world-map__tile--SA { grid-area: sa; }
-.world-map__tile--AN { grid-area: an; }
+.continent-row:last-child { margin-bottom: 0; }
 
-.world-map__label {
-  font-size: 0.65rem;
+.continent-row__label {
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
 }
 
-.world-map__count {
-  font-size: 1.1rem;
+.continent-row__count {
+  font-size: 1rem;
   font-weight: bold;
   color: var(--text);
 }
