@@ -79,15 +79,26 @@ dashboard can show the feed as realtime / stale / offline.
 3. Run it: `contestpulse-windows-amd64.exe config.json` (or the matching
    binary for whatever runs it). Nothing else to install.
 
-**Running ContestPulse on the same PC as N1MM in networked/multi-op mode?**
-N1MM's own process also binds its Contact/Score/Radio ports to sync with
-other stations on the network. ContestPulse sets `SO_REUSEADDR` so both can
-bind the same port and each get a copy of every broadcast, regardless of
-start order in the normal case. If you still see N1MM's own "Port In Use
-Error" dialog, try starting ContestPulse first and restarting N1MM
-afterward -- Windows' exact reuse-address behavior can depend on whether
-N1MM's own socket also opts into sharing the port, which isn't something
-this project controls.
+**"N1MMSpot Port: Port In Use Error" on port 12061, running FlexRadio +
+SmartSDR CAT?** That's SmartSDR CAT's own "Spots" connection (visible in its
+connection list as `N: Spots -- UDP: Port 12061`) exclusively claiming that
+port for its N1MM-format spot feed to the radio -- nothing to do with
+ContestPulse's own `SO_REUSEADDR` (which handles a *different* case: two
+*cooperating* sockets sharing a port, not a third program that hardcodes
+exclusive use of one). Since that pairing is typically load-bearing for
+radio operation, move ContestPulse off 12061 instead of touching it:
+
+1. In N1MM+'s Broadcast Data tab, change **Contacts** and **External
+   Callsign Lookup** to a different, unused destination port (e.g.
+   `13061`).
+2. Match it in ContestPulse's `config.json`: `"contact_port": 13061`.
+3. Restart ContestPulse, then N1MM. Leave SmartSDR CAT's Spots connection on
+   12061 untouched -- ContestPulse no longer competes for it at all.
+
+More generally: `SO_REUSEADDR` only helps when *both* programs sharing a
+port request it. If a port conflict persists after that, some other program
+holds the port exclusively and the real fix is separating the ports, not
+more socket options on ContestPulse's end.
 
 ## Alternative: raw UDP over Tailscale/ZeroTier
 
