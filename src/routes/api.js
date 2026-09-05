@@ -28,8 +28,19 @@ router.get('/radios', (req, res) => {
   res.json(getRadios());
 });
 
-// DELETE /api/db  requires X-Confirm: yes header
+// DELETE /api/db  requires X-Confirm: yes, plus a bearer token whenever
+// CONTESTSCORE_API_TOKEN is set. On a LAN-only install with no token
+// configured this behaves exactly as before; on a publicly reachable
+// deployment, set the token (and see deploy/ for restricting this route to
+// trusted source IPs at the reverse-proxy layer too).
 router.delete('/db', (req, res) => {
+  const requiredToken = process.env.CONTESTSCORE_API_TOKEN;
+  if (requiredToken) {
+    const auth = req.headers['authorization'] || '';
+    if (auth !== `Bearer ${requiredToken}`) {
+      return res.status(401).json({ error: 'Missing or invalid bearer token' });
+    }
+  }
   if (req.headers['x-confirm'] !== 'yes') {
     return res.status(400).json({ error: 'Missing X-Confirm: yes header' });
   }

@@ -196,7 +196,9 @@ Environment variables override config file. See `.env.example`.
 - `GET /api/score` -- current score
 - `GET /api/score/history` -- score time series
 - `GET /api/radios` -- current state of all radios
-- `DELETE /api/db` -- clear all QSOs (pre-contest reset, requires confirm header)
+- `DELETE /api/db` -- clear all QSOs (pre-contest reset, requires `X-Confirm:
+  yes`, plus a bearer token if `CONTESTSCORE_API_TOKEN` is set -- see
+  `deploy/DEPLOY.md` for the public-deployment case)
 
 ## Key Behaviors and Constraints
 

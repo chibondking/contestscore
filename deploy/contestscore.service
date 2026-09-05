@@ -1,0 +1,35 @@
+# Adjust paths if your deployment layout differs. Install to
+# /etc/systemd/system/contestscore.service, then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now contestscore
+#
+# This is the reverse-proxied deployment shape (see deploy/DEPLOY.md) -- a
+# dedicated service user, bound to localhost, nginx/cloudflared handle the
+# public side. For a standalone Pi install with no reverse proxy, use the
+# simpler contestscore.service in the repo root instead.
+
+[Unit]
+Description=contestscore ham radio contest dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=contestscore
+Group=contestscore
+WorkingDirectory=/opt/contestscore
+EnvironmentFile=/opt/contestscore/contestscore.env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Basic hardening -- this service only needs to read its own directory and
+# write to its own data/ subdirectory (the SQLite file + WAL/SHM).
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/contestscore/data
+
+[Install]
+WantedBy=multi-user.target

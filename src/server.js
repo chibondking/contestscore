@@ -6,6 +6,10 @@ const { initSocket } = require('./socket');
 const config = require('../config/default.json');
 
 const port = process.env.HTTP_PORT || config.http.port;
+// Default 0.0.0.0 suits a LAN/Pi install reached directly by hostname; a
+// reverse-proxied deployment should set HTTP_HOST=127.0.0.1 so the app is
+// only reachable through the proxy, not directly on the public interface.
+const host = process.env.HTTP_HOST || config.http.host;
 
 initDb();
 
@@ -15,6 +19,6 @@ app.set('io', io);
 
 startListeners(io);
 
-httpServer.listen(port, () => {
-  console.log(`contestscore running at http://localhost:${port}`);
+httpServer.listen(port, host, () => {
+  console.log(`contestscore running at http://${host}:${port}`);
 });

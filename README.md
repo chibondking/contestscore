@@ -198,6 +198,16 @@ sudo systemctl enable --now contestscore
 The service file assumes the app lives at `/home/pi/contestscore` and runs as
 the `pi` user — edit if your setup differs.
 
+## Deploying publicly behind a reverse proxy
+
+For a deployment reachable outside your own LAN (e.g. a VPS fronted by
+nginx/Cloudflare Tunnel rather than reached directly by hostname), see
+[deploy/DEPLOY.md](deploy/DEPLOY.md) — it covers binding to localhost,
+requiring `CONTESTSCORE_API_TOKEN` on the destructive `DELETE /api/db`
+route, restricting that route to trusted source IPs, and getting N1MM's UDP
+broadcasts there over Tailscale/ZeroTier (broadcast addressing doesn't route
+over the public internet).
+
 ## Project layout
 
 ```
