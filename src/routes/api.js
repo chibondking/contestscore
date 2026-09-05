@@ -6,6 +6,7 @@ const {
 } = require('../db/queries');
 const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
+const { freqToBand } = require('../parsers/util');
 
 const router = Router();
 
@@ -41,8 +42,13 @@ router.get('/score/history', (req, res) => {
 });
 
 // GET /api/radios
+// Never returns the exact freq/tx_freq columns -- see freqToBand()'s own
+// comment (src/parsers/util.js) and the matching scrub on the radio:update
+// socket payload (src/udp/index.js). The exact value stays in radio_state
+// (still useful server-side); it just never leaves the server toward a
+// browser, whether that's this REST endpoint or the live socket feed.
 router.get('/radios', (req, res) => {
-  res.json(getRadios());
+  res.json(getRadios().map(({ freq, tx_freq, ...rest }) => ({ ...rest, band: freqToBand(freq) })));
 });
 
 // GET /api/rate -- N1MM-style rate meter: QSO count and extrapolated

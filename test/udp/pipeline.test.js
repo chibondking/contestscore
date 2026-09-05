@@ -94,6 +94,13 @@ describe('radio pipeline', () => {
     const evt = io.events.find((e) => e.name === 'radio:update');
     assert.ok(evt);
     assert.equal(evt.payload.radio_nr, 1);
+    // The exact running frequency must never reach a browser -- see
+    // freqToBand()'s comment (src/parsers/util.js). radio_state itself
+    // (asserted above via getRadios()) still has the real freq; only the
+    // outward-facing socket payload is scrubbed.
+    assert.equal(evt.payload.freq, undefined);
+    assert.equal(evt.payload.tx_freq, undefined);
+    assert.equal(evt.payload.band, '20m'); // 14025000 Hz falls in 20m
   });
 });
 

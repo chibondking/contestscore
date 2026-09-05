@@ -5,6 +5,7 @@ const { createScoreListener } = require('./scoreListener');
 const {
   upsertRadio, upsertQso, deleteQso, insertScoreBreakdown, cacheCallsign,
 } = require('../db/queries');
+const { freqToBand } = require('../parsers/util');
 const config = require('../../config/default.json');
 
 const emitter = new EventEmitter();
@@ -19,7 +20,14 @@ function safely(label, fn) {
 function startListeners(io) {
   emitter.on('radio:update', (data) => {
     safely('radio:update', () => upsertRadio(data));
-    io.emit('radio:update', data);
+    // The exact freq/tx_freq stay in radio_state (upsertRadio, above) --
+    // they just never go out over the wire to a browser. Every connected
+    // dashboard gets this event, so anyone with the URL could otherwise
+    // read the running frequency straight out of the socket payload even
+    // though the UI itself only ever displays the band (see
+    // freqToBand()'s own comment).
+    const { freq, tx_freq, ...rest } = data;
+    io.emit('radio:update', { ...rest, band: freqToBand(freq) });
   });
 
   emitter.on('contact:new', (data) => {

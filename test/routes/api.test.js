@@ -5,7 +5,7 @@ const http = require('node:http');
 const { describe, it, before, after, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { initDb, closeDb } = require('../../src/db/index');
-const { resetStatements, insertScoreBreakdown } = require('../../src/db/queries');
+const { resetStatements, insertScoreBreakdown, upsertRadio } = require('../../src/db/queries');
 
 let server;
 let baseUrl;
@@ -85,6 +85,21 @@ describe('GET /api/score', () => {
     assert.equal(body.total, 1600);
     assert.equal(body.score_total, 1600);
     assert.equal(body.grid6, 'EN81LM');
+  });
+});
+
+describe('GET /api/radios', () => {
+  it('never returns the exact freq/tx_freq -- only the derived band', async () => {
+    upsertRadio({
+      station_name: 'WT2P-1', radio_nr: 1, freq: '14025000', tx_freq: '14025000',
+      mode: 'CW', op_call: 'WT2P', is_running: 1,
+    });
+    const res = await fetch(`${baseUrl}/api/radios`);
+    assert.equal(res.status, 200);
+    const [radio] = await res.json();
+    assert.equal(radio.freq, undefined);
+    assert.equal(radio.tx_freq, undefined);
+    assert.equal(radio.band, '20m');
   });
 });
 
