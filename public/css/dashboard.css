@@ -45,6 +45,23 @@ body {
 .status--ok  { background: var(--green); color: #000; }
 .status--err { background: var(--red);   color: #fff; }
 
+/* Pushes the connection status badge to the far right of the header,
+   leaving the live "updated Xs ago" ticker in between it and the title. */
+.updated {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.footer {
+  padding: 0.75rem 1.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

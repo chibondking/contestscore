@@ -5,8 +5,16 @@ const {
   getLatestScore, getScoreHistory,
 } = require('../db/queries');
 const { getStatuses } = require('../state/bridgeStatus');
+const { getVersionInfo } = require('../version');
 
 const router = Router();
+
+// GET /api/version -- when this instance was last deployed, so a viewer can
+// tell whether they're looking at a cached/stale page (the timestamp only
+// changes on a real deploy, never on its own).
+router.get('/version', (req, res) => {
+  res.json(getVersionInfo());
+});
 
 // GET /api/qsos  optional ?band=&mode=&operator=
 router.get('/qsos', (req, res) => {

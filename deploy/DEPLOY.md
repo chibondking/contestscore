@@ -23,9 +23,16 @@ it's destructive), so two things are non-negotiable here:
 Every push to `main` that passes the test suite auto-deploys via
 `.github/workflows/deploy.yml`: it SSHes in with a dedicated key and runs
 `/usr/local/bin/contestscore-deploy.sh` (git pull --ff-only, npm install,
-restart the service). That key is restricted server-side via a forced
-command in `wt2p`'s `~/.ssh/authorized_keys` -- even if it leaked, it could
-only ever run that one script, nothing else.
+restart the service, write `deploy-info.json`). That key is restricted
+server-side via a forced command in `wt2p`'s `~/.ssh/authorized_keys` --
+even if it leaked, it could only ever run that one script, nothing else.
+
+The installed script is `deploy/contestscore-deploy.sh` in this repo --
+update it there and reinstall, don't hand-edit the copy on the server:
+
+```bash
+sudo install -o root -g root -m 755 deploy/contestscore-deploy.sh /usr/local/bin/contestscore-deploy.sh
+```
 
 To deploy manually from any other machine (your laptop, another shack
 computer -- deploying isn't tied to CI or to one machine), run
@@ -36,6 +43,11 @@ access to the box:
 scripts/deploy.sh              # defaults to wt2p@147.224.142.162
 scripts/deploy.sh me@otherhost # or target a different box
 ```
+
+Every deploy writes `deploy-info.json` (commit + UTC timestamp) next to the
+app, which `GET /api/version` serves and the dashboard footer shows -- since
+that timestamp only changes on a real deploy, it's a reliable way to tell a
+cached/stale page apart from a fresh one.
 
 Both paths run the exact same `/usr/local/bin/contestscore-deploy.sh` on the
 server -- the only difference is which SSH key gets you there.
@@ -133,6 +145,24 @@ offline indicator -- that's ContestPulse-specific.
    then `sudo systemctl restart cloudflared`, and add the matching Public
    Hostname entry in the Cloudflare dashboard for this tunnel.
 
-7. Verify: `curl -I https://scoreboard.wt2p.us` should return the dashboard;
+7. Install the deploy script and set up CI auto-deploy (see
+   "Redeploying after the initial setup" above for what this enables):
+   ```bash
+   sudo install -o root -g root -m 755 deploy/contestscore-deploy.sh /usr/local/bin/contestscore-deploy.sh
+   ```
+   Then generate a dedicated key for GitHub Actions and restrict it to only
+   ever run that script:
+   ```bash
+   ssh-keygen -t ed25519 -f deploy_key -N "" -C "github-actions-deploy"
+   # append to the deploy target user's ~/.ssh/authorized_keys:
+   echo 'command="/usr/local/bin/contestscore-deploy.sh",no-port-forwarding,no-x11-forwarding,no-agent-forwarding,no-pty '"$(cat deploy_key.pub)" >> ~/.ssh/authorized_keys
+   ```
+   Add `deploy_key`'s contents, the host, and the user as the
+   `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER` secrets on the GitHub repo
+   (`gh secret set NAME`), then delete the local private key copy.
+
+8. Verify: `curl -I https://scoreboard.wt2p.us` should return the dashboard;
    `curl -X DELETE https://scoreboard.wt2p.us/api/db -H "X-Confirm: yes"`
-   from off-tailnet should get a plain nginx 403, never reach the app.
+   from off-tailnet should get a plain nginx 403, never reach the app;
+   `curl https://scoreboard.wt2p.us/api/version` should return a recent
+   `deployedAt`.

@@ -13,11 +13,21 @@ function dashboard() {
     // even with no new QSOs), so this is polled on a timer, not just
     // refreshed on contact:new.
     rate: [],
+    // { commit, deployedAt } from GET /api/version, shown in the footer.
+    // Only changes on a real deploy -- a stale/cached page would show an
+    // old timestamp here even though nothing else looks obviously wrong.
+    version: {},
+    // "Last updated" ticker: lastUpdateAt bumps on every socket event or
+    // successful poll; now ticks every second so secondsSinceUpdate()
+    // counts up live in the header even between events, proving the page
+    // itself is still alive and not just frozen mid-render.
+    lastUpdateAt: Date.now(),
+    now: Date.now(),
 
     init() {
       const socket = io();
 
-      socket.on('connect',    () => { this.connected = true; });
+      socket.on('connect',    () => { this.connected = true; this.touch(); });
       socket.on('disconnect', () => { this.connected = false; });
 
       socket.on('radio:update', (data) => {
@@ -25,15 +35,18 @@ function dashboard() {
         if (idx >= 0) this.radios[idx] = data;
         else this.radios.push(data);
         this.radios = [...this.radios];
+        this.touch();
       });
 
       socket.on('contact:new', (data) => {
         this.qsos = [data, ...this.qsos];
         this.fetchRate();
+        this.touch();
       });
 
       socket.on('score:update', (data) => {
         this.score = data;
+        this.touch();
       });
 
       socket.on('bridge:status', (data) => {
@@ -41,6 +54,7 @@ function dashboard() {
         if (idx >= 0) this.bridges[idx] = data;
         else this.bridges.push(data);
         this.bridges = [...this.bridges];
+        this.touch();
       });
 
       socket.on('db:cleared', () => {
@@ -48,12 +62,28 @@ function dashboard() {
         this.score = {};
         this.radios = [];
         this.fetchRate(); // trailing windows should drop to zero, not linger
+        this.touch();
       });
 
       this.fetchInitialState();
+      this.fetchVersion();
       // The rate windows decay purely with elapsed time, so they need to be
       // re-fetched on a timer even when nothing else is happening.
       setInterval(() => this.fetchRate(), 30000);
+      // Drives the header's live "updated Xs ago" ticker.
+      setInterval(() => { this.now = Date.now(); }, 1000);
+    },
+
+    touch() {
+      this.lastUpdateAt = Date.now();
+    },
+
+    secondsSinceUpdate() {
+      return Math.max(0, Math.round((this.now - this.lastUpdateAt) / 1000));
+    },
+
+    formatDeployTime(iso) {
+      return iso ? new Date(iso).toLocaleString() : '';
     },
 
     async fetchInitialState() {
@@ -70,6 +100,7 @@ function dashboard() {
         this.radios  = radios;
         this.bridges = bridges;
         this.rate    = rate;
+        this.touch();
       } catch (err) {
         console.error('Failed to load initial state:', err);
       }
@@ -78,8 +109,17 @@ function dashboard() {
     async fetchRate() {
       try {
         this.rate = await fetch('/api/rate').then((r) => r.json());
+        this.touch();
       } catch (err) {
         console.error('Failed to refresh rate:', err);
+      }
+    },
+
+    async fetchVersion() {
+      try {
+        this.version = await fetch('/api/version').then((r) => r.json());
+      } catch (err) {
+        console.error('Failed to load version info:', err);
       }
     },
   };

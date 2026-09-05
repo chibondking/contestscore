@@ -12,6 +12,7 @@
 
   <header class="header">
     <h1>ContestPulse</h1>
+    <span class="updated" x-text="'updated ' + secondsSinceUpdate() + 's ago'"></span>
     <span class="status" :class="connected ? 'status--ok' : 'status--err'">
       <span x-text="connected ? 'live' : 'disconnected'"></span>
     </span>
@@ -98,6 +99,10 @@
     </section>
 
   </main>
+
+  <footer class="footer" x-show="version.deployedAt">
+    <span x-text="'deployed ' + formatDeployTime(version.deployedAt) + (version.commit ? ' (' + version.commit + ')' : '')"></span>
+  </footer>
 
   <script type="module" src="/js/dashboard.js"></script>
 </body>

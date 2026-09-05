@@ -72,3 +72,13 @@ describe('DELETE /api/db', () => {
     assert.equal(res.status, 200);
   });
 });
+
+describe('GET /api/version', () => {
+  it('is public (no token required) and returns a deployedAt timestamp', async () => {
+    const res = await fetch(`${baseUrl}/api/version`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.ok(body.deployedAt);
+    assert.ok(!Number.isNaN(Date.parse(body.deployedAt)));
+  });
+});

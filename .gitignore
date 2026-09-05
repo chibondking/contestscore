@@ -2,3 +2,6 @@ node_modules/
 data/
 .env
 *.db
+# Written by deploy/contestscore-deploy.sh at deploy time -- environment-
+# specific, regenerated on every deploy, never committed.
+deploy-info.json
