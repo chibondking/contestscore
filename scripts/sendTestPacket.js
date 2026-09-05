@@ -69,11 +69,18 @@ const DX_CALLS = [
 const BANDS = ['28', '21', '14', '7', '3.5', '1.8'];
 const MODES = ['CW', 'SSB', 'RTTY'];
 
-// N1MM sends radio frequency in Hz.
+// Real Hz, for readability in this script (log lines, band lookups). N1MM's
+// own wire format encodes Freq/TXFreq/rxfreq/txfreq in TENS OF HZ, not Hz --
+// see src/parsers/util.js -- so toTensOfHz() converts at the point each
+// value actually gets embedded in a packet, not here.
 const BAND_FREQS = {
   '28': 28025000, '21': 21025000, '14': 14025000,
   '7': 7025000, '3.5': 3525000, '1.8': 1825000,
 };
+
+function toTensOfHz(hz) {
+  return Math.round(hz / 10);
+}
 
 let callPool = [...DX_CALLS];
 function nextCall() {
@@ -93,8 +100,8 @@ function radioPacket(radioNr, freq, mode, isRunning = true) {
 <RadioInfo>
   <StationName>${MYCALL}-${radioNr}</StationName>
   <RadioNr>${radioNr}</RadioNr>
-  <Freq>${freq}</Freq>
-  <TXFreq>${freq}</TXFreq>
+  <Freq>${toTensOfHz(freq)}</Freq>
+  <TXFreq>${toTensOfHz(freq)}</TXFreq>
   <Mode>${mode}</Mode>
   <mycall>${MYCALL}</mycall>
   <OpCall>${MYCALL}</OpCall>
@@ -118,8 +125,8 @@ function contactPacket(root, { id, call, band, mode, srx, radioNr, isMultiplier,
   <timestamp>${new Date().toISOString().replace('T', ' ').slice(0, 19)}</timestamp>
   <mycall>${MYCALL}</mycall>
   <band>${band}</band>
-  <rxfreq>${BAND_FREQS[band]}</rxfreq>
-  <txfreq>${BAND_FREQS[band]}</txfreq>
+  <rxfreq>${toTensOfHz(BAND_FREQS[band])}</rxfreq>
+  <txfreq>${toTensOfHz(BAND_FREQS[band])}</txfreq>
   <operator>${MYCALL}</operator>
   <mode>${mode}</mode>
   <call>${call}</call>

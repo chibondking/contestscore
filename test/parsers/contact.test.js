@@ -76,6 +76,14 @@ describe('parseContact', () => {
     assert.equal(c.sent_exchange, '599 042');
   });
 
+  it('converts rxfreq/txfreq from tens of Hz to Hz, same as RadioInfo', async () => {
+    // <rxfreq>1402500</rxfreq> only lands in <band>14</band> (14 MHz) once
+    // multiplied by 10 -- taken as raw Hz it's 1.4025 MHz, a different band.
+    const c = await parseContact(Buffer.from(base));
+    assert.equal(c.rx_freq, '14025000');
+    assert.equal(c.tx_freq, '14025000');
+  });
+
   it('parses N1MM True/False multiplier flags', async () => {
     const c = await parseContact(Buffer.from(base));
     assert.equal(c.is_mult1, 1);

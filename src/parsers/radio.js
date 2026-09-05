@@ -1,4 +1,5 @@
 const xml2js = require('xml2js');
+const { tensOfHzToHz } = require('./util');
 
 const PARSE_OPTS = { explicitArray: false, trim: true };
 
@@ -16,8 +17,8 @@ async function parseRadio(buf) {
   return {
     radio_nr:        Number(r.RadioNr) || 0,
     station_name:    r.StationName || '',
-    freq:            r.Freq || '',
-    tx_freq:         r.TXFreq || '',
+    freq:            tensOfHzToHz(r.Freq),
+    tx_freq:         tensOfHzToHz(r.TXFreq),
     mode:            r.Mode || '',
     op_call:         r.OpCall || '',
     is_running:      toBool(r.IsRunning),

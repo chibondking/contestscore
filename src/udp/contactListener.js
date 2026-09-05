@@ -1,16 +1,8 @@
 const dgram = require('dgram');
-const xml2js = require('xml2js');
 const { parseContact } = require('../parsers/contact');
 const { parseContactDelete } = require('../parsers/contactDelete');
 const { parseLookup } = require('../parsers/lookup');
-
-const PARSE_OPTS = { explicitArray: false, trim: true };
-
-// Detect packet type by parsing root element — more reliable than string search
-async function getRootElement(buf) {
-  const result = await xml2js.parseStringPromise(buf.toString(), PARSE_OPTS);
-  return Object.keys(result)[0] || '';
-}
+const { getRootElement, handleAnyBuffer } = require('./dispatch');
 
 // Parses one contact-port packet (contactinfo/contactreplace/contactdelete/
 // lookupinfo, disambiguated by root element) and emits the matching event.
@@ -64,8 +56,11 @@ async function handleContactBuffer(buf, emitter, source) {
 function createContactListener(port, emitter) {
   const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
 
+  // Dispatches by the packet's own root element rather than assuming
+  // everything on this port is contact-family traffic -- see dispatch.js's
+  // header comment for why port labels can't be trusted alone.
   sock.on('message', (buf, rinfo) => {
-    handleContactBuffer(buf, emitter, rinfo.address);
+    handleAnyBuffer(buf, emitter, rinfo.address);
   });
 
   sock.on('error', (err) => {

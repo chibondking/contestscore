@@ -75,8 +75,8 @@ describe('radio pipeline', () => {
 <RadioInfo>
   <StationName>K1TTT-1</StationName>
   <RadioNr>1</RadioNr>
-  <Freq>14025000</Freq>
-  <TXFreq>14025000</TXFreq>
+  <Freq>1402500</Freq>
+  <TXFreq>1402500</TXFreq>
   <Mode>CW</Mode>
   <OpCall>K1TTT</OpCall>
   <IsRunning>True</IsRunning>
@@ -94,6 +94,32 @@ describe('radio pipeline', () => {
     const evt = io.events.find((e) => e.name === 'radio:update');
     assert.ok(evt);
     assert.equal(evt.payload.radio_nr, 1);
+  });
+
+  // Regression test for a real-world report: a live capture showed N1MM's
+  // Score broadcast arriving on the port this deployment's own config
+  // called the radio port. All three listeners now dispatch by the
+  // packet's actual root element (see udp/dispatch.js), so this must still
+  // work correctly instead of logging "Not a RadioInfo packet" and dropping
+  // real score data on the floor.
+  it('a Score (dynamicresults) packet arriving on the radio port is still processed correctly', async () => {
+    const xml = `<?xml version="1.0"?>
+<dynamicresults>
+  <contest>CW-OPEN</contest>
+  <call>WT2P</call>
+  <breakdown>
+    <qso band="total" mode="ALL">7</qso>
+    <point band="total" mode="ALL">14</point>
+  </breakdown>
+  <score>14</score>
+</dynamicresults>`;
+    await send(xml, RADIO_PORT); // deliberately the wrong port
+    await waitFor(() => (getLatestScore() || {}).qsos === 7);
+
+    const total = getLatestScore();
+    assert.equal(total.points, 14);
+    assert.equal(io.events.some((e) => e.name === 'score:update'), true);
+    assert.equal(io.events.some((e) => e.name === 'radio:update'), false);
   });
 });
 

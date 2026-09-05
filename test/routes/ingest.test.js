@@ -84,7 +84,7 @@ describe('POST /api/ingest/radio', () => {
 <RadioInfo>
   <StationName>K1TTT-1</StationName>
   <RadioNr>1</RadioNr>
-  <Freq>14025000</Freq>
+  <Freq>1402500</Freq>
   <Mode>CW</Mode>
   <OpCall>K1TTT</OpCall>
   <IsRunning>True</IsRunning>

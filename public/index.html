@@ -84,7 +84,7 @@
           </tr>
         </thead>
         <tbody>
-          <template x-for="q in qsos.slice(0, 50)" :key="q.id ?? q.call + q.band">
+          <template x-for="q in qsos.slice(0, 50)" :key="q.ext_id ?? q.id ?? (q.call + q.band + q.mode)">
             <tr>
               <td x-text="q.call"></td>
               <td x-text="q.band"></td>

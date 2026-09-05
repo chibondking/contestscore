@@ -1,5 +1,6 @@
 const dgram = require('dgram');
 const { parseRadio } = require('../parsers/radio');
+const { handleAnyBuffer } = require('./dispatch');
 
 // Parses one RadioInfo packet and emits radio:update. Split out from the
 // dgram socket so the exact same logic runs whether the bytes arrived over
@@ -18,8 +19,12 @@ async function handleRadioBuffer(buf, emitter, source) {
 function createRadioListener(port, emitter) {
   const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
 
+  // Dispatches by the packet's own root element, not just "this arrived on
+  // the radio port so it must be RadioInfo" -- a live capture showed a
+  // Score broadcast landing on this port instead (see dispatch.js's header
+  // comment), which a port-trusting listener would just silently reject.
   sock.on('message', (buf, rinfo) => {
-    handleRadioBuffer(buf, emitter, rinfo.address);
+    handleAnyBuffer(buf, emitter, rinfo.address);
   });
 
   sock.on('error', (err) => {

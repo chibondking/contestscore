@@ -1,4 +1,5 @@
 const xml2js = require('xml2js');
+const { tensOfHzToHz } = require('./util');
 
 const PARSE_OPTS = { explicitArray: false, trim: true };
 
@@ -30,8 +31,10 @@ async function parseContact(buf) {
     mycall:           c.mycall || '',
     contestname:      c.contestname || '',
     contestnr:        c.contestnr || '',
-    rx_freq:          c.rxfreq || '',
-    tx_freq:          c.txfreq || '',
+    // See parsers/util.js -- N1MM's rxfreq/txfreq are in tens of Hz, same
+    // as RadioInfo's Freq/TXFreq.
+    rx_freq:          tensOfHzToHz(c.rxfreq),
+    tx_freq:          tensOfHzToHz(c.txfreq),
     countryprefix:    c.countryprefix || '',
     wpxprefix:        c.wpxprefix || '',
     stationprefix:    c.stationprefix || '',

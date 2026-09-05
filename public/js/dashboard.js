@@ -39,7 +39,25 @@ function dashboard() {
       });
 
       socket.on('contact:new', (data) => {
-        this.qsos = [data, ...this.qsos];
+        // A contactreplace edit re-emits contact:new with the same ext_id --
+        // update that row in place instead of prepending a duplicate (which
+        // would leave two rows sharing the same x-for :key, exactly the
+        // kind of thing that breaks Alpine's DOM reconciliation).
+        const idx = data.ext_id ? this.qsos.findIndex((q) => q.ext_id === data.ext_id) : -1;
+        if (idx >= 0) {
+          this.qsos[idx] = data;
+          this.qsos = [...this.qsos];
+        } else {
+          this.qsos = [data, ...this.qsos];
+        }
+        this.fetchRate();
+        this.touch();
+      });
+
+      socket.on('contact:delete', (data) => {
+        this.qsos = this.qsos.filter((q) => (
+          data.ext_id ? q.ext_id !== data.ext_id : !(q.call === data.call && q.band === data.band)
+        ));
         this.fetchRate();
         this.touch();
       });

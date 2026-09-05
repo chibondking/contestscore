@@ -27,30 +27,42 @@ updates to connected browsers in real time via WebSockets.
 ## Architecture
 
 ```
-UDP :12060  (Radio broadcast)      -->  src/udp/radioListener.js   --\
-UDP :12061  (Contacts + Callsign)  -->  src/udp/contactListener.js  |-> handle*Buffer()
-UDP :12062  (Score broadcast)      -->  src/udp/scoreListener.js   --/       |
-                                                                              v
-POST /api/ingest/{radio,contact,score}  (ContestPulse bridge) -------> same handle*Buffer()
-                                                                              |
-                                                                              v
-                                                                src/parsers/  (XML -> JS objects)
-                                                                              |
-                                                                              v
-                                                                src/db/       (better-sqlite3)
-                                                                              |
-                                                                              v
-                                                                src/socket/   (socket.io)
-                                                                              |
-                                                                              v
-                                                                public/       (dashboard, no build step)
+UDP :12060  (Radio broadcast)      --\
+UDP :12061  (Contacts + Callsign)   |-> src/udp/dispatch.js (handleAnyBuffer)
+UDP :12062  (Score broadcast)      --/         |
+                                                v
+POST /api/ingest/{radio,contact,score}  ------>+   (ContestPulse bridge)
+                                                |
+                                                v
+                                    src/parsers/  (XML -> JS objects)
+                                                |
+                                                v
+                                    src/db/       (better-sqlite3)
+                                                |
+                                                v
+                                    src/socket/   (socket.io)
+                                                |
+                                                v
+                                    public/       (dashboard, no build step)
 ```
 
 Two transports feed the same pipeline: raw LAN UDP for a local install, and
 authenticated HTTP for a deployment ContestPulse relays into (see
-"ContestPulse Bridge" below) -- both end up calling the exact same
-`handle*Buffer()` functions exported from `src/udp/*Listener.js`, so there is
-one parse/DB/emit code path regardless of transport.
+"ContestPulse Bridge" below).
+
+**Every listener and every ingest route dispatches by the packet's own XML
+root element (`src/udp/dispatch.js`), not by which port/route it arrived
+on.** This isn't defensive theater -- port labels have already failed to
+match content twice in real deployments: a FlexRadio/SmartSDR CAT setup
+exclusively claiming N1MM's documented default Contacts port for its own
+spot listener, and a live capture where a Score broadcast landed on
+whatever port a deployment's own config called "radio_port". A
+port-trusting listener silently drops real data in both cases; dispatching
+by actual root element handles any such mismatch, from any of the three
+local ports or any of the three ingest routes. `handleRadioBuffer`/
+`handleContactBuffer`/`handleScoreBuffer` (exported from `src/udp/
+*Listener.js`) still do the actual per-type parse/DB/emit work -- dispatch.js
+just routes to the right one first.
 
 HTTP server (Express) on port 3000 serves the dashboard and a REST API for
 historical data. Socket.io runs on the same port.
@@ -153,7 +165,15 @@ real captured packet or the docs above.
 Fields we care about: `StationName`, `RadioNr`, `Freq`, `TXFreq`, `Mode`,
 `OpCall`, `IsRunning`, `IsTransmitting`, `FocusEntry`, `Antenna`, `Rotors`,
 `FocusRadioNr`, `ActiveRadioNr`. This is the one packet type whose casing and
-field names matched our original assumptions.
+field names matched our original assumptions -- the *values* didn't,
+though: `Freq`/`TXFreq` (and ContactInfo's `rxfreq`/`txfreq`, same issue) are
+in **tens of Hz, not Hz**. Confirmed against N1MM's own documented example
+(`<Freq>352211</Freq>` only makes sense as 3.52211 MHz, its own "CW-80m"
+label, once multiplied by 10) and against a live report of the dashboard
+showing 386.5 kHz while actually on 3865 kHz -- exactly a 10x error. See
+`src/parsers/util.js`'s `tensOfHzToHz()`, shared by both parsers specifically
+so fixing this in one field doesn't leave it sitting in another, which is
+exactly how ContactInfo's copy of the same bug was first missed.
 
 ### Contact broadcasts (:12061) — three distinct packet types, disambiguated
 by root element name (**lowercase**, unlike RadioInfo):
@@ -190,6 +210,17 @@ attributes, a `<qth>` element with `dxcccountry`/`cqzone`/`iaruzone`/
 one pair per band/mode the station has worked, **plus** a
 `band="total" mode="ALL"` pair holding the contest grand total. The overall
 point total is the top-level `<score>` element, not `<total>`.
+
+**Confirmed by a live capture (2026-09, N1MM+, "CW-OPEN" contest):**
+`<dynamicresults>` can arrive nested one level deeper than the docs show,
+inside an outer `<rtc>` wrapper (`<rtc><dynamicresults>...</dynamicresults>
+</rtc>`) rather than as the bare root. `parseScore()` accepts both shapes.
+Which one a given N1MM installation sends may depend on its version, or
+possibly on whether N1MM's separate "Report Real-Time Score to Server"
+feature (Score Reporting tab -- an unrelated, HTTP-based integration with
+third-party scoreboard aggregators, on its own update interval) is enabled;
+not confirmed either way, but the two features appear to share the same
+underlying XML serialization internally.
 
 No `<mult>` breakdown has been observed in a live capture yet (the only
 verified example, ARRL Field Day, doesn't score multipliers) — the parser

@@ -1,5 +1,6 @@
 const dgram = require('dgram');
 const { parseScore } = require('../parsers/score');
+const { handleAnyBuffer } = require('./dispatch');
 
 // Parses one Score (dynamicresults) packet and emits score:update. Split out
 // from the dgram socket so the exact same logic runs whether the bytes
@@ -19,8 +20,11 @@ async function handleScoreBuffer(buf, emitter, source) {
 function createScoreListener(port, emitter) {
   const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
 
+  // Dispatches by the packet's own root element rather than assuming
+  // everything on this port is Score traffic -- see dispatch.js's header
+  // comment for why port labels can't be trusted alone.
   sock.on('message', (buf, rinfo) => {
-    handleScoreBuffer(buf, emitter, rinfo.address);
+    handleAnyBuffer(buf, emitter, rinfo.address);
   });
 
   sock.on('error', (err) => {

@@ -128,4 +128,41 @@ describe('parseScore', () => {
       /Not a dynamicresults \(Score\) packet/
     );
   });
+
+  // Live capture, 2026-09, N1MM+ Score Reporting, "CW-OPEN" contest: real
+  // Score broadcasts arrived with <dynamicresults> nested one level deeper
+  // than the docs show, inside an outer <rtc> wrapper. Every real Score
+  // broadcast was silently rejected until this shape was also accepted.
+  it('accepts dynamicresults nested inside an <rtc> wrapper (real capture)', async () => {
+    const rtcWrapped = `<?xml version="1.0"?>
+<rtc>
+<dynamicresults>
+        <contest>CW-OPEN</contest>
+        <call>WT2P</call>
+        <ops>WT2P</ops>
+        <class power="LOW" assisted="ASSISTED" transmitter="ONE" ops="SINGLE-OP" bands="ALL" mode="CW" overlay="N/A"></class>
+        <breakdown>
+          <qso band="total" mode="ALL">10</qso>
+          <point band="total" mode="ALL">20</point>
+        </breakdown>
+        <score>20</score>
+</dynamicresults>
+</rtc>`;
+    const s = await parseScore(Buffer.from(rtcWrapped));
+    assert.equal(s.contest, 'CW-OPEN');
+    assert.equal(s.call, 'WT2P');
+    assert.equal(s.power, 'LOW');
+    assert.equal(s.assisted, 1);
+    assert.equal(s.score_total, 20);
+    const total = s.breakdown.find((b) => b.is_total);
+    assert.equal(total.qsos, 10);
+    assert.equal(total.points, 20);
+  });
+
+  it('still prefers the bare (non-<rtc>) shape when both would be present', async () => {
+    // Not a real N1MM shape, just confirming the fallback order is
+    // "bare first, then rtc-wrapped" rather than the other way round.
+    const bareStillWorks = await parseScore(Buffer.from(base));
+    assert.equal(bareStillWorks.contest, 'CQ-WPX-CW');
+  });
 });

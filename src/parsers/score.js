@@ -26,13 +26,21 @@ function textAndAttrs(el) {
 // grand total) rather than flat top-level fields. The overall point total is
 // <score>, not <total>.
 //
+// A live capture (2026-09, N1MM+ Score Reporting, "CW-OPEN" contest) showed
+// <dynamicresults> nested one level deeper than documented, inside an outer
+// <rtc> ("real-time contest [score]") wrapper -- every real Score broadcast
+// was being rejected as "not a dynamicresults packet" until this was found,
+// since the docs' example shows dynamicresults as the bare root. Both shapes
+// are accepted here; which one a given N1MM installation sends may depend on
+// its version or a setting this project doesn't otherwise touch.
+//
 // No <mult> breakdown has been confirmed yet — the only captured example
 // (ARRL Field Day) doesn't score multipliers. If a contest broadcasts one,
 // it's parsed defensively using the same band/mode-keyed shape as qso/point;
 // otherwise `mults` stays null on every row.
 async function parseScore(buf) {
   const result = await xml2js.parseStringPromise(buf.toString(), PARSE_OPTS);
-  const s = result.dynamicresults;
+  const s = result.dynamicresults || (result.rtc && result.rtc.dynamicresults);
   if (!s) throw new Error('Not a dynamicresults (Score) packet');
 
   const clsAttrs = (s.class && s.class.$) || {};

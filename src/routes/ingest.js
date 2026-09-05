@@ -1,8 +1,6 @@
 const { Router } = require('express');
 const { emitter } = require('../udp');
-const { handleRadioBuffer } = require('../udp/radioListener');
-const { handleContactBuffer } = require('../udp/contactListener');
-const { handleScoreBuffer } = require('../udp/scoreListener');
+const { handleAnyBuffer } = require('../udp/dispatch');
 const { recordHeartbeat } = require('../state/bridgeStatus');
 
 const router = Router();
@@ -30,22 +28,26 @@ function requireToken(req, res, next) {
 
 router.use(requireToken);
 
-// POST /api/ingest/radio    body: raw RadioInfo XML bytes
+// POST /api/ingest/{radio,contact,score}  body: raw N1MM XML bytes. All
+// three routes dispatch by the packet's own root element (see
+// udp/dispatch.js), not by which of the three it was POSTed to -- a live
+// capture showed a Score broadcast landing on ContestPulse's local "radio"
+// port, and it forwards whatever it receives on a port to that port's own
+// ingest route, so trusting the route name here would repeat the exact same
+// mistake server-side. Any of the three routes can correctly handle any
+// known packet type.
 router.post('/radio', rawBody, (req, res) => {
-  handleRadioBuffer(req.body, emitter, `bridge:${req.ip}`);
+  handleAnyBuffer(req.body, emitter, `bridge:${req.ip}`);
   res.status(202).end();
 });
 
-// POST /api/ingest/contact  body: raw contactinfo/contactreplace/
-//                                 contactdelete/lookupinfo XML bytes
 router.post('/contact', rawBody, (req, res) => {
-  handleContactBuffer(req.body, emitter, `bridge:${req.ip}`);
+  handleAnyBuffer(req.body, emitter, `bridge:${req.ip}`);
   res.status(202).end();
 });
 
-// POST /api/ingest/score    body: raw dynamicresults (Score) XML bytes
 router.post('/score', rawBody, (req, res) => {
-  handleScoreBuffer(req.body, emitter, `bridge:${req.ip}`);
+  handleAnyBuffer(req.body, emitter, `bridge:${req.ip}`);
   res.status(202).end();
 });
 
