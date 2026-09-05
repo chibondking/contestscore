@@ -39,14 +39,15 @@
 
     <section class="card" id="rate">
       <h2>Rate</h2>
-      <div class="score-row">
+      <div class="score-row" x-show="rate.length > 0">
         <template x-for="r in rate" :key="r.minutes">
           <div class="metric">
-            <span class="metric__value" x-text="r.rate_per_hour"></span>
-            <span class="metric__label" x-text="r.minutes + ' min'"></span>
+            <span class="metric__value" x-text="r.rate_per_hour ?? '—'"></span>
+            <span class="metric__label" x-text="(r.minutes ?? '?') + ' min'"></span>
           </div>
         </template>
       </div>
+      <p x-show="rate.length === 0" class="empty">Loading…</p>
     </section>
 
     <section class="card" id="bridges" x-show="bridges.length > 0">
