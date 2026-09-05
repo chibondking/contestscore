@@ -51,7 +51,7 @@
       <h2>Radios</h2>
       <template x-for="r in radios" :key="r.radio_nr">
         <div class="radio-row">
-          <span class="radio-nr" x-text="'R' + r.radio_nr"></span>
+          <span class="radio-nr" x-text="r.radio_nr != null ? 'R' + r.radio_nr : '—'"></span>
           <span class="radio-freq" x-text="r.freq ? (r.freq / 1000).toFixed(1) + ' kHz' : '—'"></span>
           <span class="radio-mode" x-text="r.mode || '—'"></span>
           <span class="radio-op" x-text="r.op_call || '—'"></span>
