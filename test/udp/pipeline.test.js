@@ -95,32 +95,6 @@ describe('radio pipeline', () => {
     assert.ok(evt);
     assert.equal(evt.payload.radio_nr, 1);
   });
-
-  // Regression test for a real-world report: a live capture showed N1MM's
-  // Score broadcast arriving on the port this deployment's own config
-  // called the radio port. All three listeners now dispatch by the
-  // packet's actual root element (see udp/dispatch.js), so this must still
-  // work correctly instead of logging "Not a RadioInfo packet" and dropping
-  // real score data on the floor.
-  it('a Score (dynamicresults) packet arriving on the radio port is still processed correctly', async () => {
-    const xml = `<?xml version="1.0"?>
-<dynamicresults>
-  <contest>CW-OPEN</contest>
-  <call>WT2P</call>
-  <breakdown>
-    <qso band="total" mode="ALL">7</qso>
-    <point band="total" mode="ALL">14</point>
-  </breakdown>
-  <score>14</score>
-</dynamicresults>`;
-    await send(xml, RADIO_PORT); // deliberately the wrong port
-    await waitFor(() => (getLatestScore() || {}).qsos === 7);
-
-    const total = getLatestScore();
-    assert.equal(total.points, 14);
-    assert.equal(io.events.some((e) => e.name === 'score:update'), true);
-    assert.equal(io.events.some((e) => e.name === 'radio:update'), false);
-  });
 });
 
 describe('contact pipeline', () => {
@@ -311,5 +285,37 @@ describe('score pipeline', () => {
 </dynamicresults>`;
     await send(xml, SCORE_PORT);
     await waitFor(() => (getLatestScore() || {}).qsos === 41);
+  });
+});
+
+describe('cross-port dispatch', () => {
+  // Regression test for a real-world report: a live capture showed N1MM's
+  // Score broadcast arriving on the port this deployment's own config
+  // called the radio port. All three listeners now dispatch by the
+  // packet's actual root element (see udp/dispatch.js), so this must still
+  // work correctly instead of logging "Not a RadioInfo packet" and dropping
+  // real score data on the floor. Placed last in the file, deliberately:
+  // it writes score_snapshots rows earlier describe blocks assume don't
+  // exist yet when they start (e.g. "score pipeline"'s first test waits for
+  // getLatestScore() !== null, which only means "my packet was processed"
+  // if the table was actually empty beforehand).
+  it('a Score (dynamicresults) packet arriving on the radio port is still processed correctly', async () => {
+    const xml = `<?xml version="1.0"?>
+<dynamicresults>
+  <contest>CW-OPEN</contest>
+  <call>WT2P</call>
+  <breakdown>
+    <qso band="total" mode="ALL">7</qso>
+    <point band="total" mode="ALL">14</point>
+  </breakdown>
+  <score>14</score>
+</dynamicresults>`;
+    await send(xml, RADIO_PORT); // deliberately the wrong port
+    await waitFor(() => (getLatestScore() || {}).qsos === 7);
+
+    const total = getLatestScore();
+    assert.equal(total.points, 14);
+    assert.equal(io.events.some((e) => e.name === 'score:update'), true);
+    assert.equal(io.events.some((e) => e.name === 'radio:update'), false);
   });
 });
