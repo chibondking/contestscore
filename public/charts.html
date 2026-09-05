@@ -40,6 +40,38 @@
       <p x-show="scoreHistory.length === 0" class="empty">No score data yet</p>
     </section>
 
+    <section class="card card--wide" id="operator-qso-chart">
+      <h2>QSOs by Operator</h2>
+      <div class="chart-box chart-box--trend">
+        <canvas id="operatorQsoChart" x-effect="renderOperatorQsoChart()"></canvas>
+      </div>
+      <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+    </section>
+
+    <section class="card card--wide" id="operator-rate-chart">
+      <h2>Rate by Operator</h2>
+      <div class="chart-box chart-box--trend">
+        <canvas id="operatorRateChart" x-effect="renderOperatorRateChart()"></canvas>
+      </div>
+      <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+    </section>
+
+    <section class="card card--wide" id="operator-score-chart">
+      <h2>Score Contribution by Operator</h2>
+      <div class="chart-box chart-box--trend">
+        <canvas id="operatorScoreChart" x-effect="renderOperatorScoreChart()"></canvas>
+      </div>
+      <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+    </section>
+
+    <section class="card card--wide" id="operator-mult-chart">
+      <h2>Multiplier Contribution by Operator</h2>
+      <div class="chart-box chart-box--trend">
+        <canvas id="operatorMultChart" x-effect="renderOperatorMultChart()"></canvas>
+      </div>
+      <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+    </section>
+
   </main>
 
   <script src="/js/charts.js"></script>
