@@ -77,8 +77,13 @@ body {
 }
 
 .grid-locator {
-  color: var(--muted);
+  color: var(--run); /* reuses the dashboard's existing amber/orange token */
+  background: rgba(210, 153, 34, 0.15); /* --run at low alpha -- a translucent chip, not a solid badge */
+  border: 1px solid rgba(210, 153, 34, 0.4);
+  border-radius: 999px;
+  padding: 0.15em 0.7em;
   font-size: 0.75rem;
+  font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
