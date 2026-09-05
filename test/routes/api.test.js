@@ -93,6 +93,7 @@ describe('GET /api/radios', () => {
     upsertRadio({
       station_name: 'WT2P-1', radio_nr: 1, freq: '14025000', tx_freq: '14025000',
       mode: 'CW', op_call: 'WT2P', is_running: 1,
+      focus_entry: null, antenna: '', rotator: '', focus_radio: null,
     });
     const res = await fetch(`${baseUrl}/api/radios`);
     assert.equal(res.status, 200);
