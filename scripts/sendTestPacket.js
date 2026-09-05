@@ -1,13 +1,19 @@
 /**
  * Simulate N1MM+ UDP traffic for local testing.
  *
+ * Packet shapes match the real N1MM wire format documented at
+ * https://n1mmwp.hamdocs.com/appendices/external-udp-broadcasts/ — lowercase
+ * <contactinfo>/<contactdelete> roots, and a <dynamicresults> Score broadcast
+ * with a per-band/mode <breakdown>.
+ *
  * Usage:
  *   node scripts/sendTestPacket.js [options]
  *
  * Options:
- *   --type <radio|contact|score|lookup|session>
+ *   --type <radio|contact|delete|score|lookup|session>
  *          What to send. 'session' (default) sends radio state, then --count
- *          contacts with a score update after each one.
+ *          contacts (occasionally editing or deleting one), with a Score
+ *          update after each.
  *   --count <n>      Number of contacts in a session, or repeat count for
  *                    single-type sends. Default: 5
  *   --delay <ms>     Milliseconds between packets. Default: 300
@@ -18,6 +24,7 @@
  */
 
 const dgram = require('dgram');
+const crypto = require('crypto');
 
 // ---------------------------------------------------------------------------
 // CLI arg parsing
@@ -37,8 +44,9 @@ const DELAY   = Number(arg('delay', 300));
 const HOST    = arg('host', '127.0.0.1');
 const MYCALL  = arg('mycall', 'W1TEST');
 const CONTEST = arg('contest', 'CQ-WPX-CW');
+const CONTESTNR = '1';
 
-const VALID_TYPES = ['radio', 'contact', 'score', 'lookup', 'session'];
+const VALID_TYPES = ['radio', 'contact', 'delete', 'score', 'lookup', 'session'];
 if (!VALID_TYPES.includes(TYPE)) {
   console.error(`Unknown --type "${TYPE}". Valid: ${VALID_TYPES.join(', ')}`);
   process.exit(1);
@@ -57,19 +65,24 @@ const DX_CALLS = [
   'ZL3IX', 'ZS6EZ', 'VU2PAI', 'BY1CW', 'HL5BFT', '7Z5OO',
 ];
 
-const BANDS = ['10', '15', '20', '40', '80', '160'];
+// N1MM's <band> field is the band in MHz, not meters.
+const BANDS = ['28', '21', '14', '7', '3.5', '1.8'];
 const MODES = ['CW', 'SSB', 'RTTY'];
 
-// 14 MHz = 14000000 Hz; N1MM sends in Hz
+// N1MM sends radio frequency in Hz.
 const BAND_FREQS = {
-  '10': 28025000, '15': 21025000, '20': 14025000,
-  '40': 7025000,  '80': 3525000,  '160': 1825000,
+  '28': 28025000, '21': 21025000, '14': 14025000,
+  '7': 7025000, '3.5': 3525000, '1.8': 1825000,
 };
 
 let callPool = [...DX_CALLS];
 function nextCall() {
   if (callPool.length === 0) callPool = [...DX_CALLS];
   return callPool.splice(Math.floor(Math.random() * callPool.length), 1)[0];
+}
+
+function newId() {
+  return crypto.randomBytes(16).toString('hex');
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +96,7 @@ function radioPacket(radioNr, freq, mode, isRunning = true) {
   <Freq>${freq}</Freq>
   <TXFreq>${freq}</TXFreq>
   <Mode>${mode}</Mode>
+  <mycall>${MYCALL}</mycall>
   <OpCall>${MYCALL}</OpCall>
   <IsRunning>${isRunning ? 'True' : 'False'}</IsRunning>
   <IsTransmitting>False</IsTransmitting>
@@ -94,66 +108,82 @@ function radioPacket(radioNr, freq, mode, isRunning = true) {
 </RadioInfo>`;
 }
 
-function contactPacket(call, band, mode, srx, isMultiplier = false) {
+// root: 'contactinfo' for a fresh QSO, 'contactreplace' for an edited one.
+function contactPacket(root, { id, call, band, mode, srx, radioNr, isMultiplier, isOriginal }) {
   return `<?xml version="1.0" encoding="utf-8"?>
-<ContactInfo>
-  <call>${call}</call>
-  <band>${band}</band>
-  <mode>${mode}</mode>
-  <operator>${MYCALL}</operator>
-  <mycall>${MYCALL}</mycall>
+<${root}>
+  <app>N1MM</app>
   <contestname>${CONTEST}</contestname>
-  <srx>${String(srx).padStart(3, '0')}</srx>
-  <stx>${String(srx).padStart(3, '0')}</stx>
+  <contestnr>${CONTESTNR}</contestnr>
+  <timestamp>${new Date().toISOString().replace('T', ' ').slice(0, 19)}</timestamp>
+  <mycall>${MYCALL}</mycall>
+  <band>${band}</band>
+  <rxfreq>${BAND_FREQS[band]}</rxfreq>
+  <txfreq>${BAND_FREQS[band]}</txfreq>
+  <operator>${MYCALL}</operator>
+  <mode>${mode}</mode>
+  <call>${call}</call>
   <snt>599</snt>
+  <sntnr>${String(srx).padStart(3, '0')}</sntnr>
   <rcv>599</rcv>
-  <points>1</points>
-  <mult1>${isMultiplier ? call.slice(0, 2) : ''}</mult1>
-  <mult2></mult2>
-  <IsMultiplier1>${isMultiplier ? 'True' : 'False'}</IsMultiplier1>
-  <IsMultiplier2>False</IsMultiplier2>
+  <rcvnr>${String(srx).padStart(3, '0')}</rcvnr>
   <exchange1></exchange1>
   <section></section>
+  <ismultiplier1>${isMultiplier ? '1' : '0'}</ismultiplier1>
+  <ismultiplier2>0</ismultiplier2>
+  <points>1</points>
+  <radionr>${radioNr}</radionr>
   <RoverLocation></RoverLocation>
-  <RadioInterfaced>1</RadioInterfaced>
+  <RadioInterfaced>${radioNr}</RadioInterfaced>
   <NetworkedCompNr>1</NetworkedCompNr>
-  <IsNewQso>1</IsNewQso>
-  <DeleteContact>False</DeleteContact>
-</ContactInfo>`;
+  <IsOriginal>${isOriginal ? 'True' : 'False'}</IsOriginal>
+  <StationName>${MYCALL}-${radioNr}</StationName>
+  <ID>${id}</ID>
+  <IsClaimedQso>1</IsClaimedQso>
+</${root}>`;
 }
 
-function deleteContactPacket(call, band, mode) {
+function deleteContactPacket({ id, call, band }) {
   return `<?xml version="1.0" encoding="utf-8"?>
-<ContactInfo>
-  <call>${call}</call>
-  <band>${band}</band>
-  <mode>${mode}</mode>
-  <operator>${MYCALL}</operator>
+<contactdelete>
+  <app>N1MM</app>
+  <timestamp>${new Date().toISOString().replace('T', ' ').slice(0, 19)}</timestamp>
   <mycall>${MYCALL}</mycall>
-  <contestname>${CONTEST}</contestname>
-  <IsNewQso>0</IsNewQso>
-  <DeleteContact>True</DeleteContact>
-</ContactInfo>`;
+  <band>${band}</band>
+  <call>${call}</call>
+  <contestnr>${CONTESTNR}</contestnr>
+  <StationName>${MYCALL}-1</StationName>
+  <ID>${id}</ID>
+</contactdelete>`;
 }
 
-function scorePacket(qsos, points, mults) {
-  const total = points * mults;
-  return `<?xml version="1.0" encoding="utf-8"?>
-<Score>
+// state: Map of "band|mode" -> { qsos, points }
+function scorePacket(state) {
+  let totalQsos = 0;
+  let totalPoints = 0;
+  const rows = [];
+  for (const [key, v] of state) {
+    const [band, mode] = key.split('|');
+    rows.push(`    <qso band="${band}" mode="${mode}">${v.qsos}</qso>`);
+    rows.push(`    <point band="${band}" mode="${mode}">${v.points}</point>`);
+    totalQsos += v.qsos;
+    totalPoints += v.points;
+  }
+  rows.push(`    <qso band="total" mode="ALL">${totalQsos}</qso>`);
+  rows.push(`    <point band="total" mode="ALL">${totalPoints}</point>`);
+
+  return `<?xml version="1.0"?>
+<dynamicresults>
   <contest>${CONTEST}</contest>
   <call>${MYCALL}</call>
-  <operators>${MYCALL}</operators>
-  <power>HIGH</power>
-  <assisted>False</assisted>
-  <transmitted>ALL</transmitted>
-  <band>ALL</band>
-  <mode>MIXED</mode>
-  <qsos>${qsos}</qsos>
-  <points>${points}</points>
-  <mults>${mults}</mults>
-  <mults2>0</mults2>
-  <total>${total}</total>
-</Score>`;
+  <ops>${MYCALL}</ops>
+  <class power="HIGH" assisted="NON-ASSISTED" transmitter="ONE" ops="SINGLE-OP" bands="ALL" mode="MIXED" overlay="N/A"></class>
+  <breakdown>
+${rows.join('\n')}
+  </breakdown>
+  <score>${totalPoints}</score>
+  <timestamp>${new Date().toISOString().replace('T', ' ').slice(0, 19)}</timestamp>
+</dynamicresults>`;
 }
 
 function lookupPacket(call) {
@@ -195,7 +225,7 @@ function sleep(ms) {
 // Scenarios
 // ---------------------------------------------------------------------------
 async function sendSingle(type) {
-  const band = BANDS[1]; // 15m
+  const band = BANDS[2]; // 14 MHz (20m)
   const mode = 'CW';
   const call = nextCall();
 
@@ -205,13 +235,22 @@ async function sendSingle(type) {
       console.log(`→ RadioInfo  R1 ${BAND_FREQS[band]} Hz ${mode}`);
       break;
     case 'contact':
-      await send(contactPacket(call, band, mode, 1), PORTS.contact);
-      console.log(`→ ContactInfo  ${call} ${band}m ${mode}`);
+      await send(
+        contactPacket('contactinfo', { id: newId(), call, band, mode, srx: 1, radioNr: 1, isMultiplier: false, isOriginal: true }),
+        PORTS.contact
+      );
+      console.log(`→ contactinfo  ${call} ${band}MHz ${mode}`);
       break;
-    case 'score':
-      await send(scorePacket(1, 1, 1), PORTS.score);
-      console.log(`→ Score  QSOs:1 pts:1 mults:1 total:1`);
+    case 'delete':
+      await send(deleteContactPacket({ id: newId(), call, band }), PORTS.contact);
+      console.log(`→ contactdelete  ${call} ${band}MHz`);
       break;
+    case 'score': {
+      const state = new Map([[`${band}|${mode}`, { qsos: 1, points: 1 }]]);
+      await send(scorePacket(state), PORTS.score);
+      console.log(`→ dynamicresults  QSOs:1 pts:1`);
+      break;
+    }
     case 'lookup':
       await send(lookupPacket(call), PORTS.contact);
       console.log(`→ lookupinfo  ${call}`);
@@ -223,35 +262,64 @@ async function runSession() {
   console.log(`Session: ${COUNT} QSOs, ${DELAY}ms delay, mycall=${MYCALL}, contest=${CONTEST}, host=${HOST}\n`);
 
   // Establish radio state for two radios
-  await send(radioPacket(1, BAND_FREQS['20'], 'CW', true), PORTS.radio);
+  await send(radioPacket(1, BAND_FREQS['14'], 'CW', true), PORTS.radio);
   console.log('→ RadioInfo  R1 20m CW (running)');
   await sleep(DELAY);
 
-  await send(radioPacket(2, BAND_FREQS['15'], 'CW', false), PORTS.radio);
+  await send(radioPacket(2, BAND_FREQS['21'], 'CW', false), PORTS.radio);
   console.log('→ RadioInfo  R2 15m CW (S&P)');
   await sleep(DELAY);
 
-  let qsos = 0;
-  let points = 0;
-  let mults = 0;
+  const state = new Map(); // "band|mode" -> { qsos, points }
+  const sent = []; // { id, call, band, mode } for edit/delete demos
 
   for (let i = 1; i <= COUNT; i++) {
-    const band = BANDS[Math.floor(Math.random() * 3)]; // 10/15/20
+    const band = BANDS[Math.floor(Math.random() * 3)]; // 28/21/14 MHz
     const mode = 'CW';
     const call = nextCall();
+    const id = newId();
     const isMultiplier = i % 4 === 0; // every 4th QSO is a new mult
 
-    await send(contactPacket(call, band, mode, i, isMultiplier), PORTS.contact);
-    qsos++;
-    points += 1;
-    if (isMultiplier) mults++;
+    await send(
+      contactPacket('contactinfo', { id, call, band, mode, srx: i, radioNr: 1, isMultiplier, isOriginal: true }),
+      PORTS.contact
+    );
+    sent.push({ id, call, band, mode });
 
-    console.log(`→ ContactInfo  [${i}/${COUNT}] ${call.padEnd(8)} ${band}m ${mode}${isMultiplier ? ' MULT' : ''}`);
+    const key = `${band}|${mode}`;
+    const row = state.get(key) || { qsos: 0, points: 0 };
+    row.qsos += 1;
+    row.points += 1;
+    state.set(key, row);
+
+    console.log(`→ contactinfo  [${i}/${COUNT}] ${call.padEnd(8)} ${band}MHz ${mode}${isMultiplier ? ' MULT' : ''}`);
     await sleep(DELAY / 2);
 
-    await send(scorePacket(qsos, points, Math.max(mults, 1)), PORTS.score);
-    const total = points * Math.max(mults, 1);
-    console.log(`→ Score        QSOs:${qsos} pts:${points} mults:${Math.max(mults, 1)} total:${total}`);
+    // Every 5th QSO, simulate the operator deleting a busted contact.
+    if (i % 5 === 0 && sent.length > 1) {
+      const victim = sent.shift();
+      await send(deleteContactPacket(victim), PORTS.contact);
+      const vKey = `${victim.band}|${victim.mode}`;
+      const vRow = state.get(vKey);
+      if (vRow) { vRow.qsos -= 1; vRow.points -= 1; }
+      console.log(`→ contactdelete  ${victim.call} ${victim.band}MHz`);
+      await sleep(DELAY / 2);
+    }
+    // Every 7th QSO, simulate the operator correcting the exchange in place.
+    else if (i % 7 === 0) {
+      const last = sent[sent.length - 1];
+      await send(
+        contactPacket('contactreplace', { id: last.id, call: last.call, band: last.band, mode: last.mode, srx: i, radioNr: 1, isMultiplier: false, isOriginal: false }),
+        PORTS.contact
+      );
+      console.log(`→ contactreplace  ${last.call} (exchange corrected)`);
+      await sleep(DELAY / 2);
+    }
+
+    await send(scorePacket(state), PORTS.score);
+    const totalQsos = [...state.values()].reduce((a, r) => a + r.qsos, 0);
+    const totalPoints = [...state.values()].reduce((a, r) => a + r.points, 0);
+    console.log(`→ dynamicresults  QSOs:${totalQsos} pts:${totalPoints}`);
     await sleep(DELAY / 2);
   }
 

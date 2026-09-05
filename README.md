@@ -156,16 +156,25 @@ on `DELETE /api/db`.
 
 SQLite file at `./data/qsos.db` (created on first start). Schema:
 
-| Table             | Contents                                     |
-|-------------------|----------------------------------------------|
-| `qsos`            | One row per logged QSO                       |
-| `radio_state`     | Latest state per radio (upserted by RadioNr) |
-| `score_snapshots` | Append-only score time series                |
-| `settings`        | Key/value config (contest name, etc.)        |
-| `callsign_cache`  | Lookup results, cleared on DB reset          |
+| Table             | Contents                                              |
+|-------------------|--------------------------------------------------------|
+| `qsos`            | One row per logged QSO                                |
+| `radio_state`     | Latest state per radio (upserted by RadioNr)          |
+| `score_snapshots` | Per-band/mode score breakdown, one batch per broadcast |
+| `settings`        | Key/value config (contest name, etc.)                 |
+| `callsign_cache`  | Lookup results, cleared on DB reset                   |
 
-`qsos` has a unique constraint on `(call, band, mode, contestname, mycall)`;
-duplicates from networked PCs are silently ignored (`INSERT OR IGNORE`).
+`qsos` is identified primarily by N1MM's own `ID` GUID, so an edited-in-place
+QSO (`contactreplace`) updates its existing row instead of duplicating it.
+Loggers that don't send an `ID` fall back to a
+`(call, band, mode, contestnr, mycall)` natural key with `INSERT OR IGNORE`
+dedupe (and lose update-in-place as a result).
+
+`score_snapshots` stores one row per (band, mode) entry from each Score
+broadcast's breakdown, plus a `band='total' mode='ALL'` row holding the
+contest grand total — a single Score packet reports the *whole* contest
+snapshot, not one band, so "current score" means that total row, not
+whichever row was inserted last.
 
 Schema lives in `src/db/schema.sql`. Numbered `.sql` files in `migrations/`
 are applied automatically on startup.

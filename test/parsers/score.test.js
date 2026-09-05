@@ -2,88 +2,130 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { parseScore } = require('../../src/parsers/score');
 
-const base = `<?xml version="1.0" encoding="utf-8"?>
-<Score>
+// Real N1MM wire format — root <dynamicresults>, per-band/mode <qso>/<point>
+// pairs under <breakdown>, plus a band="total" mode="ALL" pair for the
+// contest grand total. Overall points are <score>, not <total>. See
+// https://n1mmwp.hamdocs.com/appendices/external-udp-broadcasts/
+const base = `<?xml version="1.0"?>
+<dynamicresults>
   <contest>CQ-WPX-CW</contest>
   <call>K1TTT</call>
-  <operators>K1TTT</operators>
-  <power>HIGH</power>
-  <assisted>False</assisted>
-  <transmitted>ALL</transmitted>
-  <band>ALL</band>
-  <mode>CW</mode>
-  <qsos>42</qsos>
-  <points>126</points>
-  <mults>15</mults>
-  <mults2>0</mults2>
-  <total>1890</total>
-</Score>`;
+  <ops>K1TTT</ops>
+  <class power="HIGH" assisted="NON-ASSISTED" transmitter="ONE"
+    ops="SINGLE-OP" bands="ALL" mode="CW" overlay="N/A">
+  </class>
+  <club></club>
+  <qth>
+    <dxcccountry>K</dxcccountry>
+    <cqzone>5</cqzone>
+    <iaruzone>8</iaruzone>
+    <arrlsection>CT</arrlsection>
+    <stprvoth>CT</stprvoth>
+    <grid6>FN31</grid6>
+  </qth>
+  <breakdown>
+    <qso band="20" mode="CW">30</qso>
+    <point band="20" mode="CW">60</point>
+    <qso band="40" mode="CW">12</qso>
+    <point band="40" mode="CW">24</point>
+    <qso band="total" mode="ALL">42</qso>
+    <point band="total" mode="ALL">84</point>
+  </breakdown>
+  <score>84</score>
+  <timestamp>2020-01-17 17:33:37</timestamp>
+</dynamicresults>`;
 
 describe('parseScore', () => {
-  it('extracts all expected fields', async () => {
+  it('extracts contest header fields', async () => {
     const s = await parseScore(Buffer.from(base));
     assert.equal(s.contest, 'CQ-WPX-CW');
     assert.equal(s.call, 'K1TTT');
     assert.equal(s.power, 'HIGH');
-    assert.equal(s.band, 'ALL');
-    assert.equal(s.mode, 'CW');
-    assert.equal(s.qsos, 42);
-    assert.equal(s.points, 126);
-    assert.equal(s.mults, 15);
-    assert.equal(s.mults2, 0);
-    assert.equal(s.total, 1890);
+    assert.equal(s.transmitter, 'ONE');
+    assert.equal(s.category_ops, 'SINGLE-OP');
+    assert.equal(s.category_mode, 'CW');
+    assert.equal(s.dxcc_country, 'K');
+    assert.equal(s.cq_zone, '5');
+    assert.equal(s.score_total, 84);
   });
 
-  it('parses assisted=False as 0', async () => {
+  it('parses assisted="ASSISTED"/"NON-ASSISTED" into a boolean', async () => {
     const s = await parseScore(Buffer.from(base));
     assert.equal(s.assisted, 0);
+
+    const assisted = base.replace('assisted="NON-ASSISTED"', 'assisted="ASSISTED"');
+    const a = await parseScore(Buffer.from(assisted));
+    assert.equal(a.assisted, 1);
   });
 
-  it('parses assisted=True as 1', async () => {
-    const xml = base.replace('<assisted>False</assisted>', '<assisted>True</assisted>');
-    const s = await parseScore(Buffer.from(xml));
-    assert.equal(s.assisted, 1);
+  it('parses the per-band/mode breakdown, zipping qso and point by band+mode', async () => {
+    const s = await parseScore(Buffer.from(base));
+    assert.equal(s.breakdown.length, 3);
+
+    const b20 = s.breakdown.find((b) => b.band === '20' && b.mode === 'CW');
+    assert.equal(b20.qsos, 30);
+    assert.equal(b20.points, 60);
+    assert.equal(b20.is_total, false);
+
+    const b40 = s.breakdown.find((b) => b.band === '40' && b.mode === 'CW');
+    assert.equal(b40.qsos, 12);
+    assert.equal(b40.points, 24);
   });
 
-  it('parses legacy assisted=1/0', async () => {
-    const xml = base.replace('<assisted>False</assisted>', '<assisted>0</assisted>');
-    const s = await parseScore(Buffer.from(xml));
-    assert.equal(s.assisted, 0);
+  it('flags the band="total" mode="ALL" row as the grand total', async () => {
+    const s = await parseScore(Buffer.from(base));
+    const total = s.breakdown.find((b) => b.is_total);
+    assert.ok(total);
+    assert.equal(total.qsos, 42);
+    assert.equal(total.points, 84);
+  });
+
+  it('leaves mults null when no <mult> breakdown is present', async () => {
+    const s = await parseScore(Buffer.from(base));
+    assert.ok(s.breakdown.every((b) => b.mults === null));
+  });
+
+  it('parses a <mult> breakdown defensively when present', async () => {
+    const withMults = base.replace(
+      '<qso band="total" mode="ALL">42</qso>',
+      '<mult band="20" mode="CW">5</mult><qso band="total" mode="ALL">42</qso>'
+    );
+    const s = await parseScore(Buffer.from(withMults));
+    const b20 = s.breakdown.find((b) => b.band === '20' && b.mode === 'CW');
+    assert.equal(b20.mults, 5);
+  });
+
+  it('handles a single breakdown entry (no auto-array) without throwing', async () => {
+    const single = `<dynamicresults>
+      <contest>TEST</contest>
+      <call>W1TEST</call>
+      <breakdown>
+        <qso band="total" mode="ALL">5</qso>
+        <point band="total" mode="ALL">5</point>
+      </breakdown>
+      <score>5</score>
+    </dynamicresults>`;
+    const s = await parseScore(Buffer.from(single));
+    assert.equal(s.breakdown.length, 1);
+    assert.equal(s.breakdown[0].qsos, 5);
+    assert.equal(s.breakdown[0].is_total, true);
   });
 
   it('handles missing optional fields without throwing', async () => {
-    const minimal = `<Score>
+    const minimal = `<dynamicresults>
       <contest>TEST</contest>
       <call>W1TEST</call>
-      <qsos>5</qsos>
-      <points>5</points>
-      <mults>3</mults>
-      <total>15</total>
-    </Score>`;
+    </dynamicresults>`;
     const s = await parseScore(Buffer.from(minimal));
     assert.equal(s.contest, 'TEST');
-    assert.equal(s.qsos, 5);
-    assert.equal(s.operators, '');
-    assert.equal(s.power, '');
+    assert.equal(s.breakdown.length, 0);
+    assert.equal(s.score_total, 0);
   });
 
-  it('rejects non-Score XML', async () => {
+  it('rejects non-dynamicresults XML', async () => {
     await assert.rejects(
       () => parseScore(Buffer.from('<RadioInfo><RadioNr>1</RadioNr></RadioInfo>')),
-      /Not a Score packet/
+      /Not a dynamicresults \(Score\) packet/
     );
-  });
-
-  it('handles concurrent calls without corrupting results', async () => {
-    const xml2 = base.replace('<qsos>42</qsos>', '<qsos>99</qsos>')
-                     .replace('<total>1890</total>', '<total>9900</total>');
-    const [s1, s2] = await Promise.all([
-      parseScore(Buffer.from(base)),
-      parseScore(Buffer.from(xml2)),
-    ]);
-    assert.equal(s1.qsos, 42);
-    assert.equal(s1.total, 1890);
-    assert.equal(s2.qsos, 99);
-    assert.equal(s2.total, 9900);
   });
 });

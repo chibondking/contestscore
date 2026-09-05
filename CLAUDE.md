@@ -90,31 +90,81 @@ contestscore/
 
 ## UDP Packet Types
 
-N1MM+ broadcasts XML over UDP. Packet schemas (from N1MM documentation):
+N1MM+ broadcasts XML over UDP. **Verified against the actual wire format** at
+https://n1mmwp.hamdocs.com/appendices/external-udp-broadcasts/ — earlier
+notes here described an invented/idealized schema that doesn't match what
+N1MM actually sends; do not trust field lists from memory, always check a
+real captured packet or the docs above.
 
-### RadioInfo (:12060)
-Fields we care about: `StationName`, `Freq`, `TXFreq`, `Mode`, `OpCall`,
-`IsRunning`, `FocusEntry`, `Antenna`, `Rotator`, `FocusRadioNr`, `RadioNr`
+### RadioInfo (:12060) — root `<RadioInfo>`
+Fields we care about: `StationName`, `RadioNr`, `Freq`, `TXFreq`, `Mode`,
+`OpCall`, `IsRunning`, `IsTransmitting`, `FocusEntry`, `Antenna`, `Rotors`,
+`FocusRadioNr`, `ActiveRadioNr`. This is the one packet type whose casing and
+field names matched our original assumptions.
 
-### ContactInfo (:12061)
-Fields: `call`, `band`, `mode`, `operator`, `mycall`, `timestamp`,
-`contestname`, `srx`, `stx`, `snt`, `rcv`, `mult1`, `mult2`, `IsMultiplier1`,
-`IsMultiplier2`, `points`, `exchange1`, `section`, `RoverLocation`,
-`RadioInterfaced`, `NetworkedCompNr`
+### Contact broadcasts (:12061) — three distinct packet types, disambiguated
+by root element name (**lowercase**, unlike RadioInfo):
 
-### Score (:12062)
-Fields: `contest`, `call`, `operators`, `power`, `assisted`, `transmitted`,
-`band`, `mode`, `qsos`, `points`, `mults`, `mults2`, `total`, `timestamp`
+- **`<contactinfo>`** — a new QSO. Fields: `contestname`, `contestnr`,
+  `timestamp`, `mycall`, `band` (MHz, e.g. `"14"`, `"3.5"`), `rxfreq`,
+  `txfreq`, `operator`, `mode`, `call`, `countryprefix`, `wpxprefix`,
+  `stationprefix`, `continent`, `snt`, `sntnr`, `rcv`, `rcvnr`, `gridsquare`,
+  `exchange1`, `section`, `comment`, `name`, `power`, `misctext`, `zone`,
+  `prec`, `ck`, `ismultiplier1`, `ismultiplier2`, `ismultiplier3`, `points`,
+  `radionr`, `run1run2`, `RoverLocation`, `RadioInterfaced`,
+  `NetworkedCompNr`, `IsOriginal`, `NetBiosName`, `IsRunQSO`, `StationName`,
+  `ID` (a GUID — see below), `IsClaimedQso`, `SentExchange`, and (on an edit)
+  `oldtimestamp`/`oldcall`.
+- **`<contactreplace>`** — an edited-in-place QSO, same field set as
+  `contactinfo`.
+- **`<contactdelete>`** — a deleted QSO. **Not** a flag inside ContactInfo —
+  it's its own packet, with a deliberately small field set: `mycall`, `band`,
+  `call`, `contestnr`, `StationName`, `ID`. Notably no `mode` or
+  `contestname`.
 
-### ExternalCallsignLookup (:12061, same port as contacts)
-Disambiguate by XML root element name.
+`ID` is a GUID that stays stable across `contactreplace` edits — it's the
+right identity key for upsert/delete, not the `(call, band, mode, mycall)`
+natural key (older loggers that omit `ID` fall back to that natural key, but
+lose update-in-place / correct delete-targeting because of it).
+
+### Score (:12062) — root `<dynamicresults>`, not `<Score>`
+This is not a flat per-band record. One broadcast contains the *entire*
+contest snapshot: header fields (`contest`, `call`, `ops`, a `<class>`
+element with `power`/`assisted`/`transmitter`/`ops`/`bands`/`mode`/`overlay`
+attributes, a `<qth>` element with `dxcccountry`/`cqzone`/`iaruzone`/
+`arrlsection`/`stprvoth`/`grid6`), plus a `<breakdown>` block of repeated
+`<qso band="20" mode="CW">156</qso>` / matching `<point ...>` element pairs —
+one pair per band/mode the station has worked, **plus** a
+`band="total" mode="ALL"` pair holding the contest grand total. The overall
+point total is the top-level `<score>` element, not `<total>`.
+
+No `<mult>` breakdown has been observed in a live capture yet (the only
+verified example, ARRL Field Day, doesn't score multipliers) — the parser
+handles one defensively if a contest sends it, using the same band/mode-keyed
+shape as `<qso>`/`<point>`, but treat multiplier data as unconfirmed until
+checked against a real non-Field-Day contest.
+
+### ExternalCallsignLookup (:12061, same port as contacts) — root `<lookupinfo>`
+Field list beyond `mycall` has not been independently verified against the
+docs (they truncate the example) — current fields (`name`, `country`, `grid`,
+`state`, `county`, `cqzone`, `ituzone`, `dxcc`, `continent`) are a plausible
+best guess, not a confirmed capture.
 
 ## Database Schema (SQLite)
 
 Core tables:
-- `qsos` -- one row per logged QSO
+- `qsos` -- one row per logged QSO. Identified primarily by N1MM's `ID` GUID
+  (`ext_id`, upserted via `ON CONFLICT` so a `contactreplace` edit updates in
+  place); a `(call, band, mode, contestnr, mycall)` natural key is the
+  fallback dedupe path for loggers that never send an `ID`.
 - `radio_state` -- latest state per radio (upsert by RadioNr)
-- `score_snapshots` -- time-series score history
+- `score_snapshots` -- one row per (band, mode) entry from each `Score`
+  broadcast's `<breakdown>`, plus a `band='total' mode='ALL'` row per
+  broadcast holding the contest grand total (`is_total = 1`). All rows from
+  one broadcast share the same `captured_at`, since a single Score packet
+  reports the whole contest snapshot, not just one band -- treating "most
+  recently inserted row" as "the current score" (the original design) is
+  wrong for any multi-band contest.
 - `settings` -- key/value config (contest name, operator, etc.)
 - `callsign_cache` -- lookup results to avoid re-querying QRZ/HamDB
 
