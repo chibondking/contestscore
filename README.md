@@ -96,6 +96,7 @@ the same port.
 | GET    | `/api/score`            | Latest score snapshot                                |
 | GET    | `/api/score/history`    | Full score time series                               |
 | GET    | `/api/radios`           | Current state of all radios                          |
+| GET    | `/api/rate`             | N1MM-style rate meter: QSOs/hr for trailing 10/30/60 min |
 | GET    | `/api/bridges`          | Realtime/stale/offline status per ContestPulse station |
 | DELETE | `/api/db`               | Wipe all contest data (requires `X-Confirm: yes`)    |
 | POST   | `/api/ingest/{radio,contact,score}` | Raw N1MM XML bytes from the ContestPulse bridge (bearer token required) |

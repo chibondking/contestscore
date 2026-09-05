@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const {
-  getQsos, clearQsos,
+  getQsos, clearQsos, getQsoRate,
   getRadios,
   getLatestScore, getScoreHistory,
 } = require('../db/queries');
@@ -27,6 +27,14 @@ router.get('/score/history', (req, res) => {
 // GET /api/radios
 router.get('/radios', (req, res) => {
   res.json(getRadios());
+});
+
+// GET /api/rate -- N1MM-style rate meter: QSO count and extrapolated
+// QSOs/hour for each of the last 10/30/60 minutes. Pure function of
+// wall-clock time, so the dashboard should poll this rather than only
+// refreshing it on contact:new (a lull should visibly decay the rate).
+router.get('/rate', (req, res) => {
+  res.json(getQsoRate());
 });
 
 // GET /api/bridges -- realtime/stale/offline status of every ContestPulse

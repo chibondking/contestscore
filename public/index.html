@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>contestscore</title>
+  <title>ContestPulse</title>
   <link rel="stylesheet" href="/css/dashboard.css">
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
@@ -11,7 +11,7 @@
 <body x-data="dashboard()" x-init="init()">
 
   <header class="header">
-    <h1>contestscore</h1>
+    <h1>ContestPulse</h1>
     <span class="status" :class="connected ? 'status--ok' : 'status--err'">
       <span x-text="connected ? 'live' : 'disconnected'"></span>
     </span>
@@ -34,6 +34,18 @@
           <span class="metric__value" x-text="score.total ?? '—'"></span>
           <span class="metric__label">Total</span>
         </div>
+      </div>
+    </section>
+
+    <section class="card" id="rate">
+      <h2>Rate</h2>
+      <div class="score-row">
+        <template x-for="r in rate" :key="r.minutes">
+          <div class="metric">
+            <span class="metric__value" x-text="r.rate_per_hour"></span>
+            <span class="metric__label" x-text="r.minutes + ' min'"></span>
+          </div>
+        </template>
       </div>
     </section>
 

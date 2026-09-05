@@ -3,7 +3,7 @@ process.env.DB_PATH = ':memory:';
 
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { initDb, closeDb } = require('../../src/db/index');
+const { initDb, closeDb, getDb } = require('../../src/db/index');
 const { resetStatements } = require('../../src/db/queries');
 const q = require('../../src/db/queries');
 
@@ -244,5 +244,52 @@ describe('callsign_cache', () => {
   it('clearQsos also wipes the callsign cache', () => {
     q.clearQsos();
     assert.equal(q.getCachedCallsign('DL1ABC'), undefined);
+  });
+});
+
+describe('getQsoRate', () => {
+  // logged_at only has a DEFAULT (datetime('now')) at insert time -- it's
+  // not a settable field on upsertQso -- so ages are simulated the same way
+  // the Go agent's own tests do it: insert normally, then back-date the row
+  // directly, rather than sleeping through real minutes in a test.
+  function backdate(extId, minutesAgo) {
+    const ts = new Date(Date.now() - minutesAgo * 60000).toISOString().slice(0, 19).replace('T', ' ');
+    getDb().prepare('UPDATE qsos SET logged_at = ? WHERE ext_id = ?').run(ts, extId);
+  }
+
+  it('an empty log reports zero for every window', () => {
+    q.clearQsos();
+    const rate = q.getQsoRate();
+    assert.deepEqual(rate.map((r) => r.minutes), [10, 30, 60]);
+    assert.ok(rate.every((r) => r.qsos === 0 && r.rate_per_hour === 0));
+  });
+
+  it('a QSO logged just now counts toward every window', () => {
+    q.clearQsos();
+    q.upsertQso({ ...QSO, ext_id: 'rate-fresh' });
+    const rate = q.getQsoRate();
+    assert.ok(rate.every((r) => r.qsos === 1));
+    // 1 QSO in a 10-minute window extrapolates to 6/hr.
+    assert.equal(rate.find((r) => r.minutes === 10).rate_per_hour, 6);
+  });
+
+  it('a QSO older than a window falls out of it, but not the wider ones', () => {
+    q.clearQsos();
+    q.upsertQso({ ...QSO, ext_id: 'rate-old' });
+    backdate('rate-old', 45); // outside the 10 and 30 min windows, inside 60
+
+    const rate = q.getQsoRate();
+    assert.equal(rate.find((r) => r.minutes === 10).qsos, 0);
+    assert.equal(rate.find((r) => r.minutes === 30).qsos, 0);
+    assert.equal(rate.find((r) => r.minutes === 60).qsos, 1);
+  });
+
+  it('a QSO older than every window is excluded entirely', () => {
+    q.clearQsos();
+    q.upsertQso({ ...QSO, ext_id: 'rate-ancient' });
+    backdate('rate-ancient', 90);
+
+    const rate = q.getQsoRate();
+    assert.ok(rate.every((r) => r.qsos === 0));
   });
 });

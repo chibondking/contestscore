@@ -88,6 +88,14 @@ function prepare() {
     ORDER BY logged_at DESC
   `);
 
+  // logged_at is our own ingestion timestamp (datetime('now'), UTC), not
+  // N1MM's n1mm_timestamp -- using it means the rate reflects when this
+  // server actually recorded the QSO, consistent regardless of clock skew
+  // on whichever PC logged it.
+  const _getQsoCountSince = db.prepare(`
+    SELECT COUNT(*) AS count FROM qsos WHERE logged_at >= datetime('now', @modifier)
+  `);
+
   const _upsertRadio = db.prepare(`
     INSERT INTO radio_state
       (radio_nr, station_name, freq, tx_freq, mode, op_call, is_running,
@@ -167,6 +175,7 @@ function prepare() {
     deleteQsoByExtId: _deleteQsoByExtId,
     deleteQsoFallback: _deleteQsoFallback,
     getQsos: _getQsos,
+    getQsoCountSince: _getQsoCountSince,
     clearAll: db.transaction(() => {
       _delQsos.run();
       _delScores.run();
@@ -235,6 +244,25 @@ function getQsos({ band, mode, operator } = {}) {
 }
 function clearQsos() { return prepare().clearAll(); }
 
+// N1MM-style rate meter: QSO count in each of several trailing windows,
+// extrapolated to a QSOs/hour figure the way N1MM's own rate display does
+// (e.g. 4 QSOs in the last 10 minutes -> a 24/hr rate). Purely a function of
+// wall-clock time passing, not of any event -- callers should poll this
+// rather than only recomputing it on contact:new, or the rate will look
+// frozen during a lull instead of decaying back down.
+const RATE_WINDOWS_MINUTES = [10, 30, 60];
+
+function getQsoRate() {
+  return RATE_WINDOWS_MINUTES.map((minutes) => {
+    const { count } = prepare().getQsoCountSince.get({ modifier: `-${minutes} minutes` });
+    return {
+      minutes,
+      qsos: count,
+      rate_per_hour: Math.round(count * (60 / minutes)),
+    };
+  });
+}
+
 function upsertRadio(radio) {
   return prepare().upsertRadio.run({
     is_transmitting: null,
@@ -289,7 +317,7 @@ function cacheCallsign(call, data, source) {
 }
 
 module.exports = {
-  upsertQso, deleteQso, getQsos, clearQsos,
+  upsertQso, deleteQso, getQsos, clearQsos, getQsoRate,
   upsertRadio, getRadios,
   insertScoreBreakdown, getLatestScore, getScoreHistory, getScoreBreakdown,
   getSetting, setSetting,

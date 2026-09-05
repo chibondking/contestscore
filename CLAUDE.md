@@ -240,6 +240,10 @@ Environment variables override config file. See `.env.example`.
 - `GET /api/score` -- current score
 - `GET /api/score/history` -- score time series
 - `GET /api/radios` -- current state of all radios
+- `GET /api/rate` -- N1MM-style rate meter: QSO count and extrapolated
+  QSOs/hour for each of the trailing 10/30/60 minute windows. Purely a
+  function of wall-clock time (not an event), so the dashboard polls this
+  rather than only refreshing it on contact:new
 - `GET /api/bridges` -- realtime/stale/offline status of every station that
   has sent a ContestPulse heartbeat
 - `DELETE /api/db` -- clear all QSOs (pre-contest reset, requires `X-Confirm:
