@@ -148,12 +148,39 @@ describe('radio_state', () => {
     assert.equal(radios[0].is_running, 0);
   });
 
-  it('stores multiple radios ordered by radio_nr', () => {
+  it('stores multiple radios ordered by station_name, radio_nr', () => {
     q.upsertRadio({ ...RADIO, radio_nr: 2, freq: '14025000', mode: 'CW', is_running: 0 });
     const radios = q.getRadios();
     assert.equal(radios.length, 2);
     assert.equal(radios[0].radio_nr, 1);
     assert.equal(radios[1].radio_nr, 2);
+  });
+
+  // The actual motivation for keying on (station_name, radio_nr) instead of
+  // radio_nr alone: in a multi-op with separate physical stations, each
+  // PC's N1MM independently numbers its own radio, typically also starting
+  // at 1 -- radio_nr alone would let one station's "Radio 1" silently
+  // overwrite another's.
+  it('two different stations both using radio_nr=1 do not overwrite each other', () => {
+    q.upsertRadio({ ...RADIO, station_name: 'STATION-A', radio_nr: 1, op_call: 'K1TTT' });
+    q.upsertRadio({ ...RADIO, station_name: 'STATION-B', radio_nr: 1, op_call: 'W2AZ' });
+
+    const radios = q.getRadios();
+    const a = radios.find((r) => r.station_name === 'STATION-A');
+    const b = radios.find((r) => r.station_name === 'STATION-B');
+    assert.ok(a);
+    assert.ok(b);
+    assert.equal(a.op_call, 'K1TTT');
+    assert.equal(b.op_call, 'W2AZ');
+  });
+
+  it('upserting the same station_name+radio_nr again still updates in place, not a duplicate', () => {
+    q.upsertRadio({ ...RADIO, station_name: 'STATION-A', radio_nr: 1, op_call: 'K1TTT' });
+    const before = q.getRadios().length;
+    q.upsertRadio({ ...RADIO, station_name: 'STATION-A', radio_nr: 1, op_call: 'K1TTT', mode: 'SSB' });
+    const radios = q.getRadios();
+    assert.equal(radios.length, before);
+    assert.equal(radios.find((r) => r.station_name === 'STATION-A').mode, 'SSB');
   });
 });
 

@@ -108,8 +108,15 @@ just somewhere that can see N1MM's LAN broadcasts.
 - Database: better-sqlite3 (synchronous, no async hell, Pi-friendly)
 - XML parsing: xml2js
 - UDP: Node built-in dgram module
-- Frontend: Vanilla JS + Alpine.js (CDN, no build step)
+- Frontend: Vanilla JS + Alpine.js + Chart.js (all CDN, no build step)
 - No TypeScript, no bundler, no framework. This runs on a Raspberry Pi.
+
+None of the three page scripts (`dashboard.js`/`admin.js`/`charts.js`) are
+loaded as `type="module"` -- see the comment on each page's `<script>` tag.
+A module's top-level declarations don't land on the global scope Alpine
+evaluates `x-data="..."` against, so a module-loaded page silently fails to
+initialize at all. This bit the dashboard once already (see git history);
+don't reintroduce it on a new page.
 
 ## Project Structure
 
@@ -138,10 +145,14 @@ contestscore/
     server.js               # entry point: starts HTTP + UDP
   public/
     index.html              # dashboard shell
+    charts.html             # rate-over-time / score-over-time trend charts
+    admin.html              # DB reset UI
     js/
       dashboard.js          # socket.io client, DOM updates
+      charts.js             # Chart.js line charts, polled not socket-driven
+      admin.js
     css/
-      dashboard.css
+      dashboard.css         # shared by all three pages
   config/
     default.json            # ports, DB path, feature flags
   migrations/               # numbered SQL migration files
@@ -303,15 +314,22 @@ Environment variables override config file. See `.env.example`.
 
 ## Key Behaviors and Constraints
 
-**Duplicate QSO handling**: N1MM in network mode can send contacts from
-multiple PCs. The `qsos` table has a unique constraint on
-`(call, band, mode, contestname, mycall)` with INSERT OR IGNORE semantics.
-The INSTALL notes explain the two valid N1MM configs; support both, handle
-dupes gracefully at the DB layer.
+**Duplicate QSO handling**: QSOs are identified primarily by N1MM's own `<ID>`
+GUID (`ext_id`), upserted so a `contactreplace` edit updates the existing row
+in place. A `(call, band, mode, contestnr, mycall)` natural key with
+`INSERT OR IGNORE` is the fallback for loggers that never send an `ID`. See
+`src/db/schema.sql`.
 
 **Score data only from master station**: Only one N1MM station should send
 Score broadcasts. The server accepts whatever arrives; the contest operator
 is responsible for configuring N1MM correctly.
+
+**Multi-op radio identity**: `radio_state` is keyed by
+`(station_name, radio_nr)`, not `radio_nr` alone. N1MM's RadioNr is only
+unique within one PC's own config -- in a multi-op with separate physical
+stations, each PC typically numbers its own radio starting at 1 too, and
+radio_nr alone would let one station's "Radio 1" silently overwrite
+another's. See `migrations/001_radio_state_composite_key.sql`.
 
 **No ORM**: Use better-sqlite3 prepared statements directly. This is a
 single-process app with predictable query patterns. An ORM is overkill and

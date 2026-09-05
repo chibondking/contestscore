@@ -55,9 +55,17 @@ CREATE TABLE IF NOT EXISTS qsos (
 -- contactreplace edits. Only enforced when present.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_qsos_ext_id ON qsos(ext_id) WHERE ext_id IS NOT NULL;
 
+-- Keyed by (station_name, radio_nr), not radio_nr alone: N1MM's RadioNr is
+-- only unique *within one PC's own config* (1 or 2 for that station's own
+-- SO2R setup). In a multi-op with separate physical stations, each PC
+-- typically also numbers its own radio starting at 1 -- keying on radio_nr
+-- alone would let Station B's "Radio 1" silently overwrite Station A's.
+-- station_name (N1MM's own StationName/NetBIOS name) disambiguates that;
+-- '' is the fallback for a packet with no StationName, which still works
+-- correctly for the common single-station case.
 CREATE TABLE IF NOT EXISTS radio_state (
-  radio_nr        INTEGER PRIMARY KEY,
-  station_name    TEXT,
+  station_name    TEXT NOT NULL DEFAULT '',
+  radio_nr        INTEGER NOT NULL,
   freq            TEXT,
   tx_freq         TEXT,
   mode            TEXT,
@@ -69,7 +77,8 @@ CREATE TABLE IF NOT EXISTS radio_state (
   rotator         TEXT,
   focus_radio     INTEGER,
   active_radio    INTEGER,
-  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (station_name, radio_nr)
 );
 
 -- One row per (band, mode) breakdown entry from each Score (<dynamicresults>)

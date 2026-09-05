@@ -35,6 +35,25 @@ body {
   color: var(--accent);
 }
 
+.nav { display: flex; gap: 1rem; }
+
+.nav__link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+.nav__link:hover { color: var(--text); }
+
+.nav__link--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 .status {
   font-size: 0.75rem;
   padding: 0.2em 0.6em;
@@ -176,3 +195,42 @@ body {
 .qso-table tbody tr:last-child td { border-bottom: none; }
 
 .empty { color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }
+
+/* Recent QSOs + continent breakdown side panel */
+.log-layout {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.log-table-wrap { flex: 1; min-width: 0; }
+
+.continent-panel {
+  flex: 0 0 220px;
+  border-left: 1px solid var(--border);
+  padding-left: 1.5rem;
+}
+
+.continent-panel h3 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.chart-box { position: relative; width: 100%; }
+.chart-box--continent { height: 180px; }
+.chart-box--trend { height: 280px; }
+
+@media (max-width: 700px) {
+  .log-layout { flex-direction: column; }
+  .continent-panel {
+    flex: 1 1 auto;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+    padding-top: 1rem;
+    width: 100%;
+  }
+}

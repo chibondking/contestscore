@@ -5,13 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ContestPulse</title>
   <link rel="stylesheet" href="/css/dashboard.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+  <!-- Plain (non-deferred) scripts, same reasoning as dashboard.js not
+       being type="module": these define globals (Chart, io) that must
+       exist before Alpine's deferred script initializes and starts
+       evaluating x-effect/x-init expressions that reference them. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
 <body x-data="dashboard()" x-init="init()">
 
   <header class="header">
     <h1>ContestPulse</h1>
+    <nav class="nav">
+      <a href="/" class="nav__link nav__link--active">Dashboard</a>
+      <a href="/charts.html" class="nav__link">Charts</a>
+      <a href="/admin.html" class="nav__link">Admin</a>
+    </nav>
     <span class="updated" x-text="'updated ' + secondsSinceUpdate() + 's ago'"></span>
     <span class="status" :class="connected ? 'status--ok' : 'status--err'">
       <span x-text="connected ? 'live' : 'disconnected'"></span>
@@ -63,9 +73,9 @@
 
     <section class="card" id="radios">
       <h2>Radios</h2>
-      <template x-for="r in radios" :key="r.radio_nr">
+      <template x-for="r in radios" :key="(r.station_name || '') + ':' + r.radio_nr">
         <div class="radio-row">
-          <span class="radio-nr" x-text="r.radio_nr != null ? 'R' + r.radio_nr : '—'"></span>
+          <span class="radio-nr" x-text="radioLabel(r)"></span>
           <span class="radio-freq" x-text="r.freq ? (r.freq / 1000).toFixed(1) + ' kHz' : '—'"></span>
           <span class="radio-mode" x-text="r.mode || '—'"></span>
           <span class="radio-op" x-text="r.op_call || '—'"></span>
@@ -77,32 +87,42 @@
 
     <section class="card card--wide" id="log">
       <h2>Recent QSOs</h2>
-      <table class="qso-table">
-        <thead>
-          <tr>
-            <th>Call</th><th>Band</th><th>Mode</th><th>Operator</th><th>Pts</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template x-for="q in qsos.slice(0, 50)" :key="q.ext_id ?? q.id ?? (q.call + q.band + q.mode)">
-            <tr>
-              <td x-text="q.call"></td>
-              <td x-text="q.band"></td>
-              <td x-text="q.mode"></td>
-              <td x-text="q.operator"></td>
-              <td x-text="q.points"></td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-      <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+      <div class="log-layout">
+        <div class="log-table-wrap">
+          <table class="qso-table">
+            <thead>
+              <tr>
+                <th>Call</th><th>Band</th><th>Mode</th><th>Operator</th><th>Pts</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="q in qsos.slice(0, 20)" :key="q.ext_id ?? q.id ?? (q.call + q.band + q.mode)">
+                <tr>
+                  <td x-text="q.call"></td>
+                  <td x-text="q.band"></td>
+                  <td x-text="q.mode"></td>
+                  <td x-text="q.operator"></td>
+                  <td x-text="q.points"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+          <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+        </div>
+
+        <div class="continent-panel" x-show="qsos.length > 0">
+          <h3>By Continent</h3>
+          <div class="chart-box chart-box--continent">
+            <canvas id="continentChart" x-effect="renderContinentChart()"></canvas>
+          </div>
+        </div>
+      </div>
     </section>
 
   </main>
 
-  <footer class="footer">
-    <span x-show="version.deployedAt" x-text="'deployed ' + formatDeployTime(version.deployedAt) + (version.commit ? ' (' + version.commit + ')' : '')"></span>
-    &nbsp;&middot;&nbsp;<a href="/admin.html">admin</a>
+  <footer class="footer" x-show="version.deployedAt">
+    <span x-text="'deployed ' + formatDeployTime(version.deployedAt) + (version.commit ? ' (' + version.commit + ')' : '')"></span>
   </footer>
 
   <!-- Not type="module": dashboard() must land on the global scope for

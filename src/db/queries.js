@@ -105,8 +105,7 @@ function prepare() {
       (@radio_nr, @station_name, @freq, @tx_freq, @mode, @op_call, @is_running,
        @is_transmitting, @focus_entry, @antenna, @rotator, @focus_radio,
        @active_radio, datetime('now'))
-    ON CONFLICT(radio_nr) DO UPDATE SET
-      station_name    = excluded.station_name,
+    ON CONFLICT(station_name, radio_nr) DO UPDATE SET
       freq            = excluded.freq,
       tx_freq         = excluded.tx_freq,
       mode            = excluded.mode,
@@ -121,7 +120,7 @@ function prepare() {
       updated_at      = excluded.updated_at
   `);
 
-  const _getRadios = db.prepare('SELECT * FROM radio_state ORDER BY radio_nr');
+  const _getRadios = db.prepare('SELECT * FROM radio_state ORDER BY station_name, radio_nr');
 
   const _insertScoreRow = db.prepare(`
     INSERT INTO score_snapshots
@@ -265,6 +264,7 @@ function getQsoRate() {
 
 function upsertRadio(radio) {
   return prepare().upsertRadio.run({
+    station_name: '',
     is_transmitting: null,
     active_radio: null,
     ...radio,

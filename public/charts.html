@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ContestPulse Charts</title>
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <!-- Plain (non-deferred): Chart must exist as a global before Alpine's
+       deferred script initializes and starts evaluating x-effect
+       expressions that call into it -- same reasoning as index.html. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</head>
+<body x-data="charts()" x-init="init()">
+
+  <header class="header">
+    <h1>ContestPulse</h1>
+    <nav class="nav">
+      <a href="/" class="nav__link">Dashboard</a>
+      <a href="/charts.html" class="nav__link nav__link--active">Charts</a>
+      <a href="/admin.html" class="nav__link">Admin</a>
+    </nav>
+  </header>
+
+  <main class="grid">
+
+    <section class="card card--wide" id="rate-chart">
+      <h2>QSO Rate Over Time</h2>
+      <div class="chart-box chart-box--trend">
+        <canvas id="rateChart" x-effect="renderRateChart()"></canvas>
+      </div>
+      <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+    </section>
+
+    <section class="card card--wide" id="score-chart">
+      <h2>Score Over Time</h2>
+      <div class="chart-box chart-box--trend">
+        <canvas id="scoreChart" x-effect="renderScoreChart()"></canvas>
+      </div>
+      <p x-show="scoreHistory.length === 0" class="empty">No score data yet</p>
+    </section>
+
+  </main>
+
+  <script src="/js/charts.js"></script>
+</body>
+</html>
