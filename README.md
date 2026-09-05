@@ -90,13 +90,16 @@ the same port.
 
 ## REST API
 
-| Method | Path                 | Description                                         |
-|--------|----------------------|-----------------------------------------------------|
-| GET    | `/api/qsos`          | All QSOs. Filters: `?band=20&mode=CW&operator=W1OP` |
-| GET    | `/api/score`         | Latest score snapshot                               |
-| GET    | `/api/score/history` | Full score time series                              |
-| GET    | `/api/radios`        | Current state of all radios                         |
-| DELETE | `/api/db`            | Wipe all contest data (requires `X-Confirm: yes`)   |
+| Method | Path                    | Description                                          |
+|--------|-------------------------|-------------------------------------------------------|
+| GET    | `/api/qsos`             | All QSOs. Filters: `?band=20&mode=CW&operator=W1OP`  |
+| GET    | `/api/score`            | Latest score snapshot                                |
+| GET    | `/api/score/history`    | Full score time series                               |
+| GET    | `/api/radios`           | Current state of all radios                          |
+| GET    | `/api/bridges`          | Realtime/stale/offline status per ContestPulse station |
+| DELETE | `/api/db`               | Wipe all contest data (requires `X-Confirm: yes`)    |
+| POST   | `/api/ingest/{radio,contact,score}` | Raw N1MM XML bytes from the ContestPulse bridge (bearer token required) |
+| POST   | `/api/ingest/heartbeat` | `{ "station_id": "..." }` liveness ping from ContestPulse |
 
 Clear the database before a contest:
 
@@ -106,14 +109,15 @@ curl -X DELETE http://localhost:3000/api/db -H "X-Confirm: yes"
 
 ## Socket.io events (server → client)
 
-| Event            | Payload                    |
-|------------------|----------------------------|
-| `radio:update`   | Latest state for one radio |
-| `contact:new`    | New QSO logged             |
-| `contact:delete` | QSO deleted in N1MM+       |
-| `score:update`   | Current score snapshot     |
-| `lookup:result`  | Callsign lookup result     |
-| `db:cleared`     | Database wiped             |
+| Event            | Payload                                          |
+|------------------|---------------------------------------------------|
+| `radio:update`   | Latest state for one radio                       |
+| `contact:new`    | New QSO logged                                   |
+| `contact:delete` | QSO deleted in N1MM+                             |
+| `score:update`   | Current score snapshot                           |
+| `lookup:result`  | Callsign lookup result                           |
+| `bridge:status`  | A ContestPulse station's realtime/stale/offline status changed |
+| `db:cleared`     | Database wiped                                   |
 
 ## Configuration
 
@@ -204,9 +208,26 @@ For a deployment reachable outside your own LAN (e.g. a VPS fronted by
 nginx/Cloudflare Tunnel rather than reached directly by hostname), see
 [deploy/DEPLOY.md](deploy/DEPLOY.md) — it covers binding to localhost,
 requiring `CONTESTSCORE_API_TOKEN` on the destructive `DELETE /api/db`
-route, restricting that route to trusted source IPs, and getting N1MM's UDP
-broadcasts there over Tailscale/ZeroTier (broadcast addressing doesn't route
-over the public internet).
+route (restricted to trusted source IPs too), and getting N1MM's data there
+via the **ContestPulse** bridge (`contestpulse/` — a small standalone binary
+that relays N1MM's UDP broadcasts over authenticated HTTPS, no VPN needed;
+Tailscale/ZeroTier is documented as an alternative).
+
+## ContestPulse
+
+N1MM's UDP broadcasts are LAN-local — they don't reach a remote instance on
+their own. ContestPulse runs on the shack LAN, relays N1MM's broadcasts to
+`/api/ingest/{radio,contact,score}` over HTTPS with a bearer token, and
+sends a heartbeat every 10s so the dashboard shows the feed as **realtime**,
+**stale**, or **offline** (`bridge:status` socket event / `GET
+/api/bridges`) instead of just silently going quiet.
+
+Pre-built binaries (Windows x86-64, Linux x86-64, Linux ARM64, Linux ARMv7 —
+see `.github/workflows/contestpulse-build.yml`) are on this repo's Releases
+page under the rolling `contestpulse-latest` tag. Configure
+`contestpulse/config.example.json` (`station_id`, `server_url`, `api_token`)
+and run `contestpulse-<platform> config.json` — nothing else to install.
+See `contestpulse/` and `deploy/DEPLOY.md` for details.
 
 ## Project layout
 

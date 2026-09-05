@@ -88,6 +88,34 @@ body {
   letter-spacing: 0.1em;
 }
 
+/* Feed status (ContestPulse bridge heartbeats) */
+.bridge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+
+.bridge-row:last-child { border-bottom: none; }
+
+.bridge-station { color: var(--text); }
+
+.bridge-badge {
+  font-size: 0.7rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.2em 0.6em;
+  border-radius: 999px;
+}
+
+.bridge-badge--realtime { background: var(--green); color: #000; }
+.bridge-badge--stale    { background: var(--run);   color: #000; }
+.bridge-badge--offline  { background: var(--red);   color: #fff; }
+
 /* Radios */
 .radio-row {
   display: flex;

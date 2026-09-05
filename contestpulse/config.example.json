@@ -1,0 +1,9 @@
+{
+  "station_id": "shack1",
+  "server_url": "https://scoreboard.wt2p.us",
+  "api_token": "changeme",
+  "radio_port": 12060,
+  "contact_port": 12061,
+  "score_port": 12062,
+  "heartbeat_interval_seconds": 10
+}

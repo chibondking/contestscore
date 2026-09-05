@@ -4,6 +4,10 @@ function dashboard() {
     score: {},
     radios: [],
     qsos: [],
+    // Per-station ContestPulse (or other bridge) liveness, keyed by
+    // station_id. Not contest data -- db:cleared deliberately leaves this
+    // alone, since it reflects the bridge process, not the QSO log.
+    bridges: [],
 
     init() {
       const socket = io();
@@ -26,6 +30,13 @@ function dashboard() {
         this.score = data;
       });
 
+      socket.on('bridge:status', (data) => {
+        const idx = this.bridges.findIndex((b) => b.station_id === data.station_id);
+        if (idx >= 0) this.bridges[idx] = data;
+        else this.bridges.push(data);
+        this.bridges = [...this.bridges];
+      });
+
       socket.on('db:cleared', () => {
         this.qsos = [];
         this.score = {};
@@ -37,14 +48,16 @@ function dashboard() {
 
     async fetchInitialState() {
       try {
-        const [qsos, score, radios] = await Promise.all([
+        const [qsos, score, radios, bridges] = await Promise.all([
           fetch('/api/qsos').then((r) => r.json()),
           fetch('/api/score').then((r) => r.json()),
           fetch('/api/radios').then((r) => r.json()),
+          fetch('/api/bridges').then((r) => r.json()),
         ]);
-        this.qsos   = qsos;
-        this.score  = score;
-        this.radios = radios;
+        this.qsos    = qsos;
+        this.score   = score;
+        this.radios  = radios;
+        this.bridges = bridges;
       } catch (err) {
         console.error('Failed to load initial state:', err);
       }

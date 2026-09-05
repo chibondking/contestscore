@@ -4,6 +4,7 @@ const {
   getRadios,
   getLatestScore, getScoreHistory,
 } = require('../db/queries');
+const { getStatuses } = require('../state/bridgeStatus');
 
 const router = Router();
 
@@ -26,6 +27,14 @@ router.get('/score/history', (req, res) => {
 // GET /api/radios
 router.get('/radios', (req, res) => {
   res.json(getRadios());
+});
+
+// GET /api/bridges -- realtime/stale/offline status of every ContestPulse
+// (or other bridge) instance that has sent a heartbeat, for the dashboard's
+// initial load. Live updates after that arrive via the bridge:status
+// socket event.
+router.get('/bridges', (req, res) => {
+  res.json(getStatuses());
 });
 
 // DELETE /api/db  requires X-Confirm: yes, plus a bearer token whenever

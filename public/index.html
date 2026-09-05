@@ -37,6 +37,16 @@
       </div>
     </section>
 
+    <section class="card" id="bridges" x-show="bridges.length > 0">
+      <h2>Feed Status</h2>
+      <template x-for="b in bridges" :key="b.station_id">
+        <div class="bridge-row">
+          <span class="bridge-station" x-text="b.station_id"></span>
+          <span class="bridge-badge" :class="'bridge-badge--' + b.status" x-text="b.status"></span>
+        </div>
+      </template>
+    </section>
+
     <section class="card" id="radios">
       <h2>Radios</h2>
       <template x-for="r in radios" :key="r.radio_nr">

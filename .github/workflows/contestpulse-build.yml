@@ -1,0 +1,107 @@
+name: contestpulse-build
+
+# Builds ContestPulse for every target the sibling station-status agent
+# ships — Windows x86-64, Linux x86-64, Linux ARM64, Linux ARMv7 — on every
+# branch push and every merge to main. Merges to main also refresh a
+# rolling "contestpulse-latest" pre-release with the four binaries attached.
+#
+# N1MM itself only runs on Windows, so Windows x86-64 is the primary target,
+# but ContestPulse doesn't need to run on the same machine as N1MM -- it
+# just needs to see N1MM's LAN broadcasts, so a Linux/ARM box elsewhere on
+# the shack LAN (a Raspberry Pi, etc.) is a valid place to run it too.
+#
+# Everything cross-compiles from a single ubuntu-latest runner: ContestPulse
+# is pure Go with no cgo (CGO_ENABLED=0), so GOOS/GOARCH is all that changes
+# between targets.
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+concurrency:
+  group: contestpulse-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: contestpulse
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: contestpulse/go.mod
+      - run: go vet ./...
+      - run: go test ./...
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: windows, goarch: amd64, name: contestpulse-windows-amd64.exe }
+          - { goos: linux,   goarch: amd64, name: contestpulse-linux-amd64 }
+          - { goos: linux,   goarch: arm64, name: contestpulse-linux-arm64 }
+          - { goos: linux,   goarch: arm, goarm: '7', name: contestpulse-linux-armv7 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: contestpulse/go.mod
+      - name: Build ${{ matrix.name }}
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: |
+          mkdir -p build
+          go build -trimpath -o "build/${{ matrix.name }}" .
+          ls -la "build/${{ matrix.name }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: contestpulse/build/${{ matrix.name }}
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    # Only when a commit lands on main (i.e. a PR merge).
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Roll the contestpulse-latest tag to this commit
+        # softprops/action-gh-release won't move an existing published tag,
+        # so a rolling "latest" needs the tag repointed by hand first.
+        run: |
+          git tag -f contestpulse-latest
+          git push -f origin contestpulse-latest
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Refresh rolling "contestpulse-latest" pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: contestpulse-latest
+          name: ContestPulse binaries (latest main)
+          body: >
+            Auto-built from ${{ github.sha }} on
+            ${{ github.event.head_commit.timestamp }}.
+            Windows x86-64, Linux x86-64, Linux ARM64, Linux ARMv7.
+          prerelease: true
+          files: dist/*
+          fail_on_unmatched_files: true

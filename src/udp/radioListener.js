@@ -1,17 +1,25 @@
 const dgram = require('dgram');
 const { parseRadio } = require('../parsers/radio');
 
+// Parses one RadioInfo packet and emits radio:update. Split out from the
+// dgram socket so the exact same logic runs whether the bytes arrived over
+// UDP (LAN) or via the authenticated HTTP ingest route (src/routes/ingest.js,
+// used by the Go relay bridge for off-LAN deployments) — see CLAUDE.md.
+async function handleRadioBuffer(buf, emitter, source) {
+  try {
+    const data = await parseRadio(buf);
+    emitter.emit('radio:update', data);
+  } catch (err) {
+    console.error(`radioListener parse error from ${source}: ${err.message}`);
+    console.error('raw:', buf.toString().slice(0, 200));
+  }
+}
+
 function createRadioListener(port, emitter) {
   const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
 
-  sock.on('message', async (buf, rinfo) => {
-    try {
-      const data = await parseRadio(buf);
-      emitter.emit('radio:update', data);
-    } catch (err) {
-      console.error(`radioListener parse error from ${rinfo.address}: ${err.message}`);
-      console.error('raw:', buf.toString().slice(0, 200));
-    }
+  sock.on('message', (buf, rinfo) => {
+    handleRadioBuffer(buf, emitter, rinfo.address);
   });
 
   sock.on('error', (err) => {
@@ -30,4 +38,4 @@ function createRadioListener(port, emitter) {
   return sock;
 }
 
-module.exports = { createRadioListener };
+module.exports = { createRadioListener, handleRadioBuffer };

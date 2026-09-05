@@ -15,25 +15,66 @@ updates to connected browsers in real time via WebSockets.
 ## Architecture
 
 ```
-UDP :12060  (Radio broadcast)      -->  src/udp/radioListener.js
-UDP :12061  (Contacts + Callsign)  -->  src/udp/contactListener.js
-UDP :12062  (Score broadcast)      -->  src/udp/scoreListener.js
-                |
-                v
-        src/parsers/          (XML -> JS objects, one file per packet type)
-                |
-                v
-        src/db/               (better-sqlite3, synchronous writes)
-                |
-                v
-        src/socket/           (socket.io, broadcasts state to browsers)
-                |
-                v
-        public/               (HTML/CSS/JS dashboard, no build step)
+UDP :12060  (Radio broadcast)      -->  src/udp/radioListener.js   --\
+UDP :12061  (Contacts + Callsign)  -->  src/udp/contactListener.js  |-> handle*Buffer()
+UDP :12062  (Score broadcast)      -->  src/udp/scoreListener.js   --/       |
+                                                                              v
+POST /api/ingest/{radio,contact,score}  (ContestPulse bridge) -------> same handle*Buffer()
+                                                                              |
+                                                                              v
+                                                                src/parsers/  (XML -> JS objects)
+                                                                              |
+                                                                              v
+                                                                src/db/       (better-sqlite3)
+                                                                              |
+                                                                              v
+                                                                src/socket/   (socket.io)
+                                                                              |
+                                                                              v
+                                                                public/       (dashboard, no build step)
 ```
+
+Two transports feed the same pipeline: raw LAN UDP for a local install, and
+authenticated HTTP for a deployment ContestPulse relays into (see
+"ContestPulse Bridge" below) -- both end up calling the exact same
+`handle*Buffer()` functions exported from `src/udp/*Listener.js`, so there is
+one parse/DB/emit code path regardless of transport.
 
 HTTP server (Express) on port 3000 serves the dashboard and a REST API for
 historical data. Socket.io runs on the same port.
+
+## ContestPulse Bridge
+
+N1MM's UDP broadcasts are LAN-local (often literal broadcast addressing),
+so they don't reach a contestscore instance that isn't on the same LAN --
+a VPS, for instance. `contestpulse/` is a small standalone Go program that
+runs on (or near) the shack LAN, listens for N1MM's broadcasts on the usual
+three ports, and forwards each datagram byte-for-byte to
+`POST /api/ingest/{radio,contact,score}` over HTTPS with a bearer token.
+It never parses or understands N1MM's XML -- that still only happens
+server-side, in `src/parsers/`, via the same functions the UDP listener path
+uses. contestscore's ingest API never accepts unauthenticated UDP-shaped
+traffic directly; the VPS never talks raw UDP to the internet.
+
+ContestPulse also sends a heartbeat (`POST /api/ingest/heartbeat`, default
+every 10s, configurable) independent of whatever N1MM traffic is or isn't
+flowing -- Contact/Score packets only happen when the contest produces
+something, so they can't be trusted alone as a liveness signal during a
+quiet stretch. `src/state/bridgeStatus.js` tracks the age of each station's
+last heartbeat and derives realtime / stale / offline (defaults: realtime
+within 15s, stale within 30s, offline beyond that -- override via
+`BRIDGE_STALE_AFTER_MS` / `BRIDGE_OFFLINE_AFTER_MS` if a deployment changes
+ContestPulse's own heartbeat interval from the 10s default). The dashboard
+shows this per station_id via `GET /api/bridges` (initial load) and the
+`bridge:status` socket event (live updates, including the transition into
+stale/offline itself, which is caught by a periodic sweep since by
+definition no event fires when a station just goes quiet).
+
+Binaries are cross-compiled for Windows x86-64, Linux x86-64, Linux ARM64,
+and Linux ARMv7 via `.github/workflows/contestpulse-build.yml` (same target
+matrix as the sibling station-status project's agent) -- N1MM itself only
+runs on Windows, but ContestPulse doesn't need to run on the same machine,
+just somewhere that can see N1MM's LAN broadcasts.
 
 ## Tech Stack
 
@@ -186,8 +227,11 @@ Environment variables override config file. See `.env.example`.
 
 - `radio:update` -- RadioInfo payload for one radio
 - `contact:new` -- new QSO logged
+- `contact:delete` -- QSO deleted in N1MM+
 - `score:update` -- current score snapshot
 - `lookup:result` -- callsign lookup result
+- `bridge:status` -- a ContestPulse (or other bridge) station's realtime/
+  stale/offline status changed
 - `db:cleared` -- database was wiped (pre-contest reset)
 
 ## REST API
@@ -196,9 +240,16 @@ Environment variables override config file. See `.env.example`.
 - `GET /api/score` -- current score
 - `GET /api/score/history` -- score time series
 - `GET /api/radios` -- current state of all radios
+- `GET /api/bridges` -- realtime/stale/offline status of every station that
+  has sent a ContestPulse heartbeat
 - `DELETE /api/db` -- clear all QSOs (pre-contest reset, requires `X-Confirm:
   yes`, plus a bearer token if `CONTESTSCORE_API_TOKEN` is set -- see
   `deploy/DEPLOY.md` for the public-deployment case)
+- `POST /api/ingest/{radio,contact,score}` -- raw N1MM XML bytes from the
+  ContestPulse bridge; requires `Authorization: Bearer <CONTESTSCORE_API_TOKEN>`
+  and 503s if that env var isn't set (fails closed, no LAN-only fallback)
+- `POST /api/ingest/heartbeat` -- `{ "station_id": "..." }` liveness ping
+  from ContestPulse, same auth as above
 
 ## Key Behaviors and Constraints
 

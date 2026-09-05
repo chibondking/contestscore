@@ -18,19 +18,41 @@ it's destructive), so two things are non-negotiable here:
    deliberately not in that allow-list, so the public hostname can never
    trigger a reset.
 
-## UDP ingestion from the shack
+## Getting N1MM's data to a remote box: ContestPulse (recommended)
 
 N1MM's UDP broadcasts don't route over the public internet -- broadcast
-addressing is LAN-local. The logging PC needs to be joined to the same
-Tailscale tailnet or ZeroTier network as this VPS, and N1MM's Broadcast Data
-config should point at this box's overlay IP directly (unicast, not a
-broadcast address):
+addressing is LAN-local. The recommended path is **ContestPulse**
+(`contestpulse/`), a small standalone binary that runs on the shack LAN,
+listens for N1MM's broadcasts, and forwards them to
+`POST /api/ingest/{radio,contact,score}` over plain HTTPS with a bearer
+token -- no VPN, no firewall changes, works over any internet connection
+the shack computer already has. It also sends a heartbeat every 10s so the
+dashboard can show the feed as realtime / stale / offline.
+
+1. Download the current build from this repo's Releases page
+   (`contestpulse-latest` tag -- Windows x86-64, Linux x86-64, Linux ARM64,
+   Linux ARMv7; N1MM itself only runs on Windows, but ContestPulse can run
+   on any machine that can see N1MM's LAN broadcasts, not necessarily the
+   logging PC itself).
+2. Copy `contestpulse/config.example.json` next to the binary as
+   `config.json`, and fill in `station_id`, `server_url`
+   (`https://scoreboard.wt2p.us`), and `api_token` (the same
+   `CONTESTSCORE_API_TOKEN` set on the server -- see step 3 below).
+3. Run it: `contestpulse-windows-amd64.exe config.json` (or the matching
+   binary for whatever runs it). Nothing else to install.
+
+## Alternative: raw UDP over Tailscale/ZeroTier
+
+If you'd rather not run an extra process, the UDP listeners already bind to
+all interfaces, so a logging PC joined to this VPS's Tailscale tailnet or
+ZeroTier network can unicast (not broadcast) N1MM's traffic directly at the
+VPS's overlay IP instead:
 
 - Tailscale: this VPS's tailnet IP (`tailscale ip -4`)
 - ZeroTier: this VPS's IP on the relevant network (`zerotier-cli listnetworks`)
 
-The UDP listeners bind to all interfaces by default, so no listener-side
-change is needed once the logging PC can reach either overlay IP.
+This path has no heartbeat, so it won't show up in the realtime/stale/
+offline indicator -- that's ContestPulse-specific.
 
 ## Steps
 
