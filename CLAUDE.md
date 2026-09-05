@@ -1,8 +1,20 @@
 # contestscore
 
-A real-time ham radio contesting dashboard. Replaces the Node-RED-based
-Node-Red-Contesting-Dashboard with a clean, maintainable Node.js application
-that does the same job without the visual flow editor overhead.
+A real-time ham radio contesting dashboard. Inspired by the Node-RED-based
+Node-Red-Contesting-Dashboard, rebuilt as a clean, maintainable Node.js
+application.
+
+## Prime Directive
+
+Display realtime contest results -- radio state, QSOs, and score. That's
+it. This is **not** a goal of feature-parity with the original Node-RED
+dashboard, which also had DX cluster/RBN spot display with a map, a
+streaming-overlay mode, Pi system monitoring, and several other panels
+unrelated to contest results themselves. Those are out of scope on
+purpose, not "not yet" -- don't add them just because the original had
+them. If a feature request isn't about showing contest results in real
+time, it needs its own explicit justification, not an appeal to matching
+the original.
 
 ## What This Does
 
@@ -360,10 +372,23 @@ Providers (configured in `config/default.json`):
 Results are cached in the `callsign_cache` table to avoid re-querying during
 a contest. Cache is cleared on DB reset.
 
-## What Is NOT in Scope (Yet)
+## What Is NOT in Scope
 
+**Permanently out of scope** (see Prime Directive -- these aren't contest
+*results*, so matching the original dashboard isn't a reason to add them):
+- DX cluster / RBN spot display, with or without a map. contestscore does
+  not parse, store, or relay N1MM's `<spot>` broadcasts -- `src/udp/
+  contactListener.js` explicitly and silently ignores them (see its
+  comment) rather than treating an unrecognized packet as a bug to fix.
+  N1MM already has its own direct spot integrations (e.g. to FlexRadio);
+  this app doesn't need to duplicate or sit in the middle of that.
+- Streaming-overlay mode, Pi system monitoring, weather/lightning alerts,
+  and the other original panels unrelated to contest results themselves.
+
+**Not yet, but plausible later** (these ARE about contest results, just
+not built):
 - N3FJP support (protocol unknown, needs reverse engineering)
 - RumLog / DXLog (spotty in the original; tackle after N1MM is solid)
-- Multi-server aggregation (future: one dashboard aggregating multiple
-  contestscore instances across sites)
+- Multi-server aggregation (one dashboard aggregating multiple contestscore
+  instances across sites)
 - Authentication (local network tool, no auth planned)

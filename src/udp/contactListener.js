@@ -43,6 +43,15 @@ async function handleContactBuffer(buf, emitter, source) {
         emitter.emit('contact:delete', data);
         return;
       }
+      // N1MM's DX cluster/RBN spot broadcasts arrive on this same port when
+      // enabled. Deliberately, permanently out of scope (see CLAUDE.md's
+      // Prime Directive) -- contestscore shows contest results, not spots,
+      // and N1MM typically already feeds spots directly to other software
+      // (e.g. a FlexRadio's own panadapter integration) through its own
+      // channel. Silently ignored, not logged as unexpected: this is
+      // expected, known traffic we're intentionally not acting on.
+      case 'spot':
+        return;
       default:
         console.warn(`contactListener: unexpected root element <${root}> from ${source}`);
     }

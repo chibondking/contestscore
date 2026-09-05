@@ -177,6 +177,44 @@ describe('contact pipeline', () => {
     const evt = io.events.find((e) => e.name === 'lookup:result');
     assert.equal(evt.payload.call, 'DL1ABC');
   });
+
+  // DX cluster/RBN spot display is permanently out of scope (see CLAUDE.md's
+  // Prime Directive) -- N1MM's <spot> broadcasts on this same port must be
+  // silently ignored, not logged as "unexpected", since they're expected,
+  // known traffic we're deliberately not acting on.
+  it('spot packets are silently ignored -- no event, no warning, pipeline stays healthy', async () => {
+    const originalWarn = console.warn;
+    let warned = false;
+    console.warn = (...args) => { warned = true; originalWarn(...args); };
+    try {
+      const spotXml = `<?xml version="1.0" encoding="utf-8"?>
+<spot>
+  <call>DL1ABC</call>
+  <freq>14025.0</freq>
+  <spotter>W1AW</spotter>
+</spot>`;
+      await send(spotXml, CONTACT_PORT);
+      await sleep(100); // nothing to waitFor -- confirming absence of a reaction
+
+      assert.equal(io.events.length, 0, 'a spot packet must not emit any socket event');
+      assert.equal(warned, false, 'spot packets are expected traffic -- must not warn');
+
+      // Prove the listener is still healthy afterward, not just quiet.
+      const xml = `<?xml version="1.0" encoding="utf-8"?>
+<contactinfo>
+  <contestname>CQ-WPX-CW</contestname>
+  <contestnr>73</contestnr>
+  <mycall>K1TTT</mycall>
+  <band>14</band>
+  <call>SPOT-FOLLOWUP</call>
+  <ID>pipeline-test-spot-followup</ID>
+</contactinfo>`;
+      await send(xml, CONTACT_PORT);
+      await waitFor(() => getQsos().some((q) => q.call === 'SPOT-FOLLOWUP'));
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
 });
 
 describe('score pipeline', () => {
