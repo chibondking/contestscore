@@ -123,15 +123,6 @@ body {
 
 .card--wide { grid-column: 1 / -1; }
 
-.card__header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.card__header h2 { margin-bottom: 0; }
-
 .card h2 {
   font-size: 0.8rem;
   text-transform: uppercase;

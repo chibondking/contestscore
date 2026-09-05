@@ -23,19 +23,8 @@ function dashboard() {
     // itself is still alive and not just frozen mid-render.
     lastUpdateAt: Date.now(),
     now: Date.now(),
-    // Off by default: for some contests, showing the exact running
-    // frequency to anyone with the dashboard URL amounts to cheerleading/
-    // spotting your own run. Per-viewer opt-in, remembered in localStorage
-    // rather than a server-side setting.
-    showFreq: false,
 
     init() {
-      try {
-        this.showFreq = localStorage.getItem('contestpulse_show_freq') === '1';
-      } catch {
-        // private browsing / storage disabled -- just default to hidden
-      }
-
       const socket = io();
 
       socket.on('connect',    () => { this.connected = true; this.touch(); });
@@ -112,12 +101,20 @@ function dashboard() {
       this.lastUpdateAt = Date.now();
     },
 
-    saveShowFreq() {
-      try {
-        localStorage.setItem('contestpulse_show_freq', this.showFreq ? '1' : '0');
-      } catch {
-        // ignore -- not worth surfacing an error just for a remembered toggle
-      }
+    // Never shows the exact running frequency (see the Radios card's own
+    // comment) -- just the amateur band it falls in. r.freq is in Hz (see
+    // CLAUDE.md/util.js's tensOfHzToHz -- N1MM's own field is tens of Hz).
+    bandFromFreq(freqHz) {
+      const mhz = Number(freqHz) / 1e6;
+      if (!mhz) return '—';
+      const bands = [
+        [1.8, 2.0, '160m'], [3.5, 4.0, '80m'], [5.3, 5.4, '60m'], [7.0, 7.3, '40m'],
+        [10.1, 10.15, '30m'], [14.0, 14.35, '20m'], [18.068, 18.168, '17m'],
+        [21.0, 21.45, '15m'], [24.89, 24.99, '12m'], [28.0, 29.7, '10m'],
+        [50, 54, '6m'], [144, 148, '2m'], [222, 225, '1.25m'], [420, 450, '70cm'],
+      ];
+      const match = bands.find(([lo, hi]) => mhz >= lo && mhz <= hi);
+      return match ? match[2] : '—';
     },
 
     secondsSinceUpdate() {
