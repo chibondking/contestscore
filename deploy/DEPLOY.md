@@ -79,6 +79,16 @@ dashboard can show the feed as realtime / stale / offline.
 3. Run it: `contestpulse-windows-amd64.exe config.json` (or the matching
    binary for whatever runs it). Nothing else to install.
 
+**Running ContestPulse on the same PC as N1MM in networked/multi-op mode?**
+N1MM's own process also binds its Contact/Score/Radio ports to sync with
+other stations on the network. ContestPulse sets `SO_REUSEADDR` so both can
+bind the same port and each get a copy of every broadcast, regardless of
+start order in the normal case. If you still see N1MM's own "Port In Use
+Error" dialog, try starting ContestPulse first and restarting N1MM
+afterward -- Windows' exact reuse-address behavior can depend on whether
+N1MM's own socket also opts into sharing the port, which isn't something
+this project controls.
+
 ## Alternative: raw UDP over Tailscale/ZeroTier
 
 If you'd rather not run an extra process, the UDP listeners already bind to

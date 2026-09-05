@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -25,7 +26,7 @@ type relay struct {
 	client    *http.Client
 
 	mu   sync.Mutex
-	conn *net.UDPConn
+	conn net.PacketConn
 }
 
 func newRelay(label string, port int, targetURL, apiToken string) *relay {
@@ -69,8 +70,13 @@ func (r *relay) forward(packet []byte) error {
 // restarting) is logged and dropped -- exactly like a lost UDP packet would
 // have been on a real LAN, not a reason to stop relaying the rest.
 func (r *relay) run() {
-	addr := &net.UDPAddr{Port: r.port, IP: net.IPv4zero}
-	conn, err := net.ListenUDP("udp4", addr)
+	// SO_REUSEADDR (via setReuseAddr, platform-specific -- see
+	// reuseaddr_windows.go / reuseaddr_unix.go) so N1MM's own process can
+	// still bind this same port for its networked multi-op sync, on the
+	// same machine ContestPulse runs on. Without it, whichever of the two
+	// starts first exclusively locks the port and the other fails to start.
+	lc := net.ListenConfig{Control: setReuseAddr}
+	conn, err := lc.ListenPacket(context.Background(), "udp4", fmt.Sprintf(":%d", r.port))
 	if err != nil {
 		log.Fatalf("[%s :%d] failed to listen: %v", r.label, r.port, err)
 	}
@@ -82,7 +88,7 @@ func (r *relay) run() {
 	log.Printf("[%s :%d] relaying to %s", r.label, r.port, r.targetURL)
 	buf := make([]byte, 8192)
 	for {
-		n, _, err := conn.ReadFromUDP(buf)
+		n, _, err := conn.ReadFrom(buf)
 		if err != nil {
 			return // socket closed via stop(), or a real error -- either way, stop
 		}
@@ -95,8 +101,8 @@ func (r *relay) run() {
 	}
 }
 
-// stop closes the listening socket, unblocking run()'s ReadFromUDP so it
-// can return. Used by tests; a real deployment just runs until the process
+// stop closes the listening socket, unblocking run()'s ReadFrom so it can
+// return. Used by tests; a real deployment just runs until the process
 // exits.
 func (r *relay) stop() {
 	r.mu.Lock()

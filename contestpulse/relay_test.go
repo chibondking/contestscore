@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"net"
 	"net/http"
@@ -109,5 +110,38 @@ func TestRunRelaysRealUDPPacketToHTTPServer(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for the relay to forward the packet")
 	}
+}
+
+// Regression test for the real-world "N1MMSpot Port: Port In Use Error":
+// N1MM's own process also binds its Contact/Score/Radio ports (for its
+// networked multi-op sync) on the same machine ContestPulse runs on. If
+// run() doesn't set SO_REUSEADDR, whichever of the two starts first
+// exclusively locks the port and the other fails to bind at all.
+func TestRunAllowsAnotherProcessToBindTheSamePort(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.WriteHeader(202)
+	}))
+	defer srv.Close()
+
+	probe, err := net.ListenUDP("udp4", &net.UDPAddr{Port: 0, IP: net.IPv4zero})
+	if err != nil {
+		t.Fatalf("failed to find a free UDP port: %v", err)
+	}
+	port := probe.LocalAddr().(*net.UDPAddr).Port
+	probe.Close()
+
+	r := newRelay("radio", port, srv.URL, "secret123")
+	go r.run()
+	defer r.stop()
+	time.Sleep(50 * time.Millisecond) // let run() bind first
+
+	// Stand-in for N1MM's own listener binding the same port afterwards --
+	// same reuseaddr mechanism a second real process on the OS would need.
+	lc := net.ListenConfig{Control: setReuseAddr}
+	second, err := lc.ListenPacket(context.Background(), "udp4", ":"+strconv.Itoa(port))
+	if err != nil {
+		t.Fatalf("a second listener should be able to bind the same port (SO_REUSEADDR): %v", err)
+	}
+	second.Close()
 }
 
