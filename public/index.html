@@ -104,6 +104,13 @@
     <span x-text="'deployed ' + formatDeployTime(version.deployedAt) + (version.commit ? ' (' + version.commit + ')' : '')"></span>
   </footer>
 
-  <script type="module" src="/js/dashboard.js"></script>
+  <!-- Not type="module": dashboard() must land on the global scope for
+       Alpine's x-data="dashboard()" (evaluated in global scope) to find it.
+       A module's top-level declarations are scoped to the module itself,
+       not exposed on window -- with type="module" here, Alpine's root
+       x-data throws "dashboard is not defined" and the whole component
+       silently fails to initialize, which is consistent with every
+       "field renders as undefined" symptom seen on this dashboard so far. -->
+  <script src="/js/dashboard.js"></script>
 </body>
 </html>
