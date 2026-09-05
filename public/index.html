@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ContestPulse</title>
   <link rel="stylesheet" href="/css/dashboard.css">
-  <!-- Plain (non-deferred) scripts, same reasoning as dashboard.js not
-       being type="module": these define globals (Chart, io) that must
-       exist before Alpine's deferred script initializes and starts
-       evaluating x-effect/x-init expressions that reference them. -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
+  <!-- Plain (non-deferred), same reasoning as dashboard.js not being
+       type="module": io must exist as a global before Alpine's deferred
+       script initializes. No Chart.js on this page -- the continent
+       breakdown is plain CSS/HTML (see world-map styles); only charts.html
+       renders actual charts. -->
   <script src="/socket.io/socket.io.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
@@ -112,8 +112,16 @@
 
         <div class="continent-panel" x-show="qsos.length > 0">
           <h3>By Continent</h3>
-          <div class="chart-box chart-box--continent">
-            <canvas id="continentChart" x-effect="renderContinentChart()"></canvas>
+          <!-- Rough relative geographic layout (not a precise projection --
+               continent-level only), shaded by QSO count. See
+               dashboard.js's continentCounts()/continentTileStyle(). -->
+          <div class="world-map">
+            <template x-for="code in ['NA','EU','AS','AF','OC','SA','AN']" :key="code">
+              <div class="world-map__tile" :class="'world-map__tile--' + code" :style="continentTileStyle(code)">
+                <span class="world-map__label" x-text="code"></span>
+                <span class="world-map__count" x-text="continentCounts()[code] || 0"></span>
+              </div>
+            </template>
           </div>
         </div>
       </div>

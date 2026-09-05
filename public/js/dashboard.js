@@ -23,10 +23,6 @@ function dashboard() {
     // itself is still alive and not just frozen mid-render.
     lastUpdateAt: Date.now(),
     now: Date.now(),
-    // Chart.js instance for the continent breakdown -- created once, then
-    // updated in place (see renderContinentChart) rather than recreated on
-    // every qsos change.
-    continentChart: null,
 
     init() {
       const socket = io();
@@ -113,75 +109,41 @@ function dashboard() {
       return iso ? new Date(iso).toLocaleString() : '';
     },
 
-    // Tally of qsos by continent, sorted most-worked first. Computed
-    // client-side from the already-loaded qsos array rather than a new
-    // backend endpoint -- the full log is already in memory here.
-    continentBreakdown() {
+    // Tally of qsos by continent (N1MM's own 2-letter codes: NA/SA/EU/AS/
+    // AF/OC/AN). Computed client-side from the already-loaded qsos array
+    // rather than a new backend endpoint -- the full log is already in
+    // memory here.
+    continentCounts() {
       const counts = {};
       for (const q of this.qsos) {
-        const c = (q.continent || '').trim() || 'Unknown';
+        const c = (q.continent || '').trim().toUpperCase();
+        if (!c) continue;
         counts[c] = (counts[c] || 0) + 1;
       }
-      return Object.entries(counts)
-        .map(([continent, count]) => ({ continent, count }))
-        .sort((a, b) => b.count - a.count);
+      return counts;
     },
 
-    // Bound via x-effect="renderContinentChart()" on the canvas, so it
-    // re-runs whenever this.qsos changes (Alpine tracks the access inside
-    // continentBreakdown() as a dependency). Updates the existing chart
-    // in place rather than recreating it, so it doesn't flicker/reset zoom
-    // state on every new QSO.
-    renderContinentChart() {
-      const data = this.continentBreakdown();
-      const canvas = document.getElementById('continentChart');
-      if (!canvas || typeof Chart === 'undefined') return;
-
-      const labels = data.map((d) => d.continent);
-      const values = data.map((d) => d.count);
-
-      if (this.continentChart) {
-        this.continentChart.data.labels = labels;
-        this.continentChart.data.datasets[0].data = values;
-        this.continentChart.update();
-        return;
-      }
-
-      this.continentChart = new Chart(canvas, {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [{
-            data: values,
-            // Comparing magnitude across a labeled category, not carrying
-            // identity in the color itself -- one sequential hue is the
-            // right call here (dataviz skill, "choosing a form"), not a
-            // multi-hue categorical palette. Blue slot from the skill's
-            // validated reference palette, dark-mode step.
-            backgroundColor: '#2a78d6',
-            borderRadius: 4,
-            barThickness: 14,
-          }],
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: { duration: 200 },
-          plugins: { legend: { display: false } },
-          scales: {
-            x: {
-              beginAtZero: true,
-              ticks: { color: '#8b949e', precision: 0 },
-              grid: { color: '#262626' },
-            },
-            y: {
-              ticks: { color: '#e6edf3' },
-              grid: { display: false },
-            },
-          },
-        },
-      });
+    // Sequential encoding (one hue, magnitude by intensity -- this is a
+    // "compare magnitude across a labeled region" job, not an identity one,
+    // so per the dataviz skill it's one hue, not a categorical palette).
+    // Reuses the dashboard's own existing --accent blue rather than
+    // introducing a second hue, scaling alpha instead of stepping through a
+    // light->dark ramp: this theme is permanently dark, so "recedes toward
+    // the surface" means low alpha, not a lighter tint (a light tint would
+    // stand out against the near-black background, the opposite of
+    // receding). Text stays --text at every intensity since alpha-over-near-
+    // black never gets bright enough to need dark text for contrast.
+    continentTileStyle(code) {
+      const counts = this.continentCounts();
+      const max = Math.max(1, ...Object.values(counts));
+      const count = counts[code] || 0;
+      if (count === 0) return {};
+      const intensity = count / max; // 0..1, empty tiles excluded above
+      const alpha = 0.15 + 0.65 * intensity;
+      return {
+        background: `rgba(88, 166, 255, ${alpha})`,
+        borderColor: `rgba(88, 166, 255, ${Math.min(1, alpha + 0.2)})`,
+      };
     },
 
     // "R1" for the common single-station case (SO1R/SO2R); once more than
