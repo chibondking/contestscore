@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ContestPulse Stats</title>
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <!-- Plain (non-deferred): io must exist as a global before Alpine's
+       deferred script initializes -- same reasoning as index.html/charts.html.
+       No Chart.js here: this page is tables, not plots. -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</head>
+<body x-data="stats()" x-init="init()">
+
+  <header class="header" data-page="stats">
+    <label class="stats-controls">
+      Operator
+      <select x-model="selectedOp">
+        <option value="ALL">All operators</option>
+        <template x-for="op in operators" :key="op">
+          <option :value="op" x-text="op"></option>
+        </template>
+      </select>
+    </label>
+  </header>
+
+  <main class="grid">
+
+    <template x-for="t in tables" :key="t.title">
+      <section class="card card--wide">
+        <h2 x-text="t.title"></h2>
+        <div class="log-table-wrap" style="overflow-x:auto;">
+          <table class="qso-table stats-table">
+            <thead>
+              <tr>
+                <template x-for="c in t.columns" :key="c.key">
+                  <th :class="c.num ? 'num' : ''" x-text="c.label"></th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="row in t.bandRows" :key="row.key">
+                <tr>
+                  <template x-for="c in t.columns" :key="c.key">
+                    <td :class="c.num ? 'num' : ''" x-text="row[c.key]"></td>
+                  </template>
+                </tr>
+              </template>
+              <tr class="stats-total">
+                <template x-for="c in t.columns" :key="c.key">
+                  <td :class="c.num ? 'num' : ''" x-text="t.totalRow[c.key]"></td>
+                </template>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p x-show="t.bandRows.length === 0" class="empty">No QSOs logged yet</p>
+      </section>
+    </template>
+
+  </main>
+
+  <footer class="footer"></footer>
+
+  <script src="/js/chrome.js"></script>
+  <script src="/js/stats.js"></script>
+</body>
+</html>

@@ -22,6 +22,7 @@
   const NAV_LINKS = [
     { page: 'dashboard', href: '/', label: 'Dashboard' },
     { page: 'charts', href: '/charts.html', label: 'Charts' },
+    { page: 'stats', href: '/stats.html', label: 'Stats' },
     { page: 'admin', href: '/admin.html', label: 'Admin' },
   ];
 

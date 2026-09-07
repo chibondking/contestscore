@@ -134,6 +134,14 @@ just a second transport into `src/udp/dispatch.js`, not a separate code path.
   QSOs so a 2-hour club contest and a 48-hour DX contest both render a
   readable number of points. Charts update live via the same socket events
   the main dashboard uses.
+- **`/stats.html` (Stats)** — a band × mode / multiplier breakdown table,
+  one card per operator plus a combined "All Operators" table (narrow it to
+  a single operator with the header dropdown). Rows are the bands worked;
+  columns are QSO and multiplier counts split into CW / PH / DG groups, then
+  an overall QSO / multiplier / points total, with a per-table Total row.
+  Multiplier credit is N1MM's per-QSO `is_mult1/2/3` flags. Computed
+  client-side from `/api/qsos` and live-refreshed via the same socket events
+  the main dashboard uses.
 - **`/admin.html` (Admin)** — reset the contest database before a contest
   starts. Shows the current QSO count and score total, requires the admin
   bearer token plus a confirmation checkbox, and is otherwise the only
@@ -335,10 +343,10 @@ src/
   state/bridgeStatus.js   ContestPulse heartbeat freshness tracking
   routes/                 REST endpoints (api.js) + ingest.js (ContestPulse's HTTP transport)
 public/
-  index.html, charts.html, admin.html   The three dashboard pages
+  index.html, charts.html, stats.html, admin.html   The dashboard pages
   js/
-    dashboard.js, charts.js, admin.js   Per-page Alpine.js logic (not ES modules -- see CLAUDE.md)
-    chrome.js                           Shared header/nav/footer, injected into all three pages
+    dashboard.js, charts.js, stats.js, admin.js   Per-page Alpine.js logic (not ES modules -- see CLAUDE.md)
+    chrome.js                           Shared header/nav/footer, injected into every page
   css/dashboard.css        Shared styling, dark theme
 config/default.json       Default configuration
 migrations/               Numbered SQL migration files
