@@ -134,14 +134,22 @@ just a second transport into `src/udp/dispatch.js`, not a separate code path.
   QSOs so a 2-hour club contest and a 48-hour DX contest both render a
   readable number of points. Charts update live via the same socket events
   the main dashboard uses.
-- **`/stats.html` (Stats)** — a band × mode / multiplier breakdown table,
-  one card per operator plus a combined "All Operators" table (narrow it to
-  a single operator with the header dropdown). Rows are the bands worked;
-  columns are QSO and multiplier counts split into CW / PH / DG groups, then
-  an overall QSO / multiplier / points total, with a per-table Total row.
-  Multiplier credit is N1MM's per-QSO `is_mult1/2/3` flags. Computed
-  client-side from `/api/qsos` and live-refreshed via the same socket events
-  the main dashboard uses.
+- **`/stats.html` (Stats)** — a post-contest analysis report in the spirit
+  of SH5 / CBS. Kept at the top: the band × mode / multiplier breakdown,
+  one table per operator plus a combined "All Operators" table (columns are
+  QSO and multiplier counts split into CW / PH / DG groups). Below that:
+  **At a Glance** headline numbers; **Rate Records** (best sliding 60 / 30 /
+  10 min, best clock hour, first/last QSO, longest gap); **Station Summary**
+  by band & mode with points/QSO; **Operator Leaderboard** (Q, points,
+  mults, run %, best 60′, bands, DXCC, pts/Q); an **Hourly Breakdown** with
+  cumulative columns and the peak hour highlighted; **Run vs. S&P** by band;
+  **Multipliers by Band**; **QSOs by Continent & Band**; **Top DXCC
+  Entities**; **Points-per-QSO** and **Callsign Length** distributions; and
+  **CQ Zones** / **Sections** worked. The header dropdown scopes every
+  section (except the leaderboard) to one operator. All computed client-side
+  from `/api/qsos` and live-refreshed via the same socket events the main
+  dashboard uses; unlike the Charts page it keys time off N1MM's own QSO
+  timestamp rather than server ingestion time (see `stats.js` `qsoTime()`).
 - **`/admin.html` (Admin)** — reset the contest database before a contest
   starts. Shows the current QSO count and score total, requires the admin
   bearer token plus a confirmation checkbox, and is otherwise the only

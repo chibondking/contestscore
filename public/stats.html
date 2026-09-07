@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/css/dashboard.css">
   <!-- Plain (non-deferred): io must exist as a global before Alpine's
        deferred script initializes -- same reasoning as index.html/charts.html.
-       No Chart.js here: this page is tables, not plots. -->
+       No Chart.js here: this page is all tables, bars, and pills. -->
   <script src="/socket.io/socket.io.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
@@ -27,10 +27,16 @@
 
   <main class="grid">
 
+    <template x-if="!hasData">
+      <section class="card card--wide"><p class="empty">No QSOs logged yet</p></section>
+    </template>
+
+    <!-- 1. Kept at the very top: band × mode / multiplier, one table per
+         operator (plus a combined table when viewing all operators). -->
     <template x-for="t in tables" :key="t.title">
       <section class="card card--wide">
         <h2 x-text="t.title"></h2>
-        <div class="log-table-wrap" style="overflow-x:auto;">
+        <div class="table-scroll">
           <table class="qso-table stats-table">
             <thead>
               <tr>
@@ -40,7 +46,7 @@
               </tr>
             </thead>
             <tbody>
-              <template x-for="row in t.bandRows" :key="row.key">
+              <template x-for="row in t.rows" :key="row.key">
                 <tr>
                   <template x-for="c in t.columns" :key="c.key">
                     <td :class="c.num ? 'num' : ''" x-text="row[c.key]"></td>
@@ -55,7 +61,103 @@
             </tbody>
           </table>
         </div>
-        <p x-show="t.bandRows.length === 0" class="empty">No QSOs logged yet</p>
+        <p x-show="t.rows.length === 0" class="empty">No QSOs logged yet</p>
+      </section>
+    </template>
+
+    <!-- At a Glance: headline numbers for the current operator scope -->
+    <template x-if="hasData">
+      <section class="card card--wide">
+        <h2>At a Glance<span class="hdr-scope" x-show="selectedOp !== 'ALL'" x-text="' — ' + selectedOp"></span></h2>
+        <div class="tile-row">
+          <template x-for="m in headline" :key="m.label">
+            <div class="metric">
+              <span class="metric__value" x-text="m.value"></span>
+              <span class="metric__label" x-text="m.label"></span>
+            </div>
+          </template>
+        </div>
+      </section>
+    </template>
+
+    <!-- Rate Records -->
+    <template x-if="hasData && rateRecords.length">
+      <section class="card card--wide">
+        <h2>Rate Records</h2>
+        <dl class="defn-grid">
+          <template x-for="r in rateRecords" :key="r.label">
+            <div class="defn">
+              <dt x-text="r.label"></dt>
+              <dd x-text="r.value"></dd>
+            </div>
+          </template>
+        </dl>
+      </section>
+    </template>
+
+    <!-- Every matrix-shaped breakdown, rendered through one generic table.
+         `barKey` names the column that gets an inline horizontal bar;
+         `row._cls` marks a highlighted row (the peak hour). -->
+    <template x-for="tbl in matrixCards" :key="tbl.title">
+      <section class="card card--wide">
+        <h2 x-text="tbl.title"></h2>
+        <p class="empty" x-show="tbl.note" x-text="tbl.note"></p>
+        <div class="table-scroll">
+          <table class="qso-table stats-table">
+            <thead>
+              <tr>
+                <template x-for="c in tbl.columns" :key="c.key">
+                  <th :class="c.num ? 'num' : ''" x-text="c.label"></th>
+                </template>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="row in tbl.rows" :key="row.key">
+                <tr :class="row._cls || ''">
+                  <template x-for="c in tbl.columns" :key="c.key">
+                    <td
+                      :class="c.num ? 'num' : ''"
+                      :style="tbl.barKey && c.key === tbl.barKey ? ('background:linear-gradient(to right, var(--accent-dim) ' + (row._bar || 0) + '%, transparent ' + (row._bar || 0) + '%)') : ''"
+                      x-text="row[c.key]"></td>
+                  </template>
+                </tr>
+              </template>
+              <template x-if="tbl.totalRow">
+                <tr class="stats-total">
+                  <template x-for="c in tbl.columns" :key="c.key">
+                    <td :class="c.num ? 'num' : ''" x-text="tbl.totalRow[c.key] ?? ''"></td>
+                  </template>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <p x-show="tbl.rows.length === 0" class="empty">No data for this scope</p>
+      </section>
+    </template>
+
+    <!-- Zones and sections/exchanges worked, as pills -->
+    <template x-for="c in chipCards" :key="c.key">
+      <section class="card card--wide">
+        <h2 x-text="c.title"></h2>
+        <div class="chips">
+          <template x-for="it in c.items" :key="it.key">
+            <span class="chip"><b x-text="it.label"></b> <span x-text="it.n"></span></span>
+          </template>
+        </div>
+      </section>
+    </template>
+
+    <!-- Duplicates -->
+    <template x-if="hasData">
+      <section class="card card--wide">
+        <h2>Duplicate QSOs</h2>
+        <p class="empty" x-show="dupes.length === 0">None — no call logged twice on the same band &amp; mode group.</p>
+        <div class="chips" x-show="dupes.length">
+          <template x-for="d in dupes" :key="d.key">
+            <span class="chip chip--warn"><b x-text="d.call"></b> <span x-text="d.band"></span> <span>×</span><span x-text="d.n"></span></span>
+          </template>
+        </div>
       </section>
     </template>
 
