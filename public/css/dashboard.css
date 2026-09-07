@@ -15,7 +15,16 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: 'Courier New', monospace;
+  /* Lead with a modern system monospace rather than 'Courier New': Windows
+     ships Courier New so it wins there and renders thin/spidery, while a
+     machine without it (ChromeOS) falls through to a cleaner face -- that
+     inconsistency, not a font failing to load, is why the dashboard looked
+     different across machines. Bare `monospace` isn't enough: Chromium on
+     Windows maps the generic monospace family to Courier New too, so an
+     explicit stack is required. Consolas covers every Windows since Vista,
+     ui-monospace covers ChromeOS/macOS, Roboto Mono most Linux/Pi installs.
+     No webfont -- keeps the no-network, no-build-step constraint. */
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Roboto Mono', 'DejaVu Sans Mono', monospace;
   font-size: 1rem;
   min-height: 100vh;
 }
