@@ -1,3 +1,10 @@
+/* Fira Code is the preferred face. Loaded from Google Fonts (same "CDN, no
+   build step" approach as Alpine/Chart.js); @import here rather than a
+   <link> in four separate <head>s keeps it in one place. If the viewing
+   device has no internet (a LAN-only Pi install), this just no-ops and the
+   system monospace stack on `body` takes over -- graceful, not broken. */
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap');
+
 :root {
   --bg:       #000000;
   --surface:  #0a0a0a;
@@ -15,16 +22,15 @@
 body {
   background: var(--bg);
   color: var(--text);
-  /* Lead with a modern system monospace rather than 'Courier New': Windows
-     ships Courier New so it wins there and renders thin/spidery, while a
-     machine without it (ChromeOS) falls through to a cleaner face -- that
-     inconsistency, not a font failing to load, is why the dashboard looked
-     different across machines. Bare `monospace` isn't enough: Chromium on
-     Windows maps the generic monospace family to Courier New too, so an
-     explicit stack is required. Consolas covers every Windows since Vista,
-     ui-monospace covers ChromeOS/macOS, Roboto Mono most Linux/Pi installs.
-     No webfont -- keeps the no-network, no-build-step constraint. */
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, 'Roboto Mono', 'DejaVu Sans Mono', monospace;
+  /* Fira Code (loaded via @import above) first; the rest is the offline
+     fallback stack. Do NOT drop back to bare 'Courier New'/`monospace`
+     here: Windows ships Courier New and Chromium maps the generic monospace
+     family to it too, so without an explicit modern stack a machine that
+     can't reach Google Fonts renders the old thin typewriter face -- which
+     is exactly the cross-machine inconsistency this replaced. Consolas
+     covers every Windows since Vista, ui-monospace covers ChromeOS/macOS,
+     Roboto Mono most Linux/Pi installs. */
+  font-family: 'Fira Code', ui-monospace, 'Cascadia Mono', Consolas, 'Roboto Mono', 'DejaVu Sans Mono', monospace;
   font-size: 1rem;
   min-height: 100vh;
 }
