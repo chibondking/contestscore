@@ -23,6 +23,7 @@
     { page: 'dashboard', href: '/', label: 'Dashboard' },
     { page: 'charts', href: '/charts.html', label: 'Charts' },
     { page: 'stats', href: '/stats.html', label: 'Stats' },
+    { page: 'analyze', href: '/analyze', label: 'Analyze' },
     { page: 'admin', href: '/admin.html', label: 'Admin' },
   ];
 

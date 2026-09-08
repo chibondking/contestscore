@@ -383,6 +383,84 @@ body {
 .defn dt { color: var(--muted); }
 .defn dd { color: var(--text); text-align: right; }
 
+/* ---- Analyze page (analyze.html / analyze.js) ---- */
+.analyze-field {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+  max-width: 32rem;
+}
+.analyze-field input {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.5rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+.drop {
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 1.5rem;
+  text-align: center;
+  margin-bottom: 1rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+.drop--set { border-color: var(--accent); }
+.drop__input {
+  position: absolute;
+  width: 1px; height: 1px;
+  opacity: 0;
+}
+.drop__label {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.55em 1.1em;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent);
+  color: #000;
+  font-family: inherit;
+  font-weight: bold;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn--ghost { background: transparent; color: var(--accent); }
+
+.analyze-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.analyze-error { color: var(--red); font-size: 0.85rem; margin-top: 0.75rem; }
+
+/* Banner shown on stats.html / charts.html when viewing an uploaded log */
+.analyze-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--muted);
+  border-color: var(--accent);
+}
+.analyze-banner a { color: var(--accent); }
+
 /* Zones / sections / dupes as pills */
 .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .chip {

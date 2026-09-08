@@ -168,6 +168,32 @@ function prepare() {
     ORDER BY band, mode
   `);
 
+  // --- Analyzer (uploaded Cabrillo/ADIF logs) -------------------------------
+  const _insertAnalyzedLog = db.prepare(`
+    INSERT INTO analyzed_logs
+      (id, filename, format, contest, station_call, operators, claimed_score,
+       qso_count, has_points, has_mults, has_operator, has_run_flag,
+       raw_bytes, parsed_json)
+    VALUES
+      (@id, @filename, @format, @contest, @station_call, @operators, @claimed_score,
+       @qso_count, @has_points, @has_mults, @has_operator, @has_run_flag,
+       @raw_bytes, @parsed_json)
+  `);
+  const _getAnalyzedLog = db.prepare('SELECT * FROM analyzed_logs WHERE id = ?');
+  const _listAnalyzedLogs = db.prepare(`
+    SELECT id, filename, format, contest, station_call, qso_count, created_at
+    FROM analyzed_logs ORDER BY created_at DESC, rowid DESC LIMIT ?
+  `);
+  const _deleteAnalyzedLog = db.prepare('DELETE FROM analyzed_logs WHERE id = ?');
+  const _pruneAnalyzedByAge = db.prepare(
+    "DELETE FROM analyzed_logs WHERE created_at < datetime('now', @modifier)"
+  );
+  const _pruneAnalyzedByCount = db.prepare(`
+    DELETE FROM analyzed_logs WHERE id NOT IN (
+      SELECT id FROM analyzed_logs ORDER BY created_at DESC, rowid DESC LIMIT @keep
+    )
+  `);
+
   Q = {
     upsertQsoByExtId: _upsertQsoByExtId,
     insertQsoIgnore:  _insertQsoIgnore,
@@ -200,6 +226,13 @@ function prepare() {
     cacheCallsign: db.prepare(
       'INSERT OR REPLACE INTO callsign_cache (call, data, source) VALUES (?, ?, ?)'
     ),
+
+    insertAnalyzedLog: _insertAnalyzedLog,
+    getAnalyzedLog: _getAnalyzedLog,
+    listAnalyzedLogs: _listAnalyzedLogs,
+    deleteAnalyzedLog: _deleteAnalyzedLog,
+    pruneAnalyzedByAge: _pruneAnalyzedByAge,
+    pruneAnalyzedByCount: _pruneAnalyzedByCount,
   };
 
   return Q;
@@ -316,11 +349,50 @@ function cacheCallsign(call, data, source) {
   return prepare().cacheCallsign.run(call, JSON.stringify(data), source);
 }
 
+// --- Analyzer -------------------------------------------------------------
+
+// row: { id, filename, format, contest, station_call, operators,
+//        claimed_score, qso_count, has_points, has_mults, has_operator,
+//        has_run_flag, raw_bytes, parsed_json }. Booleans are stored as
+//        0/1; parsed_json is the already-serialized QSO array.
+function insertAnalyzedLog(row) {
+  return prepare().insertAnalyzedLog.run({
+    id: row.id,
+    filename: row.filename || '',
+    format: row.format || '',
+    contest: row.contest || '',
+    station_call: row.station_call || '',
+    operators: row.operators || '',
+    claimed_score: row.claimed_score ?? null,
+    qso_count: row.qso_count || 0,
+    has_points: row.has_points ? 1 : 0,
+    has_mults: row.has_mults ? 1 : 0,
+    has_operator: row.has_operator ? 1 : 0,
+    has_run_flag: row.has_run_flag ? 1 : 0,
+    raw_bytes: row.raw_bytes || 0,
+    parsed_json: row.parsed_json,
+  });
+}
+
+function getAnalyzedLog(id)          { return prepare().getAnalyzedLog.get(id) || null; }
+function listAnalyzedLogs(limit = 100) { return prepare().listAnalyzedLogs.all(limit); }
+function deleteAnalyzedLog(id)       { return prepare().deleteAnalyzedLog.run(id); }
+
+// Enforce retention: drop anything older than ttlDays, then anything beyond
+// the newest `keep`. Both bounds are opt-out with 0.
+function pruneAnalyzedLogs({ keep = 200, ttlDays = 365 } = {}) {
+  const q = prepare();
+  if (ttlDays > 0) q.pruneAnalyzedByAge.run({ modifier: `-${ttlDays} days` });
+  if (keep > 0) q.pruneAnalyzedByCount.run({ keep });
+}
+
 module.exports = {
   upsertQso, deleteQso, getQsos, clearQsos, getQsoRate,
   upsertRadio, getRadios,
   insertScoreBreakdown, getLatestScore, getScoreHistory, getScoreBreakdown,
   getSetting, setSetting,
   getCachedCallsign, cacheCallsign,
+  insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,
+  pruneAnalyzedLogs,
   resetStatements,
 };

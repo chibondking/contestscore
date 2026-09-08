@@ -125,3 +125,32 @@ CREATE TABLE IF NOT EXISTS callsign_cache (
   source    TEXT,
   cached_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Uploaded Cabrillo/ADIF logs for the offline analyzer (see
+-- docs/ANALYZER.md and src/routes/analyze.js). Deliberately separate from
+-- `qsos`: that table is the realtime contest and is wiped by
+-- DELETE /api/db; an analyzed log is a saved artifact with its own
+-- shareable /analyze/<id> URL and must survive a pre-contest reset. One row
+-- per upload; the parsed QSO array lives in `parsed_json` since the
+-- analyzer renderers only ever consume the array. has_* flags record which
+-- of points/mults/operator/run-status the source format actually carried,
+-- so the result page can hide the sections it can't populate.
+CREATE TABLE IF NOT EXISTS analyzed_logs (
+  id            TEXT PRIMARY KEY,        -- url-safe base32 slug
+  filename      TEXT,
+  format        TEXT,                    -- 'cabrillo' | 'adif'
+  contest       TEXT,
+  station_call  TEXT,
+  operators     TEXT,                    -- raw OPERATORS header, display only
+  claimed_score INTEGER,
+  qso_count     INTEGER DEFAULT 0,
+  has_points    INTEGER DEFAULT 0,
+  has_mults     INTEGER DEFAULT 0,
+  has_operator  INTEGER DEFAULT 0,
+  has_run_flag  INTEGER DEFAULT 0,
+  raw_bytes     INTEGER DEFAULT 0,
+  parsed_json   TEXT NOT NULL,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_analyzed_logs_created ON analyzed_logs(created_at);

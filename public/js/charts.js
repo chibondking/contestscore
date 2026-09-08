@@ -32,6 +32,10 @@ function charts() {
     // convenience, so localStorage (not a server-side setting) is the right
     // place for it.
     detailed: false,
+    // Set from ?log=<id> -- render a saved analyzed log instead of the live
+    // contest, with no socket/poll wiring (an uploaded log never changes).
+    logId: null,
+    logMeta: null,
 
     async init() {
       try {
@@ -39,7 +43,9 @@ function charts() {
       } catch {
         // private browsing / storage disabled -- just default to simple
       }
+      this.logId = new URLSearchParams(location.search).get('log');
       await this.fetchData();
+      if (this.logId) return;
       // Live updates via socket, same events dashboard.js listens for --
       // a 48-hour contest shouldn't need a manual refresh to see a chart
       // move. The interval stays as a fallback in case an event is missed
@@ -78,6 +84,16 @@ function charts() {
 
     async fetchData() {
       try {
+        if (this.logId) {
+          const r = await fetch(`/api/analyze/${encodeURIComponent(this.logId)}`);
+          const body = r.ok ? await r.json() : null;
+          this.qsos = body ? (body.qsos || []) : [];
+          this.logMeta = body ? body.meta : null;
+          // An uploaded log has no score-broadcast history; the Score Over
+          // Time card falls back to its own "no score data yet" empty state.
+          this.scoreHistory = [];
+          return;
+        }
         const [qsos, scoreHistory] = await Promise.all([
           fetch('/api/qsos').then((r) => r.json()),
           fetch('/api/score/history').then((r) => r.json()),
@@ -318,7 +334,12 @@ function charts() {
     // qsoTime()).
     // ================================================================
     get extraCharts() {
-      return EXTRA_CHART_SPECS;
+      // When viewing an uploaded log, drop the charts whose data the source
+      // format didn't carry (a bare Cabrillo has no points / mults / run
+      // flag), rather than drawing an all-zeros chart.
+      const m = this.logMeta;
+      if (!m) return EXTRA_CHART_SPECS;
+      return EXTRA_CHART_SPECS.filter((s) => !s.need || m[`has_${s.need}`]);
     },
 
     renderExtra(spec) {
@@ -822,11 +843,11 @@ const EXTRA_CHART_SPECS = [
     build: (q, sh, bm) => buildCumulative(q, bm, () => 1, 'QSOs', CATEGORICAL_COLORS[0]),
   },
   {
-    id: 'cx-cum-points', title: 'Cumulative QSO Points', wide: true,
+    id: 'cx-cum-points', title: 'Cumulative QSO Points', wide: true, need: 'points',
     build: (q, sh, bm) => buildCumulative(q, bm, (x) => Number(x.points) || 0, 'Points', CATEGORICAL_COLORS[1]),
   },
   {
-    id: 'cx-cum-mults', title: 'Cumulative Multipliers', wide: true,
+    id: 'cx-cum-mults', title: 'Cumulative Multipliers', wide: true, need: 'mults',
     build: (q, sh, bm) => buildCumulative(q, bm, multCount, 'Mults', CATEGORICAL_COLORS[2]),
   },
   {
@@ -838,7 +859,7 @@ const EXTRA_CHART_SPECS = [
     build: (q, sh, bm) => buildStackedByKey(q, bm, (x) => (x.continent || '—').toUpperCase(), CONTINENT_ORDER, continentColor),
   },
   {
-    id: 'cx-runsp-time', title: 'Run vs. Search & Pounce Over Time', wide: true,
+    id: 'cx-runsp-time', title: 'Run vs. Search & Pounce Over Time', wide: true, need: 'run_flag',
     build: (q, sh, bm) => buildStackedByKey(
       q, bm, (x) => (x.is_run_qso ? 'Run' : 'S&P'), ['Run', 'S&P'],
       (k) => (k === 'Run' ? CATEGORICAL_COLORS[5] : CATEGORICAL_COLORS[0]),
@@ -857,7 +878,7 @@ const EXTRA_CHART_SPECS = [
     build: (q) => buildTotalsBar(q, (x) => (x.continent || '—').toUpperCase(), null, continentColor),
   },
   {
-    id: 'cx-mult-band', title: 'Multipliers by Band', wide: false,
+    id: 'cx-mult-band', title: 'Multipliers by Band', wide: false, need: 'mults',
     build: (q) => buildMultsByBand(q),
   },
   {
@@ -865,7 +886,7 @@ const EXTRA_CHART_SPECS = [
     build: (q) => buildHourOfDay(q),
   },
   {
-    id: 'cx-points-dist', title: 'Points-per-QSO Distribution', wide: false,
+    id: 'cx-points-dist', title: 'Points-per-QSO Distribution', wide: false, need: 'points',
     build: (q) => buildPointsDist(q),
   },
   {

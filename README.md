@@ -158,6 +158,18 @@ just a second transport into `src/udp/dispatch.js`, not a separate code path.
   from `/api/qsos` and live-refreshed via the same socket events the main
   dashboard uses; unlike the Charts page it keys time off N1MM's own QSO
   timestamp rather than server ingestion time (see `stats.js` `qsoTime()`).
+- **`/analyze` (Analyze)** — upload a submitted Cabrillo (`.cbr`/`.log`) or
+  ADIF (`.adi`) log and get the full Stats + Charts treatment for it, saved
+  at a shareable `/analyze/<id>` link. The file is parsed server-side and
+  each worked call is resolved against a bundled country file
+  (`src/analyze/cty.csv`) to fill in continent / DXCC / CQ zone, so the
+  geographic breakdowns work for any contest. An ADIF export from N1MM also
+  carries points, multipliers, per-operator and run/S&P data; a bare
+  Cabrillo doesn't, so those sections are hidden for it. Upload is gated by
+  `CONTESTSCORE_API_TOKEN` (paste it on the page, same as Admin); viewing a
+  saved analysis is public. Stored separately from the live `qsos` table —
+  a pre-contest reset never touches it. Retention: newest `ANALYZE_KEEP`
+  (200) and younger than `ANALYZE_TTL_DAYS` (365). See `docs/ANALYZER.md`.
 - **`/admin.html` (Admin)** — reset the contest database before a contest
   starts. Shows the current QSO count and score total, requires the admin
   bearer token plus a confirmation checkbox, and is otherwise the only
@@ -192,6 +204,10 @@ never gets forwarded to a client.
 | DELETE | `/api/db`               | Wipe all contest data (requires `X-Confirm: yes`, plus a bearer token if `CONTESTSCORE_API_TOKEN` is set) |
 | POST   | `/api/ingest/{radio,contact,score}` | Raw N1MM XML bytes from the ContestPulse bridge (bearer token required, dispatched by XML root element like the UDP listeners) |
 | POST   | `/api/ingest/heartbeat` | `{ "station_id": "..." }` liveness ping from ContestPulse |
+| POST   | `/api/analyze`          | Upload raw Cabrillo/ADIF text (`?filename=`), bearer token required. Returns `{ id, meta }` |
+| GET    | `/api/analyze`          | List saved analyses (bearer token required) |
+| GET    | `/api/analyze/:id`      | A saved analysis as `{ meta, qsos }` — **public** (shareable link) |
+| DELETE | `/api/analyze/:id`      | Delete a saved analysis (bearer token required) |
 
 Clear the database before a contest:
 
@@ -354,14 +370,15 @@ src/
   app.js                  Express setup
   udp/                    dgram listeners + dispatch.js (routes by XML root element, not port)
   parsers/                XML → JS (radio, contact, score, lookup, util.js for shared conversions)
+  analyze/                Cabrillo + ADIF parsers, cty.csv resolver, orchestrator (the /analyze feature)
   db/                     better-sqlite3: schema, migrations, queries
   socket/                 socket.io init and event wiring
   state/bridgeStatus.js   ContestPulse heartbeat freshness tracking
-  routes/                 REST endpoints (api.js) + ingest.js (ContestPulse's HTTP transport)
+  routes/                 REST endpoints (api.js) + ingest.js (bridge) + analyze.js (log upload)
 public/
-  index.html, charts.html, stats.html, admin.html   The dashboard pages
+  index.html, charts.html, stats.html, analyze.html, admin.html   The pages
   js/
-    dashboard.js, charts.js, stats.js, admin.js   Per-page Alpine.js logic (not ES modules -- see CLAUDE.md)
+    dashboard.js, charts.js, stats.js, analyze.js, admin.js   Per-page Alpine.js logic (not ES modules -- see CLAUDE.md)
     chrome.js                           Shared header/nav/footer, injected into every page
   css/dashboard.css        Shared styling, dark theme
 config/default.json       Default configuration
@@ -374,9 +391,10 @@ contestpulse/              Standalone Go relay binary (see above)
 .github/workflows/         CI (test on every push) + auto-deploy + ContestPulse cross-compile/release
 test/
   parsers/                Parser unit tests
+  analyze/                Cabrillo/ADIF/cty parser + orchestrator unit tests
   db/                     DB integration tests (in-memory SQLite)
   udp/                    UDP pipeline integration tests
-  routes/                 REST API integration tests
+  routes/                 REST API integration tests (incl. /api/analyze)
 ```
 
 ## Tech stack

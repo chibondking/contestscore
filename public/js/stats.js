@@ -16,9 +16,16 @@ function stats() {
   return {
     qsos: [],
     selectedOp: 'ALL',
+    // Set from ?log=<id> -- when present this page renders a saved analyzed
+    // log (GET /api/analyze/<id>) instead of the live contest, and skips
+    // all the socket/poll wiring since an uploaded log never changes.
+    logId: null,
+    logMeta: null,
 
     async init() {
+      this.logId = new URLSearchParams(location.search).get('log');
       await this.fetchData();
+      if (this.logId) return;
       const socket = io();
       const refresh = () => this.fetchData();
       socket.on('contact:new', refresh);
@@ -29,6 +36,14 @@ function stats() {
 
     async fetchData() {
       try {
+        if (this.logId) {
+          const r = await fetch(`/api/analyze/${encodeURIComponent(this.logId)}`);
+          if (!r.ok) { this.qsos = []; this.logMeta = null; return; }
+          const body = await r.json();
+          this.qsos = body.qsos || [];
+          this.logMeta = body.meta || null;
+          return;
+        }
         this.qsos = await fetch('/api/qsos').then((r) => r.json());
       } catch (err) {
         console.error('Failed to load stats data:', err);
@@ -49,6 +64,24 @@ function stats() {
         : this.qsos.filter((q) => (q.operator || '—') === this.selectedOp);
     },
 
+    // Which breakdowns the current data can actually support. Live contest
+    // data has everything; an uploaded log only has what its format carried
+    // (logMeta.has_*), so sections that would be all-zeros for a bare
+    // Cabrillo are dropped rather than shown empty.
+    get caps() {
+      const m = this.logMeta;
+      if (!m) return { points: true, mults: true, operator: true, run: true };
+      return {
+        points: !!m.has_points,
+        mults: !!m.has_mults,
+        operator: !!m.has_operator,
+        run: !!m.has_run_flag,
+      };
+    },
+
+    // Hide the operator <select> when there's nothing to split by.
+    get showOpSelect() { return this.caps.operator; },
+
     // ================================================================
     // 1. EXISTING: band x mode / multiplier by operator -- kept at the
     //    very top of the page, unchanged in spirit from the first version.
@@ -57,6 +90,9 @@ function stats() {
 
     get tables() {
       if (!this.hasData) return [];
+      // No per-QSO operator (bare Cabrillo): a single pooled table, no
+      // per-operator split and no "All Operators" vs "—" duplication.
+      if (!this.caps.operator) return [this.buildTable('All QSOs', this.qsos)];
       const out = [];
       const ops = this.operators;
       if (this.selectedOp === 'ALL') {
@@ -134,11 +170,11 @@ function stats() {
       const mults = sum(qs, multCount);
       const elapsedMs = times.length > 1 ? times[times.length - 1] - times[0] : 0;
       const elapsedHrs = elapsedMs / 3600000;
-      return [
+      const tiles = [
         { label: 'QSOs', value: qs.length.toLocaleString() },
-        { label: 'Points', value: pts.toLocaleString() },
-        { label: 'Mults', value: mults.toLocaleString() },
-        { label: 'Pts / QSO', value: qs.length ? (pts / qs.length).toFixed(2) : '0' },
+        { label: 'Points', value: pts.toLocaleString(), need: 'points' },
+        { label: 'Mults', value: mults.toLocaleString(), need: 'mults' },
+        { label: 'Pts / QSO', value: qs.length ? (pts / qs.length).toFixed(2) : '0', need: 'points' },
         { label: 'Avg Rate', value: elapsedHrs > 0 ? `${Math.round(qs.length / elapsedHrs)}/h` : '—' },
         { label: 'DXCC', value: distinct(qs, (q) => q.countryprefix) },
         { label: 'CQ Zones', value: distinct(qs, (q) => (q.zone && q.zone !== '0' ? q.zone : '')) },
@@ -146,6 +182,7 @@ function stats() {
         { label: 'Hrs Active', value: new Set(times.map((t) => Math.floor(t / 3600000))).size },
         { label: 'Elapsed', value: elapsedMs ? fmtDur(elapsedMs) : '—' },
       ];
+      return tiles.filter((t) => !t.need || this.caps[t.need]);
     },
 
     // ================================================================
@@ -203,12 +240,15 @@ function stats() {
     get summaryCard() {
       const qs = this.scopedQsos;
       const groups = presentModeGroups(qs);
+      const withPts = this.caps.points;
 
       const columns = [{ key: 'band', label: 'Band' }];
       for (const g of groups) columns.push({ key: g, label: g, num: true });
       columns.push({ key: 'q', label: 'Total Q', num: true });
-      columns.push({ key: 'pts', label: 'Points', num: true });
-      columns.push({ key: 'ppq', label: 'Pts/Q', num: true });
+      if (withPts) {
+        columns.push({ key: 'pts', label: 'Points', num: true });
+        columns.push({ key: 'ppq', label: 'Pts/Q', num: true });
+      }
 
       const blank = () => {
         const o = { q: 0, pts: 0 };
@@ -245,6 +285,7 @@ function stats() {
     },
 
     get leaderboardCard() {
+      if (!this.caps.operator) return null; // no per-QSO operator to rank
       const ops = this.operators;
       if (ops.length === 0) return null;
 
@@ -368,6 +409,7 @@ function stats() {
     },
 
     get runSpCard() {
+      if (!this.caps.run) return null; // no run/S&P flag in this source
       const qs = this.scopedQsos;
       const columns = [
         { key: 'band', label: 'Band' },
@@ -407,6 +449,7 @@ function stats() {
     },
 
     get multBandsCard() {
+      if (!this.caps.mults) return null; // no multiplier status in this source
       const qs = this.scopedQsos;
       const has2 = qs.some((q) => q.is_mult2);
       const has3 = qs.some((q) => q.is_mult3);
@@ -528,6 +571,7 @@ function stats() {
     },
 
     get pointsDistCard() {
+      if (!this.caps.points) return null; // no per-QSO points in this source
       const qs = this.scopedQsos;
       const by = new Map();
       for (const q of qs) {

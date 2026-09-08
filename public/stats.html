@@ -14,7 +14,7 @@
 <body x-data="stats()" x-init="init()">
 
   <header class="header" data-page="stats">
-    <label class="stats-controls">
+    <label class="stats-controls" x-show="showOpSelect">
       Operator
       <select x-model="selectedOp">
         <option value="ALL">All operators</option>
@@ -27,8 +27,15 @@
 
   <main class="grid">
 
+    <template x-if="logMeta">
+      <section class="card card--wide analyze-banner">
+        <span x-text="'Analyzing: ' + (logMeta.contest || logMeta.filename || 'uploaded log') + ' · ' + (logMeta.station_call || '?') + ' · ' + logMeta.qso_count + ' QSOs · ' + logMeta.format.toUpperCase()"></span>
+      <a href="/analyze">&larr; new analysis</a>
+      </section>
+    </template>
+
     <template x-if="!hasData">
-      <section class="card card--wide"><p class="empty">No QSOs logged yet</p></section>
+      <section class="card card--wide"><p class="empty" x-text="logId ? 'Analyzed log not found, or it has no QSOs.' : 'No QSOs logged yet'"></p></section>
     </template>
 
     <!-- 1. Kept at the very top: band × mode / multiplier, one table per

@@ -11,8 +11,11 @@ it's destructive), so two things are non-negotiable here:
 
 1. The app binds to `127.0.0.1` only (`HTTP_HOST=127.0.0.1`) -- nginx is the
    only thing the internet can talk to.
-2. `DELETE /api/db` (and `/api/ingest/*`) require a bearer token
-   (`CONTESTSCORE_API_TOKEN` -- a 64-char random secret). There's
+2. `DELETE /api/db`, `/api/ingest/*`, and the analyzer's write routes
+   (`POST /api/analyze`, `DELETE /api/analyze/:id`, `GET /api/analyze` list)
+   require a bearer token (`CONTESTSCORE_API_TOKEN` -- a 64-char random
+   secret). `GET /api/analyze/:id` is public on purpose -- a saved analysis
+   is meant to be shared by link. There's
    deliberately no nginx-layer IP restriction on top: Cloudflare Tunnel
    traffic always arrives at nginx as `127.0.0.1`, so an IP allow-list can't
    distinguish "the admin's own device" from "anyone on the internet" once
@@ -21,6 +24,17 @@ it's destructive), so two things are non-negotiable here:
    `public/admin.html` (the DB-reset UI) unusable from anywhere but a
    Tailscale/ZeroTier-connected device. The token alone is the boundary;
    treat it like a password.
+
+## Log analyzer (`/analyze`)
+
+The analyzer needs nothing extra at deploy time -- the `analyzed_logs`
+table is created by `src/db/schema.sql` on startup, and the country file it
+resolves calls against is bundled at `src/analyze/cty.csv` (kept current by
+`.github/workflows/cty-refresh.yml`, which opens a monthly PR). Optional
+env knobs, all with sane defaults: `ANALYZE_KEEP` (200 newest kept),
+`ANALYZE_TTL_DAYS` (365), `ANALYZE_MAX_BYTES` (5 MB per upload). Uploaded
+logs live in the same SQLite file as the contest but in their own table,
+so `DELETE /api/db` / the Admin reset does **not** remove them.
 
 ## Redeploying after the initial setup
 

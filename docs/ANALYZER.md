@@ -1,8 +1,20 @@
-# Log Analyzer — plan
+# Log Analyzer
 
-Status: **planning, not built.** This document is the agreed shape for an
-"Analyze" feature that takes an uploaded Cabrillo or ADIF log and renders it
-through the same Stats and Charts breakdowns the realtime dashboard uses.
+Status: **v1 implemented.** Upload a Cabrillo or ADIF log at `/analyze`; it
+is parsed, enriched, saved, and given a shareable `/analyze/<id>` link that
+renders through the same Stats and Charts pages as the realtime dashboard.
+
+**What shipped vs. the plan below:** the "shared analysis core" extraction
+was *not* done — it was high-risk for the two just-shipped pages and turned
+out unnecessary. Instead `stats.js` / `charts.js` gained a `?log=<id>` data
+source: when that param is present they fetch `GET /api/analyze/<id>`
+instead of the live feed, skip all socket/poll wiring, and hide the
+sections the source format can't populate (`logMeta.has_*`). The
+`/analyze/<id>` page is a light landing card linking into
+`stats.html?log=<id>` and `charts.html?log=<id>`. The country file lives at
+`src/analyze/cty.csv` (a source asset — `data/` is gitignored), refreshed by
+`.github/workflows/cty-refresh.yml`. The `analyzed_logs` table is in
+`src/db/schema.sql`, not a numbered migration. Everything else matches.
 
 ## Why this is a distinct thing
 

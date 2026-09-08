@@ -27,6 +27,13 @@
 
   <main class="grid">
 
+    <template x-if="logMeta">
+      <section class="card card--wide analyze-banner">
+        <span x-text="'Analyzing: ' + (logMeta.contest || logMeta.filename || 'uploaded log') + ' · ' + (logMeta.station_call || '?') + ' · ' + logMeta.qso_count + ' QSOs · ' + logMeta.format.toUpperCase()"></span>
+        <a href="/analyze">&larr; new analysis</a>
+      </section>
+    </template>
+
     <section class="card card--wide" id="rate-chart">
       <h2>QSO Rate Over Time</h2>
       <div class="chart-box chart-box--trend">
