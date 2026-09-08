@@ -17,6 +17,12 @@ function charts() {
   let operatorScoreChart = null;
   let operatorMultChart = null;
 
+  // The "more charts" grid below (see extraCharts / renderExtra) is
+  // spec-driven rather than one named closure var per canvas -- there are a
+  // dozen-plus of them. Same rule as above though: the live Chart.js
+  // instances are kept in this plain Map, never on the Alpine object.
+  const extra = new Map(); // spec.id -> Chart
+
   return {
     qsos: [],
     scoreHistory: [],
@@ -300,6 +306,52 @@ function charts() {
         options: trendChartOptions(),
       });
     },
+
+    // ================================================================
+    // "More charts" -- a spec-driven grid of additional breakdowns, the
+    // visual counterpart to the Stats page's tables. Each spec names a
+    // canvas id, a title, whether it wants a full-width row and a squarer
+    // box (doughnuts), and a build(qsos, scoreHistory, bucketMinutes) that
+    // returns a ready Chart.js config (or null when there's no data). All
+    // keyed off logged_at like the rest of this page -- deliberately not
+    // n1mm_timestamp (that's the Stats page's choice; see stats.js
+    // qsoTime()).
+    // ================================================================
+    get extraCharts() {
+      return EXTRA_CHART_SPECS;
+    },
+
+    renderExtra(spec) {
+      const canvas = document.getElementById(spec.id);
+      if (!canvas || typeof Chart === 'undefined') return;
+
+      const cfg = spec.build(this.qsos, this.scoreHistory, this.autoBucketMinutes());
+      const current = extra.get(spec.id);
+
+      if (!cfg) {
+        // No data yet -- tear down a stale chart so the box goes properly
+        // blank rather than showing the last contest's shape.
+        if (current) { current.destroy(); extra.delete(spec.id); }
+        return;
+      }
+
+      // Same detached-canvas guard as renderMultiSeriesChart(): the
+      // x-if="qsos.length > 0" wrapper can remove and re-create these
+      // canvases, orphaning the old instance.
+      if (current && current.canvas !== canvas) {
+        current.destroy();
+        extra.delete(spec.id);
+      }
+
+      const live = extra.get(spec.id);
+      if (live) {
+        live.data = cfg.data;
+        live.options = cfg.options;
+        live.update();
+        return;
+      }
+      extra.set(spec.id, new Chart(canvas, cfg));
+    },
   };
 }
 
@@ -417,3 +469,411 @@ function trendChartOptions() {
     },
   };
 }
+
+// A stacked bar/column: same dark axes as trendChartOptions() but with the
+// legend on (each series is a band / continent / run-state that colour
+// alone has to carry) and both axes stacked.
+function stackedChartOptions() {
+  const o = trendChartOptions();
+  o.plugins.legend = { display: true, labels: { color: '#e6edf3', boxWidth: 12 } };
+  o.scales.x.stacked = true;
+  o.scales.y.stacked = true;
+  return o;
+}
+
+function doughnutChartOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 200 },
+    plugins: {
+      legend: { display: true, position: 'right', labels: { color: '#e6edf3', boxWidth: 12 } },
+    },
+  };
+}
+
+// ===========================================================================
+// "More charts" grid -- spec-driven. See the charts() object's extraCharts /
+// renderExtra. Each build() takes (qsos, scoreHistory, bucketMinutes) and
+// returns a ready Chart.js config, or null when there's nothing to draw.
+// Time is keyed off logged_at (via qLoggedTime), same as the rest of this
+// page.
+// ===========================================================================
+
+const CONTINENT_ORDER = ['NA', 'SA', 'EU', 'AS', 'AF', 'OC', 'AN', '—'];
+const MODE_COLORS = {
+  CW: CATEGORICAL_COLORS[0], PH: CATEGORICAL_COLORS[1],
+  DG: CATEGORICAL_COLORS[2], '—': '#8b949e',
+};
+
+function qLoggedTime(q) {
+  if (!q.logged_at) return NaN;
+  const t = new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime();
+  return Number.isNaN(t) ? NaN : t;
+}
+
+function multCount(q) {
+  return (q.is_mult1 ? 1 : 0) + (q.is_mult2 ? 1 : 0) + (q.is_mult3 ? 1 : 0);
+}
+
+// Same CW / PH / DG buckets as stats.js modeGroup().
+function modeGroup(mode) {
+  const m = String(mode || '').toUpperCase();
+  if (!m) return '—';
+  if (m === 'CW') return 'CW';
+  if (['USB', 'LSB', 'SSB', 'AM', 'FM', 'PH', 'PHONE', 'DV', 'FMN'].includes(m)) return 'PH';
+  return 'DG';
+}
+
+function bandSortKey(band) {
+  const n = parseFloat(band);
+  return Number.isNaN(n) ? Infinity : n;
+}
+
+function bandLabel(band) {
+  const n = parseFloat(band);
+  if (Number.isNaN(n)) return band || '—';
+  const ranges = [
+    [1.7, 2.1, '160m'], [3.4, 4.1, '80m'], [5.2, 5.5, '60m'], [6.9, 7.4, '40m'],
+    [10.0, 10.2, '30m'], [13.9, 14.5, '20m'], [18.0, 18.2, '17m'], [20.9, 21.5, '15m'],
+    [24.8, 25.1, '12m'], [27.9, 29.8, '10m'], [49, 55, '6m'], [69, 75, '4m'],
+    [143, 149, '2m'], [218, 226, '1.25m'], [419, 451, '70cm'],
+  ];
+  const hit = ranges.find(([lo, hi]) => n >= lo && n < hi);
+  return hit ? hit[2] : String(band);
+}
+
+function hexA(hex, a) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return hex;
+  return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${a})`;
+}
+
+function sortedBands(qsos) {
+  return [...new Set(qsos.map((q) => q.band).filter(Boolean))]
+    .sort((a, b) => bandSortKey(a) - bandSortKey(b));
+}
+
+// A band keeps the same colour across every chart on the page: index into
+// the fixed palette by the band's position in frequency order.
+function bandColorFactory(qsos) {
+  const order = sortedBands(qsos);
+  return (band) => CATEGORICAL_COLORS[Math.max(0, order.indexOf(band)) % CATEGORICAL_COLORS.length];
+}
+
+function continentColor(c) {
+  const i = CONTINENT_ORDER.indexOf(c);
+  return CATEGORICAL_COLORS[(i < 0 ? 7 : i) % CATEGORICAL_COLORS.length];
+}
+
+// Even bucket timeline across the full span of logged QSOs, plus a label
+// formatter that adds the date once a contest runs past 24h. Min/max by
+// loop, not Math.min(...times), so a big log can't blow the call stack.
+function timeAxis(qsos, bucketMin) {
+  const bucketMs = Math.max(1, bucketMin) * 60000;
+  const times = [];
+  for (const q of qsos) {
+    const t = qLoggedTime(q);
+    if (!Number.isNaN(t)) times.push(t);
+  }
+  if (!times.length) return { buckets: [], bucketMs, label: () => '' };
+
+  let min = times[0];
+  let max = times[0];
+  for (const t of times) { if (t < min) min = t; if (t > max) max = t; }
+
+  const start = Math.floor(min / bucketMs) * bucketMs;
+  const end = Math.floor(max / bucketMs) * bucketMs;
+  const buckets = [];
+  for (let b = start; b <= end && buckets.length < 2000; b += bucketMs) buckets.push(b);
+
+  const multiDay = end - start >= 24 * 3600000;
+  const pad = (n) => String(n).padStart(2, '0');
+  const label = (ms) => {
+    const d = new Date(ms);
+    const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return multiDay ? `${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())} ${hm}` : hm;
+  };
+  return { buckets, bucketMs, label };
+}
+
+function buildCumulative(qsos, bucketMin, valueFn, label, color) {
+  if (!qsos.length) return null;
+  const { buckets, bucketMs, label: fmt } = timeAxis(qsos, bucketMin);
+  if (!buckets.length) return null;
+
+  const perBucket = new Map(buckets.map((b) => [b, 0]));
+  for (const q of qsos) {
+    const t = qLoggedTime(q);
+    if (Number.isNaN(t)) continue;
+    const b = Math.floor(t / bucketMs) * bucketMs;
+    if (perBucket.has(b)) perBucket.set(b, perBucket.get(b) + valueFn(q));
+  }
+
+  let run = 0;
+  const data = buckets.map((b) => (run += perBucket.get(b)));
+  return {
+    type: 'line',
+    data: {
+      labels: buckets.map(fmt),
+      datasets: [{
+        label,
+        data,
+        borderColor: color,
+        backgroundColor: hexA(color, 0.15),
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        borderWidth: 2,
+      }],
+    },
+    options: trendChartOptions(),
+  };
+}
+
+function buildStackedByKey(qsos, bucketMin, keyFn, orderedKeys, colorFn) {
+  if (!qsos.length) return null;
+  const { buckets, bucketMs, label: fmt } = timeAxis(qsos, bucketMin);
+  if (!buckets.length) return null;
+
+  const keys = orderedKeys.filter((k, i) => orderedKeys.indexOf(k) === i && qsos.some((q) => keyFn(q) === k));
+  const grid = new Map(keys.map((k) => [k, new Map(buckets.map((b) => [b, 0]))]));
+  for (const q of qsos) {
+    const t = qLoggedTime(q);
+    if (Number.isNaN(t)) continue;
+    const b = Math.floor(t / bucketMs) * bucketMs;
+    const row = grid.get(keyFn(q));
+    if (row && row.has(b)) row.set(b, row.get(b) + 1);
+  }
+
+  return {
+    type: 'bar',
+    data: {
+      labels: buckets.map(fmt),
+      datasets: keys.map((k) => ({
+        label: k,
+        data: buckets.map((b) => grid.get(k).get(b)),
+        backgroundColor: colorFn(k),
+        borderWidth: 0,
+      })),
+    },
+    options: stackedChartOptions(),
+  };
+}
+
+function buildTotalsBar(qsos, keyFn, orderedKeys, colorFn) {
+  if (!qsos.length) return null;
+  const counts = new Map();
+  for (const q of qsos) {
+    const k = keyFn(q);
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  if (counts.size === 0) return null;
+
+  let keys = orderedKeys
+    ? orderedKeys.filter((k) => counts.has(k))
+    : [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a));
+
+  return {
+    type: 'bar',
+    data: {
+      labels: keys,
+      datasets: [{
+        label: 'QSOs',
+        data: keys.map((k) => counts.get(k) || 0),
+        backgroundColor: keys.map(colorFn),
+        borderRadius: 4,
+      }],
+    },
+    options: barChartOptions(),
+  };
+}
+
+function buildDoughnut(qsos, keyFn, orderedKeys, colorFn) {
+  if (!qsos.length) return null;
+  const counts = new Map();
+  for (const q of qsos) {
+    const k = keyFn(q);
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  if (counts.size === 0) return null;
+
+  const keys = orderedKeys
+    ? orderedKeys.filter((k) => counts.has(k))
+    : [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a));
+
+  return {
+    type: 'doughnut',
+    data: {
+      labels: keys,
+      datasets: [{
+        data: keys.map((k) => counts.get(k)),
+        backgroundColor: keys.map(colorFn),
+        borderColor: '#0a0a0a',
+        borderWidth: 2,
+      }],
+    },
+    options: doughnutChartOptions(),
+  };
+}
+
+function buildHistogram(labels, values, color) {
+  if (!labels.length) return null;
+  return {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'QSOs', data: values, backgroundColor: color, borderRadius: 4 }] },
+    options: barChartOptions(),
+  };
+}
+
+function buildMultsByBand(qsos) {
+  if (!qsos.length) return null;
+  const bands = sortedBands(qsos);
+  if (!bands.length) return null;
+  const by = new Map(bands.map((b) => [b, 0]));
+  for (const q of qsos) if (by.has(q.band)) by.set(q.band, by.get(q.band) + multCount(q));
+  return buildHistogram(
+    bands.map(bandLabel),
+    bands.map((b) => by.get(b)),
+    bands.map((b, i) => CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length]),
+  );
+}
+
+function buildPointsDist(qsos) {
+  if (!qsos.length) return null;
+  const by = new Map();
+  for (const q of qsos) {
+    const p = Number(q.points) || 0;
+    by.set(p, (by.get(p) || 0) + 1);
+  }
+  const keys = [...by.keys()].sort((a, b) => a - b);
+  return buildHistogram(keys.map(String), keys.map((k) => by.get(k)), CATEGORICAL_COLORS[3]);
+}
+
+function buildCallLenDist(qsos) {
+  if (!qsos.length) return null;
+  const by = new Map();
+  for (const q of qsos) {
+    const L = (q.call || '').length;
+    if (!L) continue;
+    const k = L >= 10 ? '10+' : String(L);
+    by.set(k, (by.get(k) || 0) + 1);
+  }
+  const order = ['3', '4', '5', '6', '7', '8', '9', '10+'].filter((k) => by.has(k));
+  return buildHistogram(order, order.map((k) => by.get(k)), CATEGORICAL_COLORS[6]);
+}
+
+function buildHourOfDay(qsos) {
+  if (!qsos.length) return null;
+  const by = new Array(24).fill(0);
+  let any = false;
+  for (const q of qsos) {
+    const t = qLoggedTime(q);
+    if (Number.isNaN(t)) continue;
+    by[new Date(t).getUTCHours()] += 1;
+    any = true;
+  }
+  if (!any) return null;
+  return buildHistogram(
+    [...Array(24).keys()].map((h) => String(h).padStart(2, '0')),
+    by,
+    CATEGORICAL_COLORS[0],
+  );
+}
+
+// Distribution of the per-hour rate seen across fixed 10-minute windows --
+// "how much of the contest was spent at what rate". Each window's QSO count
+// is extrapolated x6 to a per-hour figure and dropped into a coarse bin.
+function buildRateHistogram(qsos) {
+  const times = [];
+  for (const q of qsos) {
+    const t = qLoggedTime(q);
+    if (!Number.isNaN(t)) times.push(t);
+  }
+  if (times.length < 2) return null;
+
+  const bucketMs = 10 * 60000;
+  let min = times[0];
+  let max = times[0];
+  for (const t of times) { if (t < min) min = t; if (t > max) max = t; }
+  const start = Math.floor(min / bucketMs) * bucketMs;
+  const end = Math.floor(max / bucketMs) * bucketMs;
+
+  const counts = new Map();
+  for (let b = start; b <= end; b += bucketMs) counts.set(b, 0);
+  for (const t of times) {
+    const b = Math.floor(t / bucketMs) * bucketMs;
+    counts.set(b, (counts.get(b) || 0) + 1);
+  }
+
+  const labels = ['0–24', '25–49', '50–74', '75–99', '100–149', '150+'];
+  const bins = [0, 0, 0, 0, 0, 0];
+  for (const c of counts.values()) {
+    const r = c * 6;
+    const idx = r < 25 ? 0 : r < 50 ? 1 : r < 75 ? 2 : r < 100 ? 3 : r < 150 ? 4 : 5;
+    bins[idx] += 1;
+  }
+  return buildHistogram(labels, bins, CATEGORICAL_COLORS[2]);
+}
+
+const EXTRA_CHART_SPECS = [
+  {
+    id: 'cx-cum-qsos', title: 'Cumulative QSOs', wide: true,
+    build: (q, sh, bm) => buildCumulative(q, bm, () => 1, 'QSOs', CATEGORICAL_COLORS[0]),
+  },
+  {
+    id: 'cx-cum-points', title: 'Cumulative QSO Points', wide: true,
+    build: (q, sh, bm) => buildCumulative(q, bm, (x) => Number(x.points) || 0, 'Points', CATEGORICAL_COLORS[1]),
+  },
+  {
+    id: 'cx-cum-mults', title: 'Cumulative Multipliers', wide: true,
+    build: (q, sh, bm) => buildCumulative(q, bm, multCount, 'Mults', CATEGORICAL_COLORS[2]),
+  },
+  {
+    id: 'cx-band-time', title: 'QSOs by Band Over Time', wide: true,
+    build: (q, sh, bm) => buildStackedByKey(q, bm, (x) => x.band || '—', [...sortedBands(q), '—'], bandColorFactory(q)),
+  },
+  {
+    id: 'cx-cont-time', title: 'QSOs by Continent Over Time', wide: true,
+    build: (q, sh, bm) => buildStackedByKey(q, bm, (x) => (x.continent || '—').toUpperCase(), CONTINENT_ORDER, continentColor),
+  },
+  {
+    id: 'cx-runsp-time', title: 'Run vs. Search & Pounce Over Time', wide: true,
+    build: (q, sh, bm) => buildStackedByKey(
+      q, bm, (x) => (x.is_run_qso ? 'Run' : 'S&P'), ['Run', 'S&P'],
+      (k) => (k === 'Run' ? CATEGORICAL_COLORS[5] : CATEGORICAL_COLORS[0]),
+    ),
+  },
+  {
+    id: 'cx-band-share', title: 'QSOs by Band', wide: false,
+    build: (q) => buildTotalsBar(q, (x) => x.band || '—', [...sortedBands(q), '—'], bandColorFactory(q)),
+  },
+  {
+    id: 'cx-mode-share', title: 'QSOs by Mode', wide: false, pie: true,
+    build: (q) => buildDoughnut(q, (x) => modeGroup(x.mode), ['CW', 'PH', 'DG', '—'], (k) => MODE_COLORS[k] || '#8b949e'),
+  },
+  {
+    id: 'cx-cont-share', title: 'QSOs by Continent', wide: false,
+    build: (q) => buildTotalsBar(q, (x) => (x.continent || '—').toUpperCase(), null, continentColor),
+  },
+  {
+    id: 'cx-mult-band', title: 'Multipliers by Band', wide: false,
+    build: (q) => buildMultsByBand(q),
+  },
+  {
+    id: 'cx-hour-of-day', title: 'QSOs by Hour of Day (UTC)', wide: true,
+    build: (q) => buildHourOfDay(q),
+  },
+  {
+    id: 'cx-points-dist', title: 'Points-per-QSO Distribution', wide: false,
+    build: (q) => buildPointsDist(q),
+  },
+  {
+    id: 'cx-calllen-dist', title: 'Callsign Length Distribution', wide: false,
+    build: (q) => buildCallLenDist(q),
+  },
+  {
+    id: 'cx-rate-hist', title: 'Rate Distribution (10-min windows)', wide: false,
+    build: (q) => buildRateHistogram(q),
+  },
+];

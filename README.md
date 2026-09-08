@@ -126,14 +126,22 @@ just a second transport into `src/udp/dispatch.js`, not a separate code path.
   carries the connection status, the current ContestPulse feed status per
   station, and the contest's grid locator (from the Score broadcast's
   `<qth>` data).
-- **`/charts.html` (Charts)** — QSO rate and score over time for the whole
-  contest, plus a QSOs-by-operator bar chart. A **Detailed view** toggle
-  (off by default, remembered per-browser) reveals three more per-operator
-  time series: rate, score contribution, and multiplier contribution over
-  time. All bucketing is sized automatically from the actual span of logged
-  QSOs so a 2-hour club contest and a 48-hour DX contest both render a
-  readable number of points. Charts update live via the same socket events
-  the main dashboard uses.
+- **`/charts.html` (Charts)** — the visual counterpart to the Stats page.
+  Top of page: QSO rate and score over time, plus a QSOs-by-operator bar
+  chart. A **Detailed view** toggle (off by default, remembered per-browser)
+  reveals three per-operator time series: rate, score contribution, and
+  multiplier contribution. Below that, always shown once there's data, a
+  "more charts" grid: cumulative QSOs / points / multipliers; QSOs by band,
+  by continent, and run vs. S&P **over time** (stacked); band, mode, and
+  continent share; multipliers by band; QSOs by hour of day; and
+  points-per-QSO, callsign-length, and rate distributions. That grid is
+  spec-driven — one `{ id, title, build() }` entry per chart in
+  `EXTRA_CHART_SPECS`, rendered through a single generic `renderExtra()`.
+  All bucketing is sized automatically from the span of logged QSOs so a
+  2-hour club contest and a 48-hour DX contest both render a readable number
+  of points. Charts update live via the same socket events the main
+  dashboard uses; time is keyed off `logged_at` (not N1MM's QSO timestamp —
+  that's the Stats page's choice).
 - **`/stats.html` (Stats)** — a post-contest analysis report in the spirit
   of SH5 / CBS. Kept at the top: the band × mode / multiplier breakdown,
   one table per operator plus a combined "All Operators" table (columns are

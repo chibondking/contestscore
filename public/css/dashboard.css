@@ -284,6 +284,11 @@ body {
 
 .chart-box { position: relative; width: 100%; }
 .chart-box--trend { height: 280px; }
+.chart-box--pie { height: 260px; }
+
+/* A full-width row of cards nested inside the main .grid (the Charts page's
+   "more charts" block and the Detailed per-operator block). */
+.grid--nested { padding: 0; grid-column: 1 / -1; }
 
 /* Continent breakdown -- plain rows, shaded by QSO count (same sequential
    blue-alpha scheme as before). See dashboard.js's continentCounts()/

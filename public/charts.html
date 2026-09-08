@@ -81,6 +81,23 @@
       </div>
     </template>
 
+    <!-- "More charts": a spec-driven grid of extra breakdowns (see
+         charts.js EXTRA_CHART_SPECS / renderExtra). Always shown once
+         there's data -- the Detailed toggle above only gates the
+         per-operator time series, which are the heavy, opt-in view. -->
+    <template x-if="qsos.length > 0">
+      <div class="grid grid--nested">
+        <template x-for="spec in extraCharts" :key="spec.id">
+          <section class="card" :class="spec.wide ? 'card--wide' : ''">
+            <h2 x-text="spec.title"></h2>
+            <div class="chart-box" :class="spec.pie ? 'chart-box--pie' : 'chart-box--trend'">
+              <canvas :id="spec.id" x-effect="renderExtra(spec)"></canvas>
+            </div>
+          </section>
+        </template>
+      </div>
+    </template>
+
   </main>
 
   <footer class="footer"></footer>
