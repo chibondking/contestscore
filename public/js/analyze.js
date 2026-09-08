@@ -12,6 +12,11 @@ function analyze() {
     mode: 'upload',      // 'upload' | 'result' | 'notfound'
     logId: null,
     meta: null,
+    excluded: [],
+    showExcluded: false,
+    compareId: '',
+    cmpA: '',
+    cmpB: '',
     token: '',
     file: null,
     fileName: '',
@@ -40,10 +45,29 @@ function analyze() {
         const r = await fetch(`/api/analyze/${encodeURIComponent(this.logId)}`);
         if (r.status === 404) { this.mode = 'notfound'; return; }
         if (!r.ok) { this.error = `Failed to load analysis (${r.status})`; return; }
-        this.meta = (await r.json()).meta;
+        const body = await r.json();
+        this.meta = body.meta;
+        this.excluded = body.excluded || [];
       } catch (err) {
         this.error = `Failed to load analysis: ${err}`;
       }
+    },
+
+    // Accept a bare id or a pasted /analyze/<id> URL.
+    idFrom(s) {
+      const m = String(s || '').trim().match(/([A-Za-z0-9_-]{4,40})\/?$/);
+      return m ? m[1] : '';
+    },
+
+    goCompare() {
+      const b = this.idFrom(this.compareId);
+      if (b && b !== this.logId) window.location.href = `/compare?a=${this.logId}&b=${b}`;
+    },
+
+    goCompare2() {
+      const a = this.idFrom(this.cmpA);
+      const b = this.idFrom(this.cmpB);
+      if (a && b) window.location.href = `/compare?a=${a}&b=${b}`;
     },
 
     pickFile(ev) {

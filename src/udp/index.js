@@ -6,6 +6,7 @@ const {
   upsertRadio, upsertQso, deleteQso, insertScoreBreakdown, cacheCallsign,
 } = require('../db/queries');
 const { freqToBand } = require('../parsers/util');
+const { enrichGeo } = require('../analyze/geo');
 const config = require('../../config/default.json');
 
 const emitter = new EventEmitter();
@@ -31,6 +32,11 @@ function startListeners(io) {
   });
 
   emitter.on('contact:new', (data) => {
+    // Fill continent / CQ zone / DXCC prefix from the country file when the
+    // logger didn't send them (TR4W, older N1MM) -- fill only, never
+    // override. Keeps the dashboard's by-continent breakdown working
+    // regardless of logger. Same helper the log analyzer uses.
+    enrichGeo(data);
     safely('contact:new', () => upsertQso(data));
     io.emit('contact:new', data);
   });

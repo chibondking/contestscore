@@ -1,40 +1,17 @@
-// Orchestrator for the log analyzer: raw text -> { meta, qsos } ready to
-// store and render. Detects Cabrillo vs ADIF, runs the matching pure
-// parser, then enriches every QSO's continent / DXCC prefix / CQ zone from
-// the bundled country file so the analyzer's geographic breakdowns work
-// regardless of what the source format carried.
+// Orchestrator for the log analyzer: raw text -> { meta, qsos, excluded }
+// ready to store and render. Detects Cabrillo vs ADIF, runs the matching
+// pure parser, applies the per-contest exchange grammar (Cabrillo), then
+// fills in continent / DXCC prefix / CQ zone from the bundled country file
+// (src/analyze/geo.js) so the geographic breakdowns work regardless of
+// what the source format carried.
 //
 // See docs/ANALYZER.md.
 
-const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
 const { parseCabrillo } = require('./cabrillo');
 const { parseAdif } = require('./adif');
-const { loadResolver } = require('./cty');
 const { specForContest, applyExchange } = require('./contests');
-
-// Bundled as a source asset (not under data/, which is gitignored runtime
-// state). Refreshed by .github/workflows/cty-refresh.yml.
-const CTY_PATH = path.join(__dirname, 'cty.csv');
-
-// The country file is ~300 KB; parse it once per process.
-let _resolver;
-function ctyResolver() {
-  if (_resolver !== undefined) return _resolver;
-  try {
-    _resolver = loadResolver(fs.readFileSync(CTY_PATH, 'utf8'));
-  } catch (err) {
-    // No country file bundled yet (see .github/workflows/cty-refresh.yml) --
-    // degrade to no geographic enrichment rather than failing the upload.
-    console.warn(`analyzer: country file unavailable (${err.message}); continent/DXCC/zone enrichment disabled`);
-    _resolver = null;
-  }
-  return _resolver;
-}
-
-// For tests: force a specific resolver (or null) instead of reading disk.
-function _setResolver(r) { _resolver = r; }
+const { enrichGeo, resolveCall } = require('./geo');
 
 function detectFormat(text) {
   const head = String(text).slice(0, 4000);
@@ -43,19 +20,6 @@ function detectFormat(text) {
   // Last resort: a line starting with QSO: anywhere.
   if (/^\s*QSO:\s/im.test(text)) return 'cabrillo';
   return null;
-}
-
-function enrich(qsos) {
-  const resolve = ctyResolver();
-  if (!resolve) return;
-  for (const q of qsos) {
-    if (!q.call) continue;
-    const hit = resolve(q.call);
-    if (!hit) continue;
-    if (!q.continent) q.continent = hit.continent || '';
-    if (!q.zone || q.zone === '0') q.zone = hit.cqzone || '';
-    if (!q.countryprefix) q.countryprefix = hit.prefix || '';
-  }
 }
 
 function newId() {
@@ -77,26 +41,26 @@ function analyzeLog(text, filename) {
   const parsed = format === 'adif' ? parseAdif(text) : parseCabrillo(text);
   const { meta, flags } = parsed;
 
-  const excludedCount = parsed.qsos.filter((q) => q.excluded).length;
   const qsos = parsed.qsos.filter((q) => !q.excluded);
+  const excluded = parsed.qsos
+    .filter((q) => q.excluded)
+    .map((q) => ({ call: q.call, band: q.band, mode: q.mode, n1mm_timestamp: q.n1mm_timestamp }));
 
   // v2: per-contest exchange parsing. Cabrillo only -- an ADIF export
-  // already has the exchange in structured fields. Runs before enrich() so
-  // a zone read from the actual exchange (CQ WW) wins over the country
+  // already has the exchange in structured fields. Runs before enrichGeo()
+  // so a zone read from the actual exchange (CQ WW) wins over the country
   // file's default zone for that entity.
   const spec = specForContest(meta.contest);
   const contestKey = spec ? spec.key : null;
   let exchangeParsed = false;
   if (spec && format === 'cabrillo') {
-    const resolve = ctyResolver();
-    const home = resolve ? resolve(meta.station_call) : null;
+    const home = resolveCall(meta.station_call);
     const isDomestic = !!home && ['K', 'VE'].includes(home.prefix);
     exchangeParsed = applyExchange(qsos, spec, { isDomestic, meta });
   }
 
   for (const q of qsos) { delete q.excluded; delete q._exchTokens; }
-
-  enrich(qsos);
+  for (const q of qsos) enrichGeo(q);
 
   return {
     meta: {
@@ -109,14 +73,15 @@ function analyzeLog(text, filename) {
       operators: meta.operators || '',
       claimed_score: meta.claimed_score ?? null,
       qso_count: qsos.length,
-      excluded_count: excludedCount,
+      excluded_count: excluded.length,
       has_points: !!flags.has_points,
       has_mults: !!flags.has_mults,
       has_operator: !!flags.has_operator,
       has_run_flag: !!flags.has_run_flag,
     },
     qsos,
+    excluded,
   };
 }
 
-module.exports = { analyzeLog, detectFormat, newId, _setResolver };
+module.exports = { analyzeLog, detectFormat, newId };

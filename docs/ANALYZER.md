@@ -237,8 +237,24 @@ CREATE TABLE IF NOT EXISTS analyzed_logs (
     `migrations/002_analyzed_logs_contest.sql`), surfaced on the result
     page. ADIF is unaffected (its exchange is already structured).
     Tested per contest in `test/analyze/contests.test.js`.
-  - **Still to do:** `X-QSO` UI (parsed and excluded today, not surfaced);
-    log-vs-log comparison.
+  - **Done:** `X-QSO` handling. `parsed_json` now stores
+    `{ qsos, excluded }` (the GET route accepts the old bare-array shape
+    too); removed QSOs come back as compact `{call, band, mode, timestamp}`
+    rows and the result page shows a count + expandable list. They stay out
+    of every stat.
+  - **Done:** log-vs-log comparison. `/compare?a=<id>&b=<id>`
+    (`public/compare.js`) fetches both public analyses and renders a
+    headline table (QSOs / points / mults / pts-per-Q / DXCC / zones /
+    bands / hours / avg rate / best-60, each with a B−A delta) and a
+    per-band QSO table with deltas. Entry points: a "Compare with…" box on
+    a result page (prefills `a`), and a two-id form on the upload page.
+- **Realtime reuse.** The country-file fill was pulled into
+  `src/analyze/geo.js` (`enrichGeo` / `resolveCall`) and wired into the
+  live contact pipeline (`src/udp/index.js`): an incoming `contact:new`
+  gets its continent / CQ zone / DXCC prefix filled from cty.csv when the
+  logger didn't send them (TR4W, older N1MM), so the dashboard's
+  by-continent breakdown works regardless of logger. Fill-only, never
+  overrides what the packet carried.
 - **v3** — "your saved analyses" list with delete/expiry UI; export the
   result as a standalone static HTML report (SH5-style).
 

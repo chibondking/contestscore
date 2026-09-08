@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ContestPulse Compare</title>
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</head>
+<body x-data="compare()" x-init="init()">
+
+  <header class="header" data-page="analyze"></header>
+
+  <main class="grid">
+
+    <template x-if="loading">
+      <section class="card card--wide"><p class="empty">Loading…</p></section>
+    </template>
+
+    <template x-if="!loading && error">
+      <section class="card card--wide">
+        <h2>Can't compare</h2>
+        <p class="empty" x-text="error"></p>
+        <p class="empty"><a href="/analyze">Back to Analyze</a></p>
+      </section>
+    </template>
+
+    <template x-if="ready">
+      <section class="card card--wide">
+        <h2>Comparison</h2>
+        <div class="tile-row" style="gap:2rem 3rem">
+          <div>
+            <div class="metric__label">A</div>
+            <div x-text="(a.meta.contest || a.meta.filename || aId) + ' · ' + (a.meta.station_call || '?')"></div>
+            <a class="chip" style="margin-top:.3rem;display:inline-block" :href="'/stats.html?log=' + aId">open A</a>
+          </div>
+          <div>
+            <div class="metric__label">B</div>
+            <div x-text="(b.meta.contest || b.meta.filename || bId) + ' · ' + (b.meta.station_call || '?')"></div>
+            <a class="chip" style="margin-top:.3rem;display:inline-block" :href="'/stats.html?log=' + bId">open B</a>
+          </div>
+        </div>
+      </section>
+    </template>
+
+    <template x-if="ready">
+      <section class="card card--wide">
+        <h2>Headline</h2>
+        <div class="table-scroll">
+          <table class="qso-table stats-table">
+            <thead><tr><th>Metric</th><th class="num">A</th><th class="num">B</th><th class="num">Δ (B−A)</th></tr></thead>
+            <tbody>
+              <template x-for="r in metricRows" :key="r.label">
+                <tr>
+                  <td x-text="r.label"></td>
+                  <td class="num" x-text="r.a"></td>
+                  <td class="num" x-text="r.b"></td>
+                  <td class="num" :style="r.up ? 'color:var(--green)' : (r.down ? 'color:var(--red)' : '')" x-text="r.delta"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
+
+    <template x-if="ready">
+      <section class="card card--wide">
+        <h2>QSOs by band</h2>
+        <div class="table-scroll">
+          <table class="qso-table stats-table">
+            <thead><tr><th>Band</th><th class="num">A</th><th class="num">B</th><th class="num">Δ</th></tr></thead>
+            <tbody>
+              <template x-for="r in bandRows" :key="r.band">
+                <tr>
+                  <td x-text="r.band"></td>
+                  <td class="num" x-text="r.a.toLocaleString()"></td>
+                  <td class="num" x-text="r.b.toLocaleString()"></td>
+                  <td class="num" :style="r.up ? 'color:var(--green)' : (r.down ? 'color:var(--red)' : '')" x-text="r.delta"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </template>
+
+  </main>
+
+  <footer class="footer"></footer>
+
+  <script src="/js/chrome.js"></script>
+  <script src="/js/compare.js"></script>
+</body>
+</html>

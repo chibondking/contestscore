@@ -125,7 +125,10 @@ just a second transport into `src/udp/dispatch.js`, not a separate code path.
   operator), the last 20 QSOs, and a by-continent QSO breakdown. The header
   carries the connection status, the current ContestPulse feed status per
   station, and the contest's grid locator (from the Score broadcast's
-  `<qth>` data).
+  `<qth>` data). When a logger doesn't send `continent`/`zone`/
+  `countryprefix` on a QSO (TR4W, older N1MM), the server fills them from
+  the bundled country file — the same `enrichGeo` the log analyzer uses
+  (`src/analyze/geo.js`), fill-only, never overriding the packet.
 - **`/charts.html` (Charts)** — the visual counterpart to the Stats page.
   Top of page: QSO rate and score over time, plus a QSOs-by-operator bar
   chart. A **Detailed view** toggle (off by default, remembered per-browser)
@@ -167,7 +170,10 @@ just a second transport into `src/udp/dispatch.js`, not a separate code path.
   (CQ WW/WPX/160, WAE, IARU, Stew Perry, ARRL SS/DX/FD/10/RTTY-RU, NAQP,
   NA Sprint, state QSO parties — see `src/analyze/contests.js`) the
   exchange itself is parsed too: real sections, serials and zones straight
-  from the log rather than inferred. An ADIF export from N1MM also
+  from the log rather than inferred. Removed (`X-QSO`) lines are surfaced
+  but kept out of every count, and `/compare?a=<id>&b=<id>` puts two saved
+  analyses side by side with per-metric and per-band deltas. An ADIF export
+  from N1MM also
   carries points, multipliers, per-operator and run/S&P data; a bare
   Cabrillo doesn't, so those sections are hidden for it. Upload is gated by
   `CONTESTSCORE_API_TOKEN` (paste it on the page, same as Admin); viewing a
@@ -374,15 +380,15 @@ src/
   app.js                  Express setup
   udp/                    dgram listeners + dispatch.js (routes by XML root element, not port)
   parsers/                XML → JS (radio, contact, score, lookup, util.js for shared conversions)
-  analyze/                Cabrillo + ADIF parsers, cty.csv resolver, orchestrator (the /analyze feature)
+  analyze/                Cabrillo + ADIF parsers, per-contest exchange maps, cty.csv resolver + geo.js (shared with the realtime pipeline), orchestrator
   db/                     better-sqlite3: schema, migrations, queries
   socket/                 socket.io init and event wiring
   state/bridgeStatus.js   ContestPulse heartbeat freshness tracking
   routes/                 REST endpoints (api.js) + ingest.js (bridge) + analyze.js (log upload)
 public/
-  index.html, charts.html, stats.html, analyze.html, admin.html   The pages
+  index.html, charts.html, stats.html, analyze.html, compare.html, admin.html   The pages
   js/
-    dashboard.js, charts.js, stats.js, analyze.js, admin.js   Per-page Alpine.js logic (not ES modules -- see CLAUDE.md)
+    dashboard.js, charts.js, stats.js, analyze.js, compare.js, admin.js   Per-page Alpine.js logic (not ES modules -- see CLAUDE.md)
     chrome.js                           Shared header/nav/footer, injected into every page
   css/dashboard.css        Shared styling, dark theme
 config/default.json       Default configuration

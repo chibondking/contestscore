@@ -46,6 +46,16 @@
           x-text="busy ? 'Analyzing…' : 'Analyze & save'"></button>
 
         <p x-show="error" class="analyze-error" x-text="error"></p>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0">
+        <h2 style="margin-bottom:.5rem">Compare two saved analyses</h2>
+        <div class="analyze-actions" style="align-items:center">
+          <input type="text" x-model="cmpA" placeholder="analysis A — id or URL"
+            style="flex:1;min-width:14rem;padding:.5rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:inherit">
+          <input type="text" x-model="cmpB" placeholder="analysis B — id or URL"
+            style="flex:1;min-width:14rem;padding:.5rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:inherit">
+          <button class="btn btn--ghost" @click="goCompare2()" :disabled="!cmpA || !cmpB">Compare</button>
+        </div>
       </section>
     </template>
 
@@ -97,11 +107,29 @@
                 : meta.contest_key + ' — exchange format not recognised for this log; worked calls and geography still resolved')
             : (meta.contest ? meta.contest + ' — unknown contest; best-effort worked-call parsing' : 'No CONTEST header; best-effort worked-call parsing')"></p>
 
+        <p class="empty" style="margin-top:0.5rem" x-show="meta.excluded_count > 0">
+          <span x-text="meta.excluded_count + ' removed QSO' + (meta.excluded_count === 1 ? '' : 's') + ' (X-QSO) — excluded from every count'"></span>
+          <button class="btn btn--ghost" style="margin-left:.5rem;padding:.1em .55em;font-size:.78rem"
+            @click="showExcluded = !showExcluded" x-text="showExcluded ? 'hide' : 'show'"></button>
+        </p>
+        <div class="chips" style="margin-top:.35rem" x-show="showExcluded && excluded.length">
+          <template x-for="(x, i) in excluded" :key="i">
+            <span class="chip"><b x-text="x.call || '?'"></b> <span x-text="x.band + ' ' + x.mode"></span></span>
+          </template>
+        </div>
+
         <div class="analyze-actions">
           <a class="btn" :href="'/stats.html?log=' + logId">Open Stats</a>
           <a class="btn" :href="'/charts.html?log=' + logId">Open Charts</a>
           <button class="btn btn--ghost" @click="copyShare()"
             x-text="copied ? 'Copied!' : 'Copy share link'"></button>
+        </div>
+
+        <div class="analyze-actions" style="align-items:center">
+          <input type="text" x-model="compareId" @keydown.enter="goCompare()"
+            placeholder="another analysis id or /analyze/… URL"
+            style="flex:1;min-width:16rem;padding:.5rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:inherit">
+          <button class="btn btn--ghost" @click="goCompare()" :disabled="!compareId">Compare</button>
         </div>
 
         <p class="empty" style="margin-top:0.75rem"

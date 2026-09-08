@@ -16,6 +16,10 @@ app.use(express.static(path.join(__dirname, '../public')));
 app.get(['/analyze', '/analyze/:id'], (req, res) => {
   res.sendFile(path.join(__dirname, '../public/analyze.html'));
 });
+// Log-vs-log comparison: /compare?a=<id>&b=<id> (compare.js reads the query).
+app.get('/compare', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/compare.html'));
+});
 
 // Mounted before apiRouter's express.json() would matter: these routes
 // parse their own raw body (see routes/ingest.js) and express.json() only

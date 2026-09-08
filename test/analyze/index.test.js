@@ -38,12 +38,17 @@ describe('newId', () => {
 
 describe('analyzeLog', () => {
   it('parses Cabrillo, drops X-QSO, and enriches from cty.csv', () => {
-    const { meta, qsos } = analyzeLog(CABRILLO, 'wt2p.cbr');
+    const { meta, qsos, excluded } = analyzeLog(CABRILLO, 'wt2p.cbr');
     assert.equal(meta.format, 'cabrillo');
     assert.equal(meta.filename, 'wt2p.cbr');
     assert.equal(meta.qso_count, 2);
     assert.equal(meta.excluded_count, 1);
     assert.equal(meta.has_points, false);
+    // X-QSO surfaced as a compact removed-QSO row, not in the main array
+    assert.equal(excluded.length, 1);
+    assert.equal(excluded[0].call, 'DL1XYZ');
+    assert.equal(excluded[0].band, '14');
+    assert.ok(qsos.every((q) => q.call !== 'DL1XYZ'));
     // cty enrichment ran
     assert.equal(qsos[0].call, 'K3LR');
     assert.equal(qsos[0].continent, 'NA');

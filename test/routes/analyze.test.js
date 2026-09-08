@@ -15,6 +15,7 @@ CALLSIGN: WT2P
 CONTEST: CQ-WPX-CW
 QSO: 14042 CW 2025-05-24 1200 WT2P 599 0001 K3LR 599 0044
 QSO:  7025 CW 2025-05-24 1305 WT2P 599 0003 JA1ABC 599 0555
+X-QSO: 14042 CW 2025-05-24 1200 WT2P 599 0001 N0DUP 599 0044
 END-OF-LOG:
 `;
 
@@ -72,14 +73,18 @@ describe('POST /api/analyze', () => {
     assert.match(body.id, /^[A-Za-z0-9]{10}$/);
     assert.equal(body.meta.format, 'cabrillo');
     assert.equal(body.meta.qso_count, 2);
+    assert.equal(body.meta.excluded_count, 1);
     assert.equal(body.meta.has_points, false);
     assert.equal(body.meta.contest_key, 'CQ-WPX');
     assert.equal(body.meta.exchange_parsed, true);
 
-    // the contest fields round-trip through storage to the public GET
+    // contest fields + the X-QSO list round-trip through storage to the GET
     const fetched = await fetch(`${baseUrl}/api/analyze/${body.id}`).then((r) => r.json());
     assert.equal(fetched.meta.contest_key, 'CQ-WPX');
     assert.equal(fetched.meta.exchange_parsed, true);
+    assert.equal(fetched.excluded.length, 1);
+    assert.equal(fetched.excluded[0].call, 'N0DUP');
+    assert.ok(fetched.qsos.every((q) => q.call !== 'N0DUP'));
   });
 });
 

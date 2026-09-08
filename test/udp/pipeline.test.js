@@ -126,10 +126,16 @@ describe('contact pipeline', () => {
     const row = getQsos().find((q) => q.call === 'DL1ABC');
     assert.equal(row.band, '14');
     assert.equal(row.ext_id, 'pipeline-test-0001');
+    // The packet carried no <continent>/<zone>; enrichGeo (shared with the
+    // log analyzer) fills them from the country file so the dashboard's
+    // by-continent breakdown works even for a logger that omits them.
+    assert.equal(row.continent, 'EU');
+    assert.equal(row.countryprefix, 'DL');
 
     const evt = io.events.find((e) => e.name === 'contact:new');
     assert.ok(evt);
     assert.equal(evt.payload.call, 'DL1ABC');
+    assert.equal(evt.payload.continent, 'EU');
   });
 
   it('contactreplace updates the existing row instead of duplicating it', async () => {

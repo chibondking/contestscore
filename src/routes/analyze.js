@@ -68,7 +68,7 @@ router.post('/', requireToken, rawBody, (req, res) => {
     has_operator: result.meta.has_operator,
     has_run_flag: result.meta.has_run_flag,
     raw_bytes: Buffer.byteLength(text, 'utf8'),
-    parsed_json: JSON.stringify(result.qsos),
+    parsed_json: JSON.stringify({ qsos: result.qsos, excluded: result.excluded || [] }),
   });
 
   try {
@@ -85,19 +85,24 @@ router.get('/', requireToken, (req, res) => {
   res.json(listAnalyzedLogs(200));
 });
 
-// GET /api/analyze/:id  -- public: { meta, qsos }.
+// GET /api/analyze/:id  -- public: { meta, qsos, excluded }.
 router.get('/:id', (req, res) => {
   const row = getAnalyzedLog(req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
 
-  let qsos = [];
+  let parsed;
   try {
-    qsos = JSON.parse(row.parsed_json) || [];
+    parsed = JSON.parse(row.parsed_json);
   } catch {
     return res.status(500).json({ error: 'Stored analysis is corrupt' });
   }
+  // parsed_json was a bare QSO array before the X-QSO surfacing change;
+  // accept both shapes.
+  const qsos = Array.isArray(parsed) ? parsed : (parsed.qsos || []);
+  const excluded = Array.isArray(parsed) ? [] : (parsed.excluded || []);
 
   res.json({
+    excluded,
     meta: {
       id: row.id,
       filename: row.filename,
@@ -113,6 +118,7 @@ router.get('/:id', (req, res) => {
       has_mults: !!row.has_mults,
       has_operator: !!row.has_operator,
       has_run_flag: !!row.has_run_flag,
+      excluded_count: excluded.length,
       created_at: row.created_at,
     },
     qsos,
