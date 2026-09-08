@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const { parseCabrillo } = require('./cabrillo');
 const { parseAdif } = require('./adif');
 const { loadResolver } = require('./cty');
+const { specForContest, applyExchange } = require('./contests');
 
 // Bundled as a source asset (not under data/, which is gitignored runtime
 // state). Refreshed by .github/workflows/cty-refresh.yml.
@@ -78,7 +79,22 @@ function analyzeLog(text, filename) {
 
   const excludedCount = parsed.qsos.filter((q) => q.excluded).length;
   const qsos = parsed.qsos.filter((q) => !q.excluded);
-  for (const q of qsos) delete q.excluded;
+
+  // v2: per-contest exchange parsing. Cabrillo only -- an ADIF export
+  // already has the exchange in structured fields. Runs before enrich() so
+  // a zone read from the actual exchange (CQ WW) wins over the country
+  // file's default zone for that entity.
+  const spec = specForContest(meta.contest);
+  const contestKey = spec ? spec.key : null;
+  let exchangeParsed = false;
+  if (spec && format === 'cabrillo') {
+    const resolve = ctyResolver();
+    const home = resolve ? resolve(meta.station_call) : null;
+    const isDomestic = !!home && ['K', 'VE'].includes(home.prefix);
+    exchangeParsed = applyExchange(qsos, spec, { isDomestic, meta });
+  }
+
+  for (const q of qsos) { delete q.excluded; delete q._exchTokens; }
 
   enrich(qsos);
 
@@ -87,6 +103,8 @@ function analyzeLog(text, filename) {
       filename: filename || '',
       format,
       contest: meta.contest || '',
+      contest_key: contestKey,
+      exchange_parsed: exchangeParsed,
       station_call: meta.station_call || '',
       operators: meta.operators || '',
       claimed_score: meta.claimed_score ?? null,

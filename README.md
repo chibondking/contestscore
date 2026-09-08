@@ -163,7 +163,11 @@ just a second transport into `src/udp/dispatch.js`, not a separate code path.
   at a shareable `/analyze/<id>` link. The file is parsed server-side and
   each worked call is resolved against a bundled country file
   (`src/analyze/cty.csv`) to fill in continent / DXCC / CQ zone, so the
-  geographic breakdowns work for any contest. An ADIF export from N1MM also
+  geographic breakdowns work for any contest. For ~20 common contests
+  (CQ WW/WPX/160, WAE, IARU, Stew Perry, ARRL SS/DX/FD/10/RTTY-RU, NAQP,
+  NA Sprint, state QSO parties — see `src/analyze/contests.js`) the
+  exchange itself is parsed too: real sections, serials and zones straight
+  from the log rather than inferred. An ADIF export from N1MM also
   carries points, multipliers, per-operator and run/S&P data; a bare
   Cabrillo doesn't, so those sections are hidden for it. Upload is gated by
   `CONTESTSCORE_API_TOKEN` (paste it on the page, same as Admin); viewing a

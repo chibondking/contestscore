@@ -139,7 +139,9 @@ CREATE TABLE IF NOT EXISTS analyzed_logs (
   id            TEXT PRIMARY KEY,        -- url-safe base32 slug
   filename      TEXT,
   format        TEXT,                    -- 'cabrillo' | 'adif'
-  contest       TEXT,
+  contest       TEXT,                    -- raw CONTEST: header
+  contest_key   TEXT,                    -- matched exchange-spec key, or NULL (see src/analyze/contests.js)
+  exchange_parsed INTEGER DEFAULT 0,     -- 1 if a per-contest exchange grammar matched
   station_call  TEXT,
   operators     TEXT,                    -- raw OPERATORS header, display only
   claimed_score INTEGER,

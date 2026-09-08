@@ -171,13 +171,13 @@ function prepare() {
   // --- Analyzer (uploaded Cabrillo/ADIF logs) -------------------------------
   const _insertAnalyzedLog = db.prepare(`
     INSERT INTO analyzed_logs
-      (id, filename, format, contest, station_call, operators, claimed_score,
-       qso_count, has_points, has_mults, has_operator, has_run_flag,
-       raw_bytes, parsed_json)
+      (id, filename, format, contest, contest_key, exchange_parsed,
+       station_call, operators, claimed_score, qso_count, has_points,
+       has_mults, has_operator, has_run_flag, raw_bytes, parsed_json)
     VALUES
-      (@id, @filename, @format, @contest, @station_call, @operators, @claimed_score,
-       @qso_count, @has_points, @has_mults, @has_operator, @has_run_flag,
-       @raw_bytes, @parsed_json)
+      (@id, @filename, @format, @contest, @contest_key, @exchange_parsed,
+       @station_call, @operators, @claimed_score, @qso_count, @has_points,
+       @has_mults, @has_operator, @has_run_flag, @raw_bytes, @parsed_json)
   `);
   const _getAnalyzedLog = db.prepare('SELECT * FROM analyzed_logs WHERE id = ?');
   const _listAnalyzedLogs = db.prepare(`
@@ -361,6 +361,8 @@ function insertAnalyzedLog(row) {
     filename: row.filename || '',
     format: row.format || '',
     contest: row.contest || '',
+    contest_key: row.contest_key || null,
+    exchange_parsed: row.exchange_parsed ? 1 : 0,
     station_call: row.station_call || '',
     operators: row.operators || '',
     claimed_score: row.claimed_score ?? null,

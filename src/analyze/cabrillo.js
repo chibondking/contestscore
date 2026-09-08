@@ -152,6 +152,10 @@ function parseCabrillo(text) {
     q.n1mm_timestamp = toTimestamp(date, time);
     q.logged_at = q.n1mm_timestamp;
     q.call = pickWorkedCall(toks.slice(5), q.mycall);
+    // Raw exchange tokens (everything after <mycall>), kept for the
+    // per-contest exchange pass in src/analyze/contests.js. Stripped before
+    // the QSO is stored -- see src/analyze/index.js.
+    q._exchTokens = toks.slice(5);
     if (tag === 'X-QSO') q.excluded = 1;
 
     qsos.push(q);
@@ -162,4 +166,4 @@ function parseCabrillo(text) {
   return { meta, qsos, flags };
 }
 
-module.exports = { parseCabrillo, freqToBand, normMode, toTimestamp };
+module.exports = { parseCabrillo, freqToBand, normMode, toTimestamp, looksLikeCall };

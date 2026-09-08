@@ -90,6 +90,13 @@
           breakdowns are shown; the rest are hidden.
         </p>
 
+        <p class="empty" style="margin-top:0.5rem" x-show="meta.format === 'cabrillo'"
+          x-text="meta.contest_key
+            ? (meta.exchange_parsed
+                ? meta.contest_key + ' — exchange parsed from the log (sections / zones / serials read directly)'
+                : meta.contest_key + ' — exchange format not recognised for this log; worked calls and geography still resolved')
+            : (meta.contest ? meta.contest + ' — unknown contest; best-effort worked-call parsing' : 'No CONTEST header; best-effort worked-call parsing')"></p>
+
         <div class="analyze-actions">
           <a class="btn" :href="'/stats.html?log=' + logId">Open Stats</a>
           <a class="btn" :href="'/charts.html?log=' + logId">Open Charts</a>

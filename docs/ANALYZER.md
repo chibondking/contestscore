@@ -222,6 +222,23 @@ CREATE TABLE IF NOT EXISTS analyzed_logs (
 - **v2** — per-contest exchange column maps for the contests actually run
   (sections, serials, zones from the exchange rather than cty.dat); `X-QSO`
   UI; log-vs-log comparison.
+  - **Done:** exchange maps (`src/analyze/contests.js`). A registry keyed on
+    the normalized `CONTEST:` header maps `sent | call | rcvd` token
+    positions onto QSO columns (`zone`, `section`, `gridsquare`, `op_name`,
+    `ck`, `prec`, `rcv_nr`, `exchange1`, `power`). Covered: CQ WW / WPX /
+    160, WAE, IARU HF, Stew Perry, ARRL SS / Field Day / DX (asymmetric,
+    keyed on whether the uploader is a K/VE station) / 10 / RTTY Roundup,
+    NAQP, NA Sprint, and a flexible handler for `*-QSO-PARTY` / `*QP`.
+    The worked call becomes deterministic when the grammar matches; a count
+    mismatch falls back to the v1 symmetric-split heuristic and maps
+    whatever trailing tokens line up. Runs before cty enrichment so an
+    exchange zone (CQ WW) wins over the country file's default. `meta`
+    gains `contest_key` + `exchange_parsed` (new `analyzed_logs` columns via
+    `migrations/002_analyzed_logs_contest.sql`), surfaced on the result
+    page. ADIF is unaffected (its exchange is already structured).
+    Tested per contest in `test/analyze/contests.test.js`.
+  - **Still to do:** `X-QSO` UI (parsed and excluded today, not surfaced);
+    log-vs-log comparison.
 - **v3** — "your saved analyses" list with delete/expiry UI; export the
   result as a standalone static HTML report (SH5-style).
 

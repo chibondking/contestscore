@@ -51,6 +51,18 @@ describe('analyzeLog', () => {
     assert.equal(qsos[1].continent, 'AS');
   });
 
+  it('reports the matched contest key / exchange_parsed', () => {
+    const { meta } = analyzeLog(CABRILLO, 'wt2p.cbr'); // CONTEST: CQ-WPX-CW
+    assert.equal(meta.contest_key, 'CQ-WPX');
+    assert.equal(meta.exchange_parsed, true);
+
+    const unknown = analyzeLog(
+      'CONTEST: LOCAL-CLUB-TEST\nQSO: 14042 CW 2025-05-24 1200 WT2P 599 001 K3LR 599 002\n',
+      'x');
+    assert.equal(unknown.meta.contest_key, null);
+    assert.equal(unknown.meta.exchange_parsed, false);
+  });
+
   it('parses ADIF and reports has_points', () => {
     const { meta, qsos } = analyzeLog(ADIF, 'wt2p.adi');
     assert.equal(meta.format, 'adif');
@@ -71,6 +83,7 @@ describe('analyzeLog', () => {
     for (const q of qsos) {
       for (const k of required) assert.ok(k in q, `missing ${k}`);
       assert.equal('excluded' in q, false, 'excluded flag should be stripped');
+      assert.equal('_exchTokens' in q, false, '_exchTokens scratch should be stripped');
     }
   });
 });

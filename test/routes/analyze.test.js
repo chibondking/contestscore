@@ -73,6 +73,13 @@ describe('POST /api/analyze', () => {
     assert.equal(body.meta.format, 'cabrillo');
     assert.equal(body.meta.qso_count, 2);
     assert.equal(body.meta.has_points, false);
+    assert.equal(body.meta.contest_key, 'CQ-WPX');
+    assert.equal(body.meta.exchange_parsed, true);
+
+    // the contest fields round-trip through storage to the public GET
+    const fetched = await fetch(`${baseUrl}/api/analyze/${body.id}`).then((r) => r.json());
+    assert.equal(fetched.meta.contest_key, 'CQ-WPX');
+    assert.equal(fetched.meta.exchange_parsed, true);
   });
 });
 
