@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { renderReport } = require('../../public/js/report');
+const { renderReport, renderReportText } = require('../../public/js/report');
 
 function qso(o) {
   return {
@@ -55,5 +55,72 @@ describe('renderReport', () => {
     assert.doesNotMatch(html, /<script>x<\/script>/);
     assert.match(html, /&lt;script&gt;/);
     assert.match(html, /A&amp;B/);
+  });
+});
+
+describe('renderReportText', () => {
+  const qsos = [
+    qso({ call: 'K3LR', n1mm_timestamp: '2025-05-24 12:00:00' }),
+    qso({ call: 'DL1XYZ', band: '7', mode: 'SSB', countryprefix: 'DL', continent: 'EU', zone: '14', section: 'BW', n1mm_timestamp: '2025-05-24 12:40:00' }),
+    qso({ call: 'JA1ABC', band: '7', mode: 'CW', countryprefix: 'JA', continent: 'AS', zone: '25', section: 'TKY', n1mm_timestamp: '2025-05-24 13:10:00' }),
+  ];
+
+  it('is plain text -- no markup, no HTML entities', () => {
+    const txt = renderReportText({ meta: { station_call: 'K3LR', contest: 'CQ-WPX-CW', filename: 'k3lr.cbr' }, qsos });
+    assert.doesNotMatch(txt, /[<>]|&amp;|&middot;|&lt;/);
+    assert.equal(typeof txt, 'string');
+  });
+
+  it('leads with the title and the same headline numbers as the HTML report', () => {
+    const txt = renderReportText({ meta: { station_call: 'K3LR', contest: 'CQ-WPX-CW' }, qsos });
+    assert.match(txt, /^CQ-WPX-CW — K3LR\n=+\n/);
+    assert.match(txt, /QSOs \.+ 3/);
+    assert.match(txt, /DXCC \.+ 3/);
+    assert.match(txt, /Bands \.+ 2/);
+  });
+
+  it('renders fixed-width band/mode, hourly and DXCC tables', () => {
+    const txt = renderReportText({ meta: { station_call: 'K3LR' }, qsos });
+    assert.match(txt, /QSOs by band & mode\nBand +CW +PH +Total\n-+\n/);
+    assert.match(txt, /40m +1 +1 +2/);
+    assert.match(txt, /20m +1 +0 +1/);
+    assert.match(txt, /Total +2 +1 +3/);
+    assert.match(txt, /\nHourly\nHour \(UTC\) +Q +Cum\n/);
+    assert.match(txt, /\nTop DXCC entities\nDXCC \(3 worked\) +Q +Bands\n/);
+  });
+
+  it('adds a Points column only when the source has points', () => {
+    const noPts = renderReportText({ meta: { station_call: 'K3LR' }, qsos });
+    assert.doesNotMatch(noPts, /Points/);
+    assert.doesNotMatch(noPts, /Pts \/ QSO/);
+
+    const withPts = renderReportText({
+      meta: { station_call: 'K3LR', has_points: true, has_mults: true },
+      qsos: qsos.map((q, i) => ({ ...q, points: (i + 1) * 2, is_mult1: i % 2 })),
+    });
+    assert.match(withPts, /Band +CW +PH +Total +Points\n/);
+    assert.match(withPts, /Points \.+ 12/);
+    assert.match(withPts, /Mults \.+ 1/);
+  });
+
+  it('lists sections worked, wrapped, when present; omits the block otherwise', () => {
+    const txt = renderReportText({ meta: { station_call: 'K3LR' }, qsos });
+    assert.match(txt, /Sections \/ exchanges worked — 2\nBW 1 +TKY 1/);
+
+    const noSec = renderReportText({
+      meta: { station_call: 'K3LR' },
+      qsos: qsos.map((q) => ({ ...q, section: '' })),
+    });
+    assert.doesNotMatch(noSec, /Sections \/ exchanges worked/);
+  });
+
+  it('drops the hourly / DXCC blocks when the data is absent', () => {
+    const bare = renderReportText({
+      meta: { station_call: 'K3LR' },
+      qsos: [qso({ n1mm_timestamp: '', logged_at: '', countryprefix: '' })],
+    });
+    assert.doesNotMatch(bare, /\nHourly\n/);
+    assert.doesNotMatch(bare, /\nTop DXCC entities\n/);
+    assert.match(bare, /QSOs by band & mode/); // this one always renders
   });
 });

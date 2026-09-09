@@ -23,6 +23,7 @@ function analyze() {
     busy: false,
     error: '',
     copied: false,
+    summaryState: '',   // '' | 'copied' | 'failed', for the "Copy summary" button
     // Saved-analyses list (upload view, when a token is present)
     savedLogs: [],
     savedRetention: null,
@@ -242,5 +243,45 @@ function analyze() {
         done();
       }
     },
+
+    // Build the plain-text summary (renderReportText) and put it on the
+    // clipboard for pasting into an email / a score reflector. The LAN
+    // deployment is plain HTTP, where navigator.clipboard is unavailable, so
+    // fall back to a hidden <textarea> + execCommand('copy').
+    async copySummary() {
+      try {
+        const body = await fetch(`/api/analyze/${encodeURIComponent(this.logId)}`).then((r) => r.json());
+        const text = renderReportText({ meta: body.meta, qsos: body.qsos });
+        const ok = await copyToClipboard(text);
+        this.summaryState = ok ? 'copied' : 'failed';
+      } catch (err) {
+        this.summaryState = 'failed';
+        this.error = `Summary failed: ${err}`;
+      }
+      setTimeout(() => { this.summaryState = ''; }, 2500);
+    },
   };
+}
+
+async function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch { /* fall through to execCommand */ }
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
 }

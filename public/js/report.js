@@ -1,31 +1,18 @@
-// renderReport({ meta, qsos }) -> a single self-contained HTML string: the
-// headline numbers plus the band x mode, hourly, top-DXCC and
-// sections-worked tables, frozen for archiving. Loaded by analyze.js as a
-// plain global (browser) and exported for tests (node). No dependencies.
+// Two renderers for a saved analysis:
+//   renderReport({ meta, qsos })     -> one self-contained HTML string (inline
+//                                       CSS, no external refs) for archiving.
+//   renderReportText({ meta, qsos }) -> the same summary as monospaced plain
+//                                       text, for pasting into an email or a
+//                                       contest-score reflector post.
+// Both are built from the same aggregation helpers (summaryTiles /
+// bandModeData / hourlyData / dxccData / sectionsData) so the HTML and the
+// text never drift apart. Loaded by analyze.js as a plain global (browser)
+// and exported for tests (node). No dependencies.
 
 function renderReport(data) {
   const meta = data.meta || {};
   const qsos = data.qsos || [];
-
-  const times = qsos.map(qTime).filter((t) => !Number.isNaN(t)).sort((a, b) => a - b);
-  const points = qsos.reduce((s, q) => s + (Number(q.points) || 0), 0);
-  const mults = qsos.reduce((s, q) => s + mc(q), 0);
-  const span = times.length > 1 ? times[times.length - 1] - times[0] : 0;
-  const hrs = span / 3600000;
-  const distinct = (fn) => new Set(qsos.map(fn).filter(Boolean)).size;
-
-  const tiles = [
-    ['QSOs', qsos.length.toLocaleString()],
-    meta.has_points && ['Points', points.toLocaleString()],
-    meta.has_mults && ['Mults', mults.toLocaleString()],
-    meta.has_points && ['Pts / QSO', qsos.length ? (points / qsos.length).toFixed(2) : '0'],
-    ['DXCC', distinct((q) => q.countryprefix)],
-    ['CQ zones', distinct((q) => (q.zone && q.zone !== '0' ? q.zone : ''))],
-    ['Bands', distinct((q) => q.band)],
-    ['Hours active', new Set(times.map((t) => Math.floor(t / 3600000))).size],
-    ['Avg rate', hrs > 0 ? `${Math.round(qsos.length / hrs)}/h` : '—'],
-    ['Best 60 min', String(bestWindow(times, 3600000))],
-  ].filter(Boolean);
+  const tiles = summaryTiles(qsos, meta);
 
   const title = esc([meta.contest || meta.contest_key || 'Contest log',
     meta.station_call].filter(Boolean).join(' — '));
@@ -83,12 +70,265 @@ ${sectionsBlock(qsos)}
 </body></html>`;
 }
 
-// --- helpers ----------------------------------------------------------------
+// Plain-text twin of renderReport: no markup, fixed-width columns, wraps at
+// ~76 cols so it survives an email client's quoting. Same sections, same
+// order, same numbers.
+function renderReportText(data) {
+  const meta = data.meta || {};
+  const qsos = data.qsos || [];
+  const out = [];
+
+  const title = [meta.contest || meta.contest_key || 'Contest log', meta.station_call]
+    .filter(Boolean).join(' — ');
+  out.push(title);
+  out.push('='.repeat(title.length));
+
+  const sub = [
+    meta.filename || null,
+    `${qsos.length} QSOs${meta.excluded_count ? ` (+${meta.excluded_count} removed)` : ''}`,
+    (meta.format || '').toUpperCase() || null,
+    meta.contest_key ? `${meta.contest_key}${meta.exchange_parsed ? ' exchange parsed' : ''}` : null,
+    `generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')}Z`,
+  ].filter(Boolean);
+  out.push(sub.join('  |  '));
+  out.push('');
+
+  const tiles = summaryTiles(qsos, meta);
+  const kw = Math.max(...tiles.map(([k]) => k.length));
+  for (const [k, v] of tiles) {
+    out.push(`${`${k} `.padEnd(kw + 2, '.')} ${v}`);
+  }
+
+  out.push('');
+  out.push('QSOs by band & mode');
+  const bm = bandModeData(qsos, meta);
+  out.push(...textTable(bm.head, bm.rows, bm.totalRow));
+
+  const hr = hourlyData(qsos);
+  if (hr) {
+    out.push('');
+    out.push('Hourly');
+    out.push(...textTable(hr.head, hr.rows, hr.totalRow));
+  }
+
+  const dx = dxccData(qsos);
+  if (dx) {
+    out.push('');
+    out.push('Top DXCC entities');
+    out.push(...textTable(dx.head, dx.rows, dx.totalRow));
+  }
+
+  const sec = sectionsData(qsos);
+  if (sec) {
+    out.push('');
+    out.push(`Sections / exchanges worked — ${sec.count}`);
+    out.push(wrapPairs(sec.entries.map(([s, n]) => `${s} ${n}`)));
+  }
+
+  out.push('');
+  out.push('-- ContestPulse analyzer report');
+  return out.join('\n');
+}
+
+// --- aggregation (shared by both renderers) --------------------------------
+
+function summaryTiles(qsos, meta) {
+  const times = qsos.map(qTime).filter((t) => !Number.isNaN(t)).sort((a, b) => a - b);
+  const points = qsos.reduce((s, q) => s + (Number(q.points) || 0), 0);
+  const mults = qsos.reduce((s, q) => s + mc(q), 0);
+  const span = times.length > 1 ? times[times.length - 1] - times[0] : 0;
+  const hrs = span / 3600000;
+  const distinct = (fn) => new Set(qsos.map(fn).filter(Boolean)).size;
+
+  return [
+    ['QSOs', qsos.length.toLocaleString()],
+    meta.has_points && ['Points', points.toLocaleString()],
+    meta.has_mults && ['Mults', mults.toLocaleString()],
+    meta.has_points && ['Pts / QSO', qsos.length ? (points / qsos.length).toFixed(2) : '0'],
+    ['DXCC', String(distinct((q) => q.countryprefix))],
+    ['CQ zones', String(distinct((q) => (q.zone && q.zone !== '0' ? q.zone : '')))],
+    ['Bands', String(distinct((q) => q.band))],
+    ['Hours active', String(new Set(times.map((t) => Math.floor(t / 3600000))).size)],
+    ['Avg rate', hrs > 0 ? `${Math.round(qsos.length / hrs)}/h` : '—'],
+    ['Best 60 min', String(bestWindow(times, 3600000))],
+  ].filter(Boolean);
+}
+
+function bandModeData(qsos, meta) {
+  const groups = [...new Set(qsos.map((q) => modeGroup(q.mode)))]
+    .sort((a, b) => ['CW', 'PH', 'DG', '—'].indexOf(a) - ['CW', 'PH', 'DG', '—'].indexOf(b));
+  const bands = [...new Set(qsos.map((q) => q.band).filter(Boolean))]
+    .sort((a, b) => bandSortKey(a) - bandSortKey(b));
+
+  const cell = new Map();
+  const bandTot = new Map();
+  const grpTot = new Map();
+  const bandPts = new Map();
+  let grand = 0;
+  let grandPts = 0;
+  for (const q of qsos) {
+    const b = q.band || '—';
+    const g = modeGroup(q.mode);
+    cell.set(`${b}|${g}`, (cell.get(`${b}|${g}`) || 0) + 1);
+    bandTot.set(b, (bandTot.get(b) || 0) + 1);
+    grpTot.set(g, (grpTot.get(g) || 0) + 1);
+    bandPts.set(b, (bandPts.get(b) || 0) + (Number(q.points) || 0));
+    grand += 1;
+    grandPts += Number(q.points) || 0;
+  }
+
+  const head = ['Band', ...groups, 'Total', ...(meta.has_points ? ['Points'] : [])];
+  const rows = bands.map((b) => {
+    const cells = groups.map((g) => cell.get(`${b}|${g}`) || 0);
+    return [bandLabel(b), ...cells, bandTot.get(b) || 0, ...(meta.has_points ? [bandPts.get(b) || 0] : [])];
+  });
+  const totalRow = ['Total', ...groups.map((g) => grpTot.get(g) || 0), grand,
+    ...(meta.has_points ? [grandPts] : [])];
+
+  return { head, rows, totalRow };
+}
+
+function hourlyData(qsos) {
+  const by = new Map();
+  for (const q of qsos) {
+    const t = qTime(q);
+    if (Number.isNaN(t)) continue;
+    const h = Math.floor(t / 3600000);
+    by.set(h, (by.get(h) || 0) + 1);
+  }
+  if (!by.size) return null;
+
+  const hs = [...by.keys()].sort((a, b) => a - b);
+  const multiDay = hs[hs.length - 1] - hs[0] >= 24;
+  let cum = 0;
+  const rows = [];
+  for (let h = hs[0]; h <= hs[hs.length - 1]; h += 1) {
+    const n = by.get(h) || 0;
+    cum += n;
+    const d = new Date(h * 3600000);
+    const label = multiDay
+      ? `${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())} ${pad(d.getUTCHours())}z`
+      : `${pad(d.getUTCHours())}:00z`;
+    rows.push([label, n, cum]);
+  }
+  return { head: ['Hour (UTC)', 'Q', 'Cum'], rows, totalRow: ['Total', qsos.length, ''] };
+}
+
+function dxccData(qsos) {
+  const by = new Map();
+  for (const q of qsos) {
+    const p = q.countryprefix;
+    if (!p) continue;
+    const e = by.get(p) || { q: 0, bands: new Set() };
+    e.q += 1;
+    if (q.band) e.bands.add(q.band);
+    by.set(p, e);
+  }
+  if (!by.size) return null;
+
+  const rows = [...by.entries()]
+    .sort((a, b) => b[1].q - a[1].q)
+    .slice(0, 20)
+    .map(([p, e]) => [p, e.q, e.bands.size]);
+  return { worked: by.size, head: [`DXCC (${by.size} worked)`, 'Q', 'Bands'], rows, totalRow: null };
+}
+
+function sectionsData(qsos) {
+  const by = new Map();
+  for (const q of qsos) {
+    const s = (q.section || '').trim();
+    if (s) by.set(s, (by.get(s) || 0) + 1);
+  }
+  if (!by.size) return null;
+  return {
+    count: by.size,
+    entries: [...by.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+  };
+}
+
+// --- HTML rendering -------------------------------------------------------
 
 function esc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+function bandModeTable(qsos, meta) {
+  const { head, rows, totalRow } = bandModeData(qsos, meta);
+  return htmlTable(head, rows, totalRow);
+}
+
+function hourlyTable(qsos) {
+  const d = hourlyData(qsos);
+  if (!d) return '<p class="chip">no timestamps</p>';
+  return htmlTable(d.head, d.rows, d.totalRow);
+}
+
+function dxccTable(qsos) {
+  const d = dxccData(qsos);
+  if (!d) return '<p class="chip">no DXCC data</p>';
+  return htmlTable(d.head, d.rows, d.totalRow);
+}
+
+function sectionsBlock(qsos) {
+  const d = sectionsData(qsos);
+  if (!d) return '';
+  const chips = d.entries
+    .map(([s, n]) => `<span class="chip"><b>${esc(s)}</b> ${n}</span>`)
+    .join('');
+  return `<h2>Sections / exchanges worked — ${d.count}</h2><div class="chips">${chips}</div>`;
+}
+
+function htmlTable(head, rows, totalRow) {
+  const th = head.map((h, i) => `<th${i ? ' class="n"' : ''}>${esc(h)}</th>`).join('');
+  const body = rows.map((r) => `<tr>${
+    r.map((c, i) => `<td${i ? ' class="n"' : ''}>${esc(typeof c === 'number' ? c.toLocaleString() : c)}</td>`).join('')
+  }</tr>`).join('');
+  const tot = totalRow ? `<tr class="total">${
+    totalRow.map((c, i) => `<td${i ? ' class="n"' : ''}>${esc(typeof c === 'number' ? c.toLocaleString() : c)}</td>`).join('')
+  }</tr>` : '';
+  return `<table><thead><tr>${th}</tr></thead><tbody>${body}${tot}</tbody></table>`;
+}
+
+// --- plain-text rendering ----------------------------------------------------
+
+// Fixed-width table: first column left-aligned, the rest right-aligned
+// (they mirror the HTML's td.n numeric columns). Returns an array of lines.
+function textTable(head, rows, totalRow) {
+  const fmt = (c) => (typeof c === 'number' ? c.toLocaleString() : String(c == null ? '' : c));
+  const body = [head, ...rows, ...(totalRow ? [totalRow] : [])].map((r) => r.map(fmt));
+  const cols = head.length;
+  const w = [];
+  for (let i = 0; i < cols; i += 1) w[i] = Math.max(...body.map((r) => (r[i] || '').length));
+
+  const line = (r) => r
+    .map((c, i) => (i === 0 ? (c || '').padEnd(w[i]) : (c || '').padStart(w[i])))
+    .join('  ')
+    .replace(/\s+$/, '');
+  const rule = '-'.repeat(w.reduce((s, x) => s + x, 0) + 2 * (cols - 1));
+
+  const lines = [line(body[0]), rule];
+  for (let i = 1; i <= rows.length; i += 1) lines.push(line(body[i]));
+  if (totalRow) {
+    lines.push(rule);
+    lines.push(line(body[body.length - 1]));
+  }
+  return lines;
+}
+
+// Space-separated "KEY n" pairs, greedily wrapped to `width` columns.
+function wrapPairs(parts, width = 76) {
+  const lines = [];
+  let cur = '';
+  for (const p of parts) {
+    if (cur && cur.length + 3 + p.length > width) { lines.push(cur); cur = ''; }
+    cur = cur ? `${cur}   ${p}` : p;
+  }
+  if (cur) lines.push(cur);
+  return lines.join('\n');
+}
+
+// --- shared helpers --------------------------------------------------------
 
 function mc(q) {
   return (q.is_mult1 ? 1 : 0) + (q.is_mult2 ? 1 : 0) + (q.is_mult3 ? 1 : 0);
@@ -139,110 +379,8 @@ function bandLabel(band) {
   return hit ? hit[2] : String(band);
 }
 
-function bandModeTable(qsos, meta) {
-  const groups = [...new Set(qsos.map((q) => modeGroup(q.mode)))]
-    .sort((a, b) => ['CW', 'PH', 'DG', '—'].indexOf(a) - ['CW', 'PH', 'DG', '—'].indexOf(b));
-  const bands = [...new Set(qsos.map((q) => q.band).filter(Boolean))]
-    .sort((a, b) => bandSortKey(a) - bandSortKey(b));
-
-  const cell = new Map();
-  const bandTot = new Map();
-  const grpTot = new Map();
-  const bandPts = new Map();
-  let grand = 0;
-  let grandPts = 0;
-  for (const q of qsos) {
-    const b = q.band || '—';
-    const g = modeGroup(q.mode);
-    cell.set(`${b}|${g}`, (cell.get(`${b}|${g}`) || 0) + 1);
-    bandTot.set(b, (bandTot.get(b) || 0) + 1);
-    grpTot.set(g, (grpTot.get(g) || 0) + 1);
-    bandPts.set(b, (bandPts.get(b) || 0) + (Number(q.points) || 0));
-    grand += 1;
-    grandPts += Number(q.points) || 0;
-  }
-
-  const head = ['Band', ...groups, 'Total', ...(meta.has_points ? ['Points'] : [])];
-  const rows = bands.map((b) => {
-    const cells = groups.map((g) => cell.get(`${b}|${g}`) || 0);
-    return [bandLabel(b), ...cells, bandTot.get(b) || 0, ...(meta.has_points ? [bandPts.get(b) || 0] : [])];
-  });
-  const totalRow = ['Total', ...groups.map((g) => grpTot.get(g) || 0), grand,
-    ...(meta.has_points ? [grandPts] : [])];
-
-  return htmlTable(head, rows, totalRow);
-}
-
-function hourlyTable(qsos) {
-  const by = new Map();
-  for (const q of qsos) {
-    const t = qTime(q);
-    if (Number.isNaN(t)) continue;
-    const h = Math.floor(t / 3600000);
-    by.set(h, (by.get(h) || 0) + 1);
-  }
-  if (!by.size) return '<p class="chip">no timestamps</p>';
-  const hs = [...by.keys()].sort((a, b) => a - b);
-  const multiDay = hs[hs.length - 1] - hs[0] >= 24;
-  let cum = 0;
-  const rows = [];
-  for (let h = hs[0]; h <= hs[hs.length - 1]; h += 1) {
-    const n = by.get(h) || 0;
-    cum += n;
-    const d = new Date(h * 3600000);
-    const label = multiDay
-      ? `${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())} ${pad(d.getUTCHours())}z`
-      : `${pad(d.getUTCHours())}:00z`;
-    rows.push([label, n, cum]);
-  }
-  return htmlTable(['Hour (UTC)', 'Q', 'Cum'], rows, ['Total', qsos.length, '']);
-}
-
-function dxccTable(qsos) {
-  const by = new Map();
-  for (const q of qsos) {
-    const p = q.countryprefix;
-    if (!p) continue;
-    const e = by.get(p) || { q: 0, bands: new Set() };
-    e.q += 1;
-    if (q.band) e.bands.add(q.band);
-    by.set(p, e);
-  }
-  if (!by.size) return '<p class="chip">no DXCC data</p>';
-  const rows = [...by.entries()]
-    .sort((a, b) => b[1].q - a[1].q)
-    .slice(0, 20)
-    .map(([p, e]) => [p, e.q, e.bands.size]);
-  return htmlTable([`DXCC (${by.size} worked)`, 'Q', 'Bands'], rows, null);
-}
-
-function sectionsBlock(qsos) {
-  const by = new Map();
-  for (const q of qsos) {
-    const s = (q.section || '').trim();
-    if (s) by.set(s, (by.get(s) || 0) + 1);
-  }
-  if (!by.size) return '';
-  const chips = [...by.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([s, n]) => `<span class="chip"><b>${esc(s)}</b> ${n}</span>`)
-    .join('');
-  return `<h2>Sections / exchanges worked — ${by.size}</h2><div class="chips">${chips}</div>`;
-}
-
-function htmlTable(head, rows, totalRow) {
-  const th = head.map((h, i) => `<th${i ? ' class="n"' : ''}>${esc(h)}</th>`).join('');
-  const body = rows.map((r) => `<tr>${
-    r.map((c, i) => `<td${i ? ' class="n"' : ''}>${esc(typeof c === 'number' ? c.toLocaleString() : c)}</td>`).join('')
-  }</tr>`).join('');
-  const tot = totalRow ? `<tr class="total">${
-    totalRow.map((c, i) => `<td${i ? ' class="n"' : ''}>${esc(typeof c === 'number' ? c.toLocaleString() : c)}</td>`).join('')
-  }</tr>` : '';
-  return `<table><thead><tr>${th}</tr></thead><tbody>${body}${tot}</tbody></table>`;
-}
-
 function pad(n) { return String(n).padStart(2, '0'); }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { renderReport };
+  module.exports = { renderReport, renderReportText };
 }

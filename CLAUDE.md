@@ -200,7 +200,7 @@ contestscore/
       analyze.js            # analyzer page logic (upload/manual/live/compare/saved list)
       compare.js            # log-vs-log comparison
       manual.js             # buildManualCabrillo(): manual form -> Cabrillo string
-      report.js             # renderReport(): self-contained HTML report for a saved analysis
+      report.js             # renderReport() HTML + renderReportText() plain-text summary for a saved analysis
       chrome.js             # shared header/nav/footer; highlights Analyze when URL has ?log=
       admin.js
     css/

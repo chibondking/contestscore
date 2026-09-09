@@ -231,6 +231,10 @@
           <a class="btn" :href="'/charts.html?log=' + logId">Open Charts</a>
           <button class="btn btn--ghost" @click="copyShare()"
             x-text="copied ? 'Copied!' : 'Copy share link'"></button>
+          <button class="btn btn--ghost" @click="copySummary()"
+            x-text="summaryState === 'copied' ? 'Copied!'
+              : summaryState === 'failed' ? 'Copy failed — try again'
+              : 'Copy summary (email)'"></button>
           <button class="btn btn--ghost" @click="downloadReport()">Download report</button>
         </div>
 
