@@ -30,6 +30,7 @@ describe('analyzeLiveQsos', () => {
     assert.equal(meta.contest_key, 'CQ-WPX');
     assert.equal(meta.exchange_parsed, true);
     assert.equal(meta.station_call, 'WT2P');
+    assert.equal(meta.claimed_score, null); // no score passed
     assert.equal(meta.qso_count, 2);
     assert.equal(meta.has_points, true);
     assert.equal(meta.has_mults, true);
@@ -53,6 +54,11 @@ describe('analyzeLiveQsos', () => {
     assert.equal(qsos[0].continent, 'AS');
     assert.equal(qsos[0].zone, '25');
     assert.equal(qsos[0].countryprefix, 'JA');
+  });
+
+  it('carries the running score total as the claimed score', () => {
+    const { meta } = analyzeLiveQsos([row({ call: 'K3LR' })], { claimedScore: 12480 });
+    assert.equal(meta.claimed_score, 12480);
   });
 
   it('a plain non-contest feed reports has_points false', () => {

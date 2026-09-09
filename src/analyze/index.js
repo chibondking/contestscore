@@ -117,7 +117,11 @@ function topValue(values) {
 // <contactinfo> -- so there's no exchange grammar or format detection to
 // do here, just a field remap plus enrichGeo() for any older logger that
 // left continent/zone/prefix blank.
-function analyzeLiveQsos(rows) {
+//
+// opts.claimedScore: the running score total from the latest Score
+// broadcast (src/db/queries.getLatestScore().score_total), stored as the
+// analysis's claimed score. Null when no Score broadcast has arrived.
+function analyzeLiveQsos(rows, opts = {}) {
   const qsos = (rows || []).map((r) => ({
     call: r.call || '', band: r.band || '', mode: r.mode || '',
     operator: r.operator || '', mycall: r.mycall || '',
@@ -148,7 +152,7 @@ function analyzeLiveQsos(rows) {
       exchange_parsed: true,
       station_call: topValue(qsos.map((q) => q.mycall)),
       operators: [...new Set(qsos.map((q) => q.operator).filter(Boolean))].join(' '),
-      claimed_score: null,
+      claimed_score: opts.claimedScore != null ? Number(opts.claimedScore) : null,
       qso_count: qsos.length,
       excluded_count: 0,
       has_points: qsos.some((q) => q.points),

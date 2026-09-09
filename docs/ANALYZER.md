@@ -141,7 +141,7 @@ must survive `DELETE /api/db` / the pre-contest reset. Not covered by the
 | Route | Auth | Behaviour |
 | --- | --- | --- |
 | `POST /api/analyze?filename=` | bearer | raw Cabrillo/ADIF text (≤ `ANALYZE_MAX_BYTES`, default 5 MB). `analyzeLog` → `persist` → `{ id, meta }`. 422 on unrecognised format or zero QSOs. |
-| `POST /api/analyze/from-live` | bearer | no body. `getQsos()` → `analyzeLiveQsos` → `persist`. 422 if the live DB is empty. |
+| `POST /api/analyze/from-live` | bearer | no body. `getQsos()` + `getLatestScore()` → `analyzeLiveQsos` (the score total becomes the analysis's claimed score) → `persist`. 422 if the live DB is empty. |
 | `GET /api/analyze` | bearer | `{ items: [...], retention: { keep, ttl_days } }` — the saved-analyses index. |
 | `GET /api/analyze/:id` | none | `{ meta, qsos, excluded }`. 404 if unknown/aged-out. This is the shareable link. |
 | `DELETE /api/analyze/:id` | bearer | remove one. |

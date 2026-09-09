@@ -2,7 +2,7 @@ const { Router } = require('express');
 const express = require('express');
 const {
   insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,
-  pruneAnalyzedLogs, getQsos,
+  pruneAnalyzedLogs, getQsos, getLatestScore,
 } = require('../db/queries');
 const { analyzeLog, analyzeLiveQsos, newId } = require('../analyze');
 
@@ -91,7 +91,9 @@ router.post('/from-live', requireToken, (req, res) => {
   if (!rows.length) {
     return res.status(422).json({ error: 'No QSOs in the live contest database' });
   }
-  res.status(201).json(persist(analyzeLiveQsos(rows), 0));
+  const score = getLatestScore();
+  const result = analyzeLiveQsos(rows, { claimedScore: score ? score.score_total : null });
+  res.status(201).json(persist(result, 0));
 });
 
 // GET /api/analyze  -- list saved analyses (auth: it's a private index).

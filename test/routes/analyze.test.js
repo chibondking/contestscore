@@ -5,7 +5,7 @@ const http = require('node:http');
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { initDb, closeDb } = require('../../src/db/index');
-const { resetStatements, upsertQso } = require('../../src/db/queries');
+const { resetStatements, upsertQso, insertScoreBreakdown } = require('../../src/db/queries');
 
 let server;
 let baseUrl;
@@ -139,6 +139,10 @@ describe('POST /api/analyze/from-live', () => {
       countryprefix: 'DL', continent: 'EU', zone: '14',
       points: 6, n1mm_timestamp: '2026-09-06 12:05:00',
     });
+    insertScoreBreakdown({
+      contest: 'CQ-WPX-CW', call: 'WT2P', score_total: 987654,
+      breakdown: [{ band: 'ALL', mode: 'ALL', qsos: 2, points: 9, mults: 2, is_total: 1 }],
+    });
 
     const res = await fetch(`${baseUrl}/api/analyze/from-live`, {
       method: 'POST', headers: { Authorization: 'Bearer sekret' },
@@ -149,6 +153,7 @@ describe('POST /api/analyze/from-live', () => {
     assert.equal(body.meta.format, 'live');
     assert.equal(body.meta.qso_count, 2);
     assert.equal(body.meta.has_points, true);
+    assert.equal(body.meta.claimed_score, 987654);
     assert.equal(body.meta.contest_key, 'CQ-WPX');
 
     delete process.env.CONTESTSCORE_API_TOKEN;
