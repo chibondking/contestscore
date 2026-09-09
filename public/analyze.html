@@ -30,7 +30,7 @@
 
         <label class="analyze-field">
           Admin token
-          <input type="password" x-model="token" @input="saveToken()"
+          <input type="password" x-model="token" @input="saveToken()" @change="loadSaved()"
             placeholder="CONTESTSCORE_API_TOKEN" autocomplete="off" spellcheck="false">
         </label>
 
@@ -56,6 +56,44 @@
             style="flex:1;min-width:14rem;padding:.5rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:4px;font-family:inherit">
           <button class="btn btn--ghost" @click="goCompare2()" :disabled="!cmpA || !cmpB">Compare</button>
         </div>
+
+        <template x-if="token">
+          <div>
+            <hr style="border:none;border-top:1px solid var(--border);margin:1.5rem 0">
+            <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap">
+              <h2 style="margin:0">Saved analyses</h2>
+              <button class="btn btn--ghost" style="padding:.1em .55em;font-size:.78rem"
+                @click="loadSaved()" x-text="savedLoading ? '…' : 'refresh'"></button>
+              <span class="empty" x-show="savedRetention"
+                x-text="'keeping newest ' + savedRetention.keep + ', ≤ ' + savedRetention.ttl_days + ' days'"></span>
+            </div>
+            <p class="analyze-error" x-show="savedError" x-text="savedError"></p>
+            <p class="empty" x-show="!savedLoading && !savedError && !savedLogs.length">No saved analyses yet.</p>
+            <div class="table-scroll" x-show="savedLogs.length">
+              <table class="qso-table stats-table">
+                <thead><tr>
+                  <th>Contest</th><th>Call</th><th class="num">QSOs</th>
+                  <th>Format</th><th>Saved (UTC)</th><th></th>
+                </tr></thead>
+                <tbody>
+                  <template x-for="s in savedLogs" :key="s.id">
+                    <tr>
+                      <td x-text="s.contest || '—'"></td>
+                      <td x-text="s.station_call || '—'"></td>
+                      <td class="num" x-text="Number(s.qso_count).toLocaleString()"></td>
+                      <td x-text="(s.format || '').toUpperCase()"></td>
+                      <td x-text="(s.created_at || '').replace('T', ' ').slice(0, 16) + (ageOut(s.created_at) ? '  ·  ' + ageOut(s.created_at) : '')"></td>
+                      <td style="white-space:nowrap">
+                        <a class="btn btn--ghost" style="padding:.1em .55em;font-size:.78rem" :href="'/analyze/' + s.id">open</a>
+                        <button class="btn btn--ghost" style="padding:.1em .55em;font-size:.78rem;border-color:var(--red);color:var(--red)" @click="deleteSaved(s.id)">delete</button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
       </section>
     </template>
 
@@ -123,6 +161,7 @@
           <a class="btn" :href="'/charts.html?log=' + logId">Open Charts</a>
           <button class="btn btn--ghost" @click="copyShare()"
             x-text="copied ? 'Copied!' : 'Copy share link'"></button>
+          <button class="btn btn--ghost" @click="downloadReport()">Download report</button>
         </div>
 
         <div class="analyze-actions" style="align-items:center">
@@ -142,6 +181,7 @@
   <footer class="footer"></footer>
 
   <script src="/js/chrome.js"></script>
+  <script src="/js/report.js"></script>
   <script src="/js/analyze.js"></script>
 </body>
 </html>

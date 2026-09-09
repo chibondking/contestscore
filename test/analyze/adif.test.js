@@ -68,6 +68,16 @@ describe('parseAdif', () => {
     assert.equal(r.qsos.length, 1);
   });
 
+  it('marks APP_N1MM_ISCLAIMEDQSO=0 as excluded (ADIF X-QSO equivalent)', () => {
+    const adi = '<EOH>\n'
+      + '<CALL:4>K3LR<QSO_DATE:8>20250524<TIME_ON:4>1200<BAND:3>20m<MODE:2>CW<APP_N1MM_ISCLAIMEDQSO:1>1<EOR>\n'
+      + '<CALL:6>N0DUPE<QSO_DATE:8>20250524<TIME_ON:4>1201<BAND:3>20m<MODE:2>CW<APP_N1MM_ISCLAIMEDQSO:1>0<EOR>\n';
+    const r = parseAdif(adi);
+    assert.equal(r.qsos.length, 2);
+    assert.equal(r.qsos[0].excluded, 0);
+    assert.equal(r.qsos[1].excluded, 1);
+  });
+
   it('helpers', () => {
     assert.equal(bandToCanonical('20m', ''), '14');
     assert.equal(bandToCanonical('', '14.025'), '14');

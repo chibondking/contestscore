@@ -10,8 +10,16 @@
 const crypto = require('crypto');
 const { parseCabrillo } = require('./cabrillo');
 const { parseAdif } = require('./adif');
-const { specForContest, applyExchange } = require('./contests');
+const { specForContest, applyExchange, applyGenericExchange } = require('./contests');
 const { enrichGeo, resolveCall } = require('./geo');
+
+// ARRL contests where the domestic vs. DX exchange differs. "Domestic" is
+// the 48 states + DC + Canada -- so Alaska (DXCC 6) and Hawaii (110) count
+// as DX. cty entity 291 = United States, 1 = Canada.
+function isArrlDomestic(call) {
+  const hit = resolveCall(call);
+  return !!hit && (hit.entity === 291 || hit.entity === 1);
+}
 
 function detectFormat(text) {
   const head = String(text).slice(0, 4000);
@@ -53,10 +61,16 @@ function analyzeLog(text, filename) {
   const spec = specForContest(meta.contest);
   const contestKey = spec ? spec.key : null;
   let exchangeParsed = false;
-  if (spec && format === 'cabrillo') {
-    const home = resolveCall(meta.station_call);
-    const isDomestic = !!home && ['K', 'VE'].includes(home.prefix);
-    exchangeParsed = applyExchange(qsos, spec, { isDomestic, meta });
+  if (format === 'cabrillo') {
+    if (spec) {
+      exchangeParsed = applyExchange(qsos, spec, {
+        isDomestic: isArrlDomestic(meta.station_call),
+        meta,
+      });
+    } else {
+      // Unknown contest: still grab a trailing state/section token.
+      applyGenericExchange(qsos);
+    }
   }
 
   for (const q of qsos) { delete q.excluded; delete q._exchTokens; }

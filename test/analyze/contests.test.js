@@ -146,6 +146,64 @@ describe('exchange parsing per contest', () => {
     assert.equal(qsos[0].section, 'ONO');
   });
 
+  it('State QSO Party — also matches short keys like 7QP / NEQP', () => {
+    assert.equal(specForContest('7QP').key, 'QSO-PARTY');
+    assert.equal(specForContest('NEQP').key, 'QSO-PARTY');
+  });
+
+  it('ARRL 160 — RST + section', () => {
+    const { meta, qsos } = first('ARRL-160',
+      'QSO: 1825 CW 2025-12-06 0200 K3LR 599 WPA W1AW 599 CT');
+    assert.equal(meta.contest_key, 'ARRL-160');
+    assert.equal(qsos[0].section, 'CT');
+  });
+
+  it('All Asian — RST + age', () => {
+    const { meta, qsos } = first('ALL-ASIAN-DX-CW',
+      'QSO: 14042 CW 2025-06-21 1200 K3LR 599 45 JA1ABC 599 32');
+    assert.equal(meta.contest_key, 'ALL-ASIAN');
+    assert.equal(qsos[0].exchange1, '32');
+  });
+
+  it('SAC / Oceania — RST + serial', () => {
+    assert.equal(first('SAC-CW',
+      'QSO: 7025 CW 2025-09-13 1200 K3LR 599 001 SM3XYZ 599 042').qsos[0].rcv_nr, '042');
+    assert.equal(first('OCEANIA-DX-SSB',
+      'QSO: 14200 PH 2025-10-04 0200 K3LR 59 001 VK3AA 59 099').qsos[0].rcv_nr, '099');
+  });
+
+  it('CWT — name + state/prov or member number', () => {
+    const spc = first('CWT', 'QSO: 14042 CW 2025-06-11 1300 K3LR TIM PA W1AW BOB CT');
+    assert.equal(spc.qsos[0].op_name, 'BOB');
+    assert.equal(spc.qsos[0].section, 'CT');
+    const num = first('CWT', 'QSO: 14042 CW 2025-06-11 1300 K3LR TIM 1234 W1AW BOB 5678');
+    assert.equal(num.qsos[0].exchange1, '5678'); // CWops member number
+  });
+
+  it('ARRL DX — Hawaii counts as DX (receives a US state, not power)', () => {
+    const { qsos } = analyzeLog(
+      ['CONTEST: ARRL-DX-CW', 'CALLSIGN: KH6XX',
+        'QSO: 14042 CW 2025-02-15 1200 KH6XX 599 100 K3LR 599 PA'].join('\n'),
+      'hi.cbr');
+    assert.equal(qsos[0].call, 'K3LR');
+    assert.equal(qsos[0].section, 'PA');
+  });
+
+  it('unknown contest — applyGenericExchange still grabs a trailing state', () => {
+    const { meta, qsos } = first('WEIRD-LOCAL-TEST',
+      'QSO: 7025 CW 2025-03-01 1200 K3LR 599 001 W1AW 599 001 MA');
+    assert.equal(meta.contest_key, null);
+    assert.equal(meta.exchange_parsed, false);
+    assert.equal(qsos[0].section, 'MA');
+  });
+
+  it('applyGenericExchange skips a trailing mode token', () => {
+    const { qsos } = first('WEIRD-LOCAL-TEST',
+      'QSO: 7025 CW 2025-03-01 1200 K3LR 599 W1AW 599 CW');
+    assert.equal(qsos[0].call, 'W1AW');
+    assert.equal(qsos[0].section, '');
+  });
+
   it('unknown contest — heuristic call, no exchange fields, flags false', () => {
     const { meta, qsos } = first('SOME-CLUB-TEST',
       'QSO: 14042 CW 2025-03-01 1200 K3LR 599 001 DL1XYZ 599 002');

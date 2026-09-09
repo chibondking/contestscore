@@ -29,7 +29,12 @@
 
   const header = document.querySelector('.header');
   if (header) {
-    const active = header.dataset.page;
+    // Stats/Charts loaded with ?log=<id> are the analyzer's result views --
+    // highlight Analyze, not the page's own nav slot.
+    let active = header.dataset.page;
+    try {
+      if (new URLSearchParams(window.location.search).has('log')) active = 'analyze';
+    } catch { /* no URLSearchParams -- keep the page's own dataset.page */ }
     const nav = NAV_LINKS
       .map((l) => `<a href="${l.href}" class="nav__link${l.page === active ? ' nav__link--active' : ''}">${l.label}</a>`)
       .join('');

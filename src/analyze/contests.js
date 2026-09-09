@@ -11,7 +11,8 @@
 //
 // It only overrides q.call when the token count matches the spec exactly;
 // otherwise it keeps the heuristic call and maps as many trailing tokens
-// as it can. Unknown contests are left entirely to the heuristic.
+// as it can. A contest with no matching spec gets applyGenericExchange():
+// a trailing 2-5 letter token is treated as a state / section.
 
 const { looksLikeCall } = require('./cabrillo');
 
@@ -31,6 +32,8 @@ const FIELD_TO_COL = {
   check: 'ck',
   prec: 'prec',
   class: 'exchange1',
+  age: 'exchange1',
+  memnum: 'exchange1',
   power: 'power',
 };
 
@@ -45,6 +48,10 @@ function normalizeContest(header) {
 // ctx.isDomestic says whether the uploader's station is in the contest's
 // home country. `flexible: true` means "no fixed grammar" -- see
 // applyFlexible (state QSO parties).
+//
+// Per-token pseudo-fields: `hqzone` (digits -> CQ zone, else HQ abbr),
+// `stnum` (digits -> serial, else state/province), `spcnum` (digits ->
+// club member number, else state/prov/country).
 const SPECS = [
   { key: 'CQ-WW', match: /^CQ-?WW/, sent: ['rst', 'zone'], rcvd: ['rst', 'zone'] },
   { key: 'CQ-WPX', match: /^CQ-?WPX/, sent: ['rst', 'serial'], rcvd: ['rst', 'serial'] },
@@ -67,11 +74,24 @@ const SPECS = [
       ? { sent: ['rst', 'state'], rcvd: ['rst', 'power'] }
       : { sent: ['rst', 'power'], rcvd: ['rst', 'state'] }),
   },
+  { key: 'ARRL-160', match: /^ARRL-160/, sent: ['rst', 'section'], rcvd: ['rst', 'section'] },
   { key: 'ARRL-10', match: /^ARRL-10/, sent: ['rst', 'stnum'], rcvd: ['rst', 'stnum'] },
   { key: 'ARRL-RTTY', match: /^ARRL-RTTY|RTTY-ROUNDUP/, sent: ['rst', 'stnum'], rcvd: ['rst', 'stnum'] },
+  { key: 'RAC', match: /^RAC(-|$)|CANADA-DAY|CANADA-WINTER/, sent: ['rst', 'stnum'], rcvd: ['rst', 'stnum'] },
+  { key: 'ALL-ASIAN', match: /^(ALL-?ASIAN|AA-?DX)/, sent: ['rst', 'age'], rcvd: ['rst', 'age'] },
+  { key: 'OCEANIA', match: /^OCEANIA|^OC-?DX/, sent: ['rst', 'serial'], rcvd: ['rst', 'serial'] },
+  { key: 'SAC', match: /^SAC(-|$)|SCANDINAVIAN/, sent: ['rst', 'serial'], rcvd: ['rst', 'serial'] },
+  { key: 'JIDX', match: /^JIDX/, sent: ['rst', 'zone'], rcvd: ['rst', 'zone'] },
+  { key: 'RDXC', match: /^(RDXC|RUSSIAN-DX|RUS-DX)/, sent: ['rst', 'stnum'], rcvd: ['rst', 'stnum'] },
+  { key: 'EU-HF', match: /^EU-?HF/, sent: ['rst', 'age'], rcvd: ['rst', 'age'] },
+  { key: 'ARI', match: /^ARI(-|$)/, sent: ['rst', 'stnum'], rcvd: ['rst', 'stnum'] },
   { key: 'NAQP', match: /^NAQP/, sent: ['name', 'loc'], rcvd: ['name', 'loc'] },
   { key: 'NA-SPRINT', match: /^(NA-?SPRINT|NCCC-?SPRINT)/, sent: ['serial', 'name', 'loc'], rcvd: ['serial', 'name', 'loc'] },
-  { key: 'QSO-PARTY', match: /QSO-?PARTY$|-QP$|^[A-Z]{2,3}QP$/, flexible: true },
+  { key: 'CWT', match: /^CWT$|^CWOPS(-?CWT)?$/, sent: ['name', 'spcnum'], rcvd: ['name', 'spcnum'] },
+  { key: 'SST', match: /^(K1USN-?)?SST$/, sent: ['name', 'loc'], rcvd: ['name', 'loc'] },
+  { key: 'MST', match: /^(ICWC-?)?MST$/, sent: ['name', 'loc'], rcvd: ['name', 'loc'] },
+  { key: 'MWC', match: /^(OK1WC|MWC)/, sent: ['name', 'serial'], rcvd: ['name', 'serial'] },
+  { key: 'QSO-PARTY', match: /QSO-?PARTY|(^|-)(\dQP|[A-Z]{2,3}QP)($|-)/, flexible: true },
 ];
 
 function specForContest(header) {
@@ -80,12 +100,11 @@ function specForContest(header) {
   return SPECS.find((sp) => sp.match.test(norm)) || null;
 }
 
-// hqzone / stnum resolve per-token: a number is a zone/serial, letters are
-// an HQ abbreviation / state.
 function coerce(field, token) {
   let f = field;
   if (f === 'hqzone') f = /^\d+$/.test(token) ? 'zone' : 'hq';
   if (f === 'stnum') f = /^\d+$/.test(token) ? 'serial' : 'state';
+  if (f === 'spcnum') f = /^\d+$/.test(token) ? 'memnum' : 'state';
   if (f === 'rst') return null;
   const col = FIELD_TO_COL[f];
   if (!col) return null;
@@ -110,6 +129,26 @@ function applyFlexible(q) {
   if (r.length > 1 && /^(5(\d\d|9|NN))$/i.test(r[0])) r = r.slice(1);
   if (r.length > 1 && /^\d+$/.test(r[0])) { q.rcv_nr = r[0]; r = r.slice(1); }
   if (r.length) q.section = String(r[r.length - 1]).toUpperCase();
+}
+
+const MODE_TOKEN = /^(CW|SSB|USB|LSB|PH|RY|FM|AM|FT8|FT4|RTTY|PSK|DIG|DG)$/i;
+
+// Fallback for a contest with no matching spec: a trailing 2-5 letter token
+// in the received exchange is almost always a state / province / section.
+// Only fills `section` (cty already handles continent / zone), never
+// overrides, and skips mode tokens.
+function applyGenericExchange(qsos) {
+  for (const q of qsos) {
+    if (q.section) continue;
+    const toks = q._exchTokens || [];
+    const ci = toks.indexOf(q.call);
+    if (ci === -1) continue;
+    const r = toks.slice(ci + 1).filter((t) => !/^[01]$/.test(t));
+    const last = r[r.length - 1];
+    if (last && /^[A-Za-z]{2,5}$/.test(last) && !MODE_TOKEN.test(last)) {
+      q.section = last.toUpperCase();
+    }
+  }
 }
 
 // Returns true if the exchange grammar matched at least one QSO exactly
@@ -149,4 +188,6 @@ function applyExchange(qsos, spec, ctx = {}) {
   return matchedAny;
 }
 
-module.exports = { specForContest, applyExchange, normalizeContest };
+module.exports = {
+  specForContest, applyExchange, applyGenericExchange, normalizeContest,
+};

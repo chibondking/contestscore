@@ -226,16 +226,21 @@ CREATE TABLE IF NOT EXISTS analyzed_logs (
     the normalized `CONTEST:` header maps `sent | call | rcvd` token
     positions onto QSO columns (`zone`, `section`, `gridsquare`, `op_name`,
     `ck`, `prec`, `rcv_nr`, `exchange1`, `power`). Covered: CQ WW / WPX /
-    160, WAE, IARU HF, Stew Perry, ARRL SS / Field Day / DX (asymmetric,
-    keyed on whether the uploader is a K/VE station) / 10 / RTTY Roundup,
-    NAQP, NA Sprint, and a flexible handler for `*-QSO-PARTY` / `*QP`.
-    The worked call becomes deterministic when the grammar matches; a count
-    mismatch falls back to the v1 symmetric-split heuristic and maps
-    whatever trailing tokens line up. Runs before cty enrichment so an
-    exchange zone (CQ WW) wins over the country file's default. `meta`
-    gains `contest_key` + `exchange_parsed` (new `analyzed_logs` columns via
+    160, WAE, IARU HF, Stew Perry, ARRL SS / Field Day / DX / 160 / 10 /
+    RTTY Roundup, RAC, All Asian, Oceania, SAC, JIDX, Russian DX, EU HF
+    Championship, ARI, NAQP, NA Sprint, the weekly CW/SSB sprints (CWT,
+    K1USN SST, ICWC MST, OK1WC MWC), and a flexible handler for
+    `*-QSO-PARTY` / `*QP` (incl. `7QP`, `NEQP`). ARRL DX / 160 domestic-vs-DX
+    is keyed on the uploader's DXCC entity (291 US / 1 Canada), so
+    Alaska / Hawaii correctly count as DX. A contest with **no** matching
+    spec still gets `applyGenericExchange()` — a trailing 2-5 letter token
+    is taken as a state / section. The worked call becomes deterministic
+    when a grammar matches; a count mismatch falls back to the v1
+    symmetric-split heuristic. Runs before cty enrichment so an exchange
+    zone (CQ WW) wins over the country file's default. `meta` gains
+    `contest_key` + `exchange_parsed` (new `analyzed_logs` columns via
     `migrations/002_analyzed_logs_contest.sql`), surfaced on the result
-    page. ADIF is unaffected (its exchange is already structured).
+    page. ADIF now also honours `APP_N1MM_ISCLAIMEDQSO=0` as a removed QSO.
     Tested per contest in `test/analyze/contests.test.js`.
   - **Done:** `X-QSO` handling. `parsed_json` now stores
     `{ qsos, excluded }` (the GET route accepts the old bare-array shape
@@ -255,8 +260,21 @@ CREATE TABLE IF NOT EXISTS analyzed_logs (
   logger didn't send them (TR4W, older N1MM), so the dashboard's
   by-continent breakdown works regardless of logger. Fill-only, never
   overrides what the packet carried.
-- **v3** — "your saved analyses" list with delete/expiry UI; export the
-  result as a standalone static HTML report (SH5-style).
+- **v3 — done.**
+  - **Saved analyses list.** `GET /api/analyze` now returns
+    `{ items, retention: { keep, ttl_days } }` (still token-gated). The
+    upload page, once a token is entered, shows the list with open / delete
+    per row and a "Nd left" retention hint (`analyze.js` `loadSaved` /
+    `deleteSaved` / `ageOut`).
+  - **Static report export.** `public/js/report.js` `renderReport({meta,
+    qsos})` builds one self-contained HTML file (inline CSS, no external
+    refs, all meta escaped) with the headline tiles, band × mode matrix,
+    hourly table, top-20 DXCC and sections worked. A "Download report"
+    button on the result page fetches the analysis and saves it as
+    `<call>-<contest>.html`. Tested in `test/analyze/report.test.js`.
+- **Nav.** `chrome.js` highlights **Analyze** (not Stats/Charts) whenever
+  the page URL carries `?log=<id>`, so a result view reads as part of the
+  analyzer.
 
 ## Risks
 

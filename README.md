@@ -170,10 +170,14 @@ just a second transport into `src/udp/dispatch.js`, not a separate code path.
   (CQ WW/WPX/160, WAE, IARU, Stew Perry, ARRL SS/DX/FD/10/RTTY-RU, NAQP,
   NA Sprint, state QSO parties — see `src/analyze/contests.js`) the
   exchange itself is parsed too: real sections, serials and zones straight
-  from the log rather than inferred. Removed (`X-QSO`) lines are surfaced
-  but kept out of every count, and `/compare?a=<id>&b=<id>` puts two saved
-  analyses side by side with per-metric and per-band deltas. An ADIF export
-  from N1MM also
+  from the log rather than inferred; an unrecognised contest still gets a
+  best-effort state/section from the trailing exchange token. Removed
+  (`X-QSO`, or ADIF `APP_N1MM_ISCLAIMEDQSO=0`) lines are surfaced but kept
+  out of every count. `/compare?a=<id>&b=<id>` puts two saved analyses side
+  by side with per-metric and per-band deltas; a **Download report** button
+  saves a self-contained HTML summary; and with the admin token the upload
+  page lists every saved analysis with open/delete. An ADIF export from
+  N1MM also
   carries points, multipliers, per-operator and run/S&P data; a bare
   Cabrillo doesn't, so those sections are hidden for it. Upload is gated by
   `CONTESTSCORE_API_TOKEN` (paste it on the page, same as Admin); viewing a
@@ -215,7 +219,7 @@ never gets forwarded to a client.
 | POST   | `/api/ingest/{radio,contact,score}` | Raw N1MM XML bytes from the ContestPulse bridge (bearer token required, dispatched by XML root element like the UDP listeners) |
 | POST   | `/api/ingest/heartbeat` | `{ "station_id": "..." }` liveness ping from ContestPulse |
 | POST   | `/api/analyze`          | Upload raw Cabrillo/ADIF text (`?filename=`), bearer token required. Returns `{ id, meta }` |
-| GET    | `/api/analyze`          | List saved analyses (bearer token required) |
+| GET    | `/api/analyze`          | `{ items, retention }` — saved analyses + effective keep/TTL (bearer token required) |
 | GET    | `/api/analyze/:id`      | A saved analysis as `{ meta, qsos }` — **public** (shareable link) |
 | DELETE | `/api/analyze/:id`      | Delete a saved analysis (bearer token required) |
 
@@ -389,6 +393,7 @@ public/
   index.html, charts.html, stats.html, analyze.html, compare.html, admin.html   The pages
   js/
     dashboard.js, charts.js, stats.js, analyze.js, compare.js, admin.js   Per-page Alpine.js logic (not ES modules -- see CLAUDE.md)
+    report.js   renderReport() -- self-contained HTML report for a saved analysis (also unit-tested)
     chrome.js                           Shared header/nav/footer, injected into every page
   css/dashboard.css        Shared styling, dark theme
 config/default.json       Default configuration

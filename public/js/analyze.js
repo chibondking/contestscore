@@ -23,6 +23,11 @@ function analyze() {
     busy: false,
     error: '',
     copied: false,
+    // Saved-analyses list (upload view, when a token is present)
+    savedLogs: [],
+    savedRetention: null,
+    savedError: '',
+    savedLoading: false,
 
     init() {
       const m = location.pathname.match(/^\/analyze\/([A-Za-z0-9_-]{4,40})$/);
@@ -34,10 +39,72 @@ function analyze() {
       }
       // Reuse the admin page's remembered token -- same secret.
       try { this.token = localStorage.getItem('contestpulse_admin_token') || ''; } catch { /* storage off */ }
+      if (this.token) this.loadSaved();
     },
 
     saveToken() {
       try { localStorage.setItem('contestpulse_admin_token', this.token); } catch { /* storage off */ }
+    },
+
+    async loadSaved() {
+      if (!this.token) { this.savedLogs = []; return; }
+      this.savedLoading = true;
+      this.savedError = '';
+      try {
+        const r = await fetch('/api/analyze', { headers: { Authorization: `Bearer ${this.token}` } });
+        if (r.status === 401 || r.status === 503) {
+          this.savedError = 'Token not accepted';
+          this.savedLogs = [];
+        } else if (!r.ok) {
+          this.savedError = `List failed (${r.status})`;
+        } else {
+          const body = await r.json();
+          this.savedLogs = body.items || [];
+          this.savedRetention = body.retention || null;
+        }
+      } catch (err) {
+        this.savedError = `List failed: ${err}`;
+      }
+      this.savedLoading = false;
+    },
+
+    async deleteSaved(id) {
+      if (!window.confirm('Delete this saved analysis? The share link will stop working.')) return;
+      try {
+        const r = await fetch(`/api/analyze/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${this.token}` },
+        });
+        if (r.ok) this.savedLogs = this.savedLogs.filter((x) => x.id !== id);
+        else this.savedError = `Delete failed (${r.status})`;
+      } catch (err) {
+        this.savedError = `Delete failed: ${err}`;
+      }
+    },
+
+    ageOut(createdAt) {
+      if (!this.savedRetention || !this.savedRetention.ttl_days || !createdAt) return '';
+      const born = new Date(createdAt.replace(' ', 'T') + 'Z').getTime();
+      const days = Math.ceil((born + this.savedRetention.ttl_days * 86400000 - Date.now()) / 86400000);
+      return days > 0 ? `${days}d left` : 'expiring';
+    },
+
+    async downloadReport() {
+      try {
+        const body = await fetch(`/api/analyze/${encodeURIComponent(this.logId)}`).then((r) => r.json());
+        const html = renderReport({ meta: body.meta, qsos: body.qsos });
+        const blob = new Blob([html], { type: 'text/html' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        const base = `${body.meta.station_call || 'log'}-${body.meta.contest_key || body.meta.contest || 'report'}`;
+        a.download = `${base.replace(/[^A-Za-z0-9._-]+/g, '_')}.html`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      } catch (err) {
+        this.error = `Report failed: ${err}`;
+      }
     },
 
     async loadResult() {

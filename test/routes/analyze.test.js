@@ -115,6 +115,27 @@ describe('GET /api/analyze/:id', () => {
   });
 });
 
+describe('GET /api/analyze (saved list)', () => {
+  it('needs the token and returns { items, retention }', async () => {
+    const noAuth = await fetch(`${baseUrl}/api/analyze`);
+    assert.equal(noAuth.status, 503); // token not configured in this test
+
+    process.env.CONTESTSCORE_API_TOKEN = 'sekret';
+    const bad = await fetch(`${baseUrl}/api/analyze`, { headers: { Authorization: 'Bearer nope' } });
+    assert.equal(bad.status, 401);
+
+    const res = await fetch(`${baseUrl}/api/analyze`, { headers: { Authorization: 'Bearer sekret' } });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.ok(Array.isArray(body.items));
+    assert.ok(body.items.length >= 1);
+    assert.ok('created_at' in body.items[0]);
+    assert.equal(typeof body.retention.keep, 'number');
+    assert.equal(typeof body.retention.ttl_days, 'number');
+    delete process.env.CONTESTSCORE_API_TOKEN;
+  });
+});
+
 describe('DELETE /api/analyze/:id', () => {
   it('requires the token and removes the row', async () => {
     process.env.CONTESTSCORE_API_TOKEN = 'sekret';

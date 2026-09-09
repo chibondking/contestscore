@@ -152,6 +152,14 @@ function parseAdif(text) {
       flags.has_run_flag = true;
     }
 
+    // N1MM marks a not-counted QSO with APP_N1MM_ISCLAIMEDQSO=0 (the ADIF
+    // equivalent of a Cabrillo X-QSO line). Excluded from every stat; still
+    // surfaced in the removed-QSO list.
+    if (f.app_n1mm_isclaimedqso != null && f.app_n1mm_isclaimedqso !== ''
+        && !truthy(f.app_n1mm_isclaimedqso)) {
+      q.excluded = 1;
+    }
+
     if (q.operator) { opSet.add(q.operator); flags.has_operator = true; }
     if (!meta.contest && f.contest_id) meta.contest = f.contest_id;
     if (!meta.station_call && q.mycall) meta.station_call = q.mycall;

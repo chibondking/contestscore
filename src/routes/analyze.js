@@ -82,7 +82,10 @@ router.post('/', requireToken, rawBody, (req, res) => {
 
 // GET /api/analyze  -- list saved analyses (auth: it's a private index).
 router.get('/', requireToken, (req, res) => {
-  res.json(listAnalyzedLogs(200));
+  res.json({
+    items: listAnalyzedLogs(500),
+    retention: { keep: KEEP, ttl_days: TTL_DAYS },
+  });
 });
 
 // GET /api/analyze/:id  -- public: { meta, qsos, excluded }.
