@@ -79,6 +79,33 @@ describe('renderReportText', () => {
     assert.match(txt, /Bands \.+ 2/);
   });
 
+  it('renders an At a Glance block like the stats page (Avg rate, Elapsed)', () => {
+    const txt = renderReportText({ meta: { station_call: 'K3LR' }, qsos });
+    assert.match(txt, /\nAt a Glance\nQSOs \.+ 3\n/);
+    assert.match(txt, /Avg rate \.+ \d+\/h/);
+    assert.match(txt, /Hours active \.+ 2/);
+    assert.match(txt, /Elapsed \.+ 1h 10m/); // 12:00z -> 13:10z
+  });
+
+  it('renders a Rate Records block: first/last, best windows, longest gap', () => {
+    const txt = renderReportText({ meta: { station_call: 'K3LR' }, qsos });
+    assert.match(txt, /\nRate Records\n/);
+    assert.match(txt, /First QSO \.+ 05\/24 12:00z/);
+    assert.match(txt, /Last QSO \.+ 05\/24 13:10z/);
+    assert.match(txt, /Best clock hour \.+ 2 Q \(12:00z\)/);
+    assert.match(txt, /Best 60 min \.+ 2 Q \(from 05\/24 12:00z\)/);
+    assert.match(txt, /Longest gap \.+ 40m \(from 05\/24 12:00z\)/);
+  });
+
+  it('omits Rate Records when there are not two timestamps', () => {
+    const txt = renderReportText({
+      meta: { station_call: 'K3LR' },
+      qsos: [qso({ n1mm_timestamp: '', logged_at: '' })],
+    });
+    assert.doesNotMatch(txt, /\nRate Records\n/);
+    assert.match(txt, /\nAt a Glance\n/); // still present
+  });
+
   it('renders fixed-width band/mode, hourly and DXCC tables', () => {
     const txt = renderReportText({ meta: { station_call: 'K3LR' }, qsos });
     assert.match(txt, /QSOs by band & mode\nBand +CW +PH +Total\n-+\n/);

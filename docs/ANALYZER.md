@@ -167,12 +167,17 @@ aggregation helpers (`summaryTiles` / `bandModeData` / `hourlyData` /
   saves it as `<call>-<contest>.html`, so an analysis can be archived
   independent of the server and its retention window.
 - `renderReportText({ meta, qsos })` → the same summary as monospaced plain
-  text (title + `===` rule, `key ..... value` headline block, fixed-width
-  band/mode + hourly + DXCC tables, wrapped sections list). The **Copy
-  summary (email)** button puts it on the clipboard for pasting into a
-  contest-score reflector post or an email. Clipboard write falls back from
-  `navigator.clipboard` to a hidden-`<textarea>` + `execCommand('copy')`
-  because the LAN deployment is plain HTTP (no secure context).
+  text: title + `===` rule, then **At a Glance** and **Rate Records**
+  `key ..... value` blocks (the same numbers as those two cards on the
+  Stats page — `glanceRows` / `rateRecordRows` mirror `stats.js`'s
+  `headline` / `rateRecords`, and `bestWindow` is kept byte-identical
+  between the two files), then fixed-width band/mode + hourly + DXCC
+  tables and a wrapped sections list. The **Copy summary (email)** button
+  puts it on the clipboard for pasting into a contest-score reflector post
+  or an email. Clipboard write falls back from `navigator.clipboard` to a
+  hidden-`<textarea>` + `execCommand('copy')` because the LAN deployment is
+  plain HTTP (no secure context). Rate Records is omitted when the log has
+  fewer than two usable timestamps.
 
 ## Tests
 
@@ -181,8 +186,9 @@ aggregation helpers (`summaryTiles` / `bandModeData` / `hourlyData` /
 (`analyzeLog` end to end, format detection, `newId`), `manual` (form →
 Cabrillo → `analyzeLog` round trip), `live` (`analyzeLiveQsos`), `report`
 (HTML structure + points gating + escaping, and the plain-text twin: no
-markup, shared numbers, fixed-width tables, points-column gating, section
-wrap, empty-block omission). `test/routes/analyze.test.js` covers
+markup, shared numbers, At a Glance + Rate Records blocks, fixed-width
+tables, points-column gating, section wrap, empty-block omission).
+`test/routes/analyze.test.js` covers
 auth (503/401), format rejection (422), store + public fetch round trip,
 delete, retention pruning, `from-live`, and the saved-list shape.
 

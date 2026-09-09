@@ -93,10 +93,14 @@ function renderReportText(data) {
   out.push(sub.join('  |  '));
   out.push('');
 
-  const tiles = summaryTiles(qsos, meta);
-  const kw = Math.max(...tiles.map(([k]) => k.length));
-  for (const [k, v] of tiles) {
-    out.push(`${`${k} `.padEnd(kw + 2, '.')} ${v}`);
+  out.push('At a Glance');
+  out.push(...dotList(glanceRows(qsos, meta)));
+
+  const rr = rateRecordRows(qsos);
+  if (rr.length) {
+    out.push('');
+    out.push('Rate Records');
+    out.push(...dotList(rr));
   }
 
   out.push('');
@@ -150,8 +154,63 @@ function summaryTiles(qsos, meta) {
     ['Bands', String(distinct((q) => q.band))],
     ['Hours active', String(new Set(times.map((t) => Math.floor(t / 3600000))).size)],
     ['Avg rate', hrs > 0 ? `${Math.round(qsos.length / hrs)}/h` : '—'],
-    ['Best 60 min', String(bestWindow(times, 3600000))],
+    ['Best 60 min', String(bestWindow(times, 3600000).count)],
   ].filter(Boolean);
+}
+
+// "At a Glance" -- the stats page's headline set (adds Elapsed, drops
+// summaryTiles' Best-60 tile since that lives in Rate Records). Text export
+// only; the HTML report keeps summaryTiles.
+function glanceRows(qsos, meta) {
+  const times = sortedTimes(qsos);
+  const points = qsos.reduce((s, q) => s + (Number(q.points) || 0), 0);
+  const mults = qsos.reduce((s, q) => s + mc(q), 0);
+  const elapsedMs = times.length > 1 ? times[times.length - 1] - times[0] : 0;
+  const elapsedHrs = elapsedMs / 3600000;
+  const distinct = (fn) => new Set(qsos.map(fn).filter(Boolean)).size;
+
+  return [
+    ['QSOs', qsos.length.toLocaleString()],
+    meta.has_points && ['Points', points.toLocaleString()],
+    meta.has_mults && ['Mults', mults.toLocaleString()],
+    meta.has_points && ['Pts / QSO', qsos.length ? (points / qsos.length).toFixed(2) : '0'],
+    ['Avg rate', elapsedHrs > 0 ? `${Math.round(qsos.length / elapsedHrs)}/h` : '—'],
+    ['DXCC', String(distinct((q) => q.countryprefix))],
+    ['CQ zones', String(distinct((q) => (q.zone && q.zone !== '0' ? q.zone : '')))],
+    ['Bands', String(distinct((q) => q.band))],
+    ['Hours active', String(new Set(times.map((t) => Math.floor(t / 3600000))).size)],
+    ['Elapsed', elapsedMs ? fmtDur(elapsedMs) : '—'],
+  ].filter(Boolean);
+}
+
+// "Rate Records" -- best sliding windows, first/last, longest gap. Mirrors
+// stats.js's rateRecords getter. Empty when there aren't two timestamps.
+function rateRecordRows(qsos) {
+  const times = sortedTimes(qsos);
+  if (times.length < 2) return [];
+
+  const b60 = bestWindow(times, 60 * 60000);
+  const b30 = bestWindow(times, 30 * 60000);
+  const b10 = bestWindow(times, 10 * 60000);
+
+  let gap = 0;
+  let gapAt = NaN;
+  for (let i = 1; i < times.length; i += 1) {
+    if (times[i] - times[i - 1] > gap) { gap = times[i] - times[i - 1]; gapAt = times[i - 1]; }
+  }
+
+  const hd = hourlyData(qsos);
+  const bestHr = hd ? hd.rows.reduce((a, r) => (r[1] > (a ? a[1] : -1) ? r : a), null) : null;
+
+  return [
+    ['First QSO', fmtStamp(times[0])],
+    ['Last QSO', fmtStamp(times[times.length - 1])],
+    ['Best clock hour', bestHr ? `${bestHr[1]} Q (${bestHr[0]})` : '—'],
+    ['Best 60 min', `${b60.count} Q (from ${fmtStamp(b60.start)})`],
+    ['Best 30 min', `${b30.count} Q (~ ${b30.count * 2}/h)`],
+    ['Best 10 min', `${b10.count} Q (~ ${b10.count * 6}/h)`],
+    ['Longest gap', gap >= 60000 ? `${fmtDur(gap)} (from ${fmtStamp(gapAt)})` : '— (no gap over 1 min)'],
+  ];
 }
 
 function bandModeData(qsos, meta) {
@@ -316,6 +375,12 @@ function textTable(head, rows, totalRow) {
   return lines;
 }
 
+// [label, value] pairs as "label ..... value", labels dot-padded to align.
+function dotList(pairs) {
+  const kw = Math.max(...pairs.map(([k]) => k.length));
+  return pairs.map(([k, v]) => `${`${k} `.padEnd(kw + 2, '.')} ${v}`);
+}
+
 // Space-separated "KEY n" pairs, greedily wrapped to `width` columns.
 function wrapPairs(parts, width = 76) {
   const lines = [];
@@ -341,16 +406,36 @@ function qTime(q) {
   return Number.isNaN(t) ? NaN : t;
 }
 
+// Largest number of `times` (sorted ascending, ms) inside any window of
+// `windowMs`, plus where that window starts. Amortized O(n) two-pointer
+// sweep. Kept identical to stats.js's copy.
 function bestWindow(times, windowMs) {
-  if (!times.length) return 0;
+  if (!times.length) return { count: 0, start: NaN };
   let best = 0;
+  let bestStart = times[0];
   let j = 0;
   for (let i = 0; i < times.length; i += 1) {
     if (j < i) j = i;
     while (j + 1 < times.length && times[j + 1] - times[i] < windowMs) j += 1;
-    if (j - i + 1 > best) best = j - i + 1;
+    if (j - i + 1 > best) { best = j - i + 1; bestStart = times[i]; }
   }
-  return best;
+  return { count: best, start: bestStart };
+}
+
+function sortedTimes(qsos) {
+  return qsos.map(qTime).filter((t) => !Number.isNaN(t)).sort((a, b) => a - b);
+}
+
+function fmtDur(ms) {
+  const mins = Math.round(ms / 60000);
+  const h = Math.floor(mins / 60);
+  return h ? `${h}h ${pad(mins % 60)}m` : `${mins}m`;
+}
+
+function fmtStamp(ms) {
+  if (Number.isNaN(ms)) return '—';
+  const d = new Date(ms);
+  return `${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}z`;
 }
 
 function modeGroup(mode) {
