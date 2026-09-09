@@ -16,16 +16,16 @@
     <!-- Upload form (path is /analyze) -->
     <template x-if="mode === 'upload'">
       <section class="card card--wide">
-        <h2>Analyze a Cabrillo or ADIF log</h2>
+        <h2>Analyze a contest log</h2>
         <p class="empty" style="margin-bottom:1rem; max-width:60ch">
           Upload a submitted Cabrillo (<code>.cbr</code> / <code>.log</code>) or an
-          ADIF export (<code>.adi</code>). It is parsed, saved, and given a
-          shareable link, then rendered through the same Stats and Charts
-          breakdowns as the live dashboard. An ADIF export from N1MM carries
-          points, multipliers, per-operator and run/S&amp;P data; a bare
-          Cabrillo does not, so those sections are hidden for it. Continent,
-          DXCC and CQ-zone breakdowns work for both (resolved from each
-          worked call).
+          ADIF export (<code>.adi</code>), or type the QSOs straight in. It is
+          parsed, saved, and given a shareable link, then rendered through the
+          same Stats and Charts breakdowns as the live dashboard. An ADIF
+          export from N1MM carries points, multipliers, per-operator and
+          run/S&amp;P data; a Cabrillo or manual entry does not, so those
+          sections are hidden. Continent, DXCC and CQ-zone breakdowns work
+          for all three (resolved from each worked call).
         </p>
 
         <label class="analyze-field">
@@ -34,16 +34,71 @@
             placeholder="CONTESTSCORE_API_TOKEN" autocomplete="off" spellcheck="false">
         </label>
 
-        <div class="drop" @dragover.prevent @drop="onDrop($event)"
-          :class="fileName ? 'drop--set' : ''">
-          <input type="file" id="logfile" class="drop__input"
-            accept=".cbr,.log,.txt,.adi,.adif,text/plain" @change="pickFile($event)">
-          <label for="logfile" class="drop__label"
-            x-text="fileName || 'Choose a file, or drop it here'"></label>
+        <div class="analyze-actions" style="margin-bottom:1rem">
+          <button class="btn" :class="entryMode === 'file' ? '' : 'btn--ghost'" @click="entryMode = 'file'">Upload file</button>
+          <button class="btn" :class="entryMode === 'manual' ? '' : 'btn--ghost'" @click="entryMode = 'manual'">Enter manually</button>
         </div>
 
-        <button class="btn" @click="upload()" :disabled="!file || !token || busy"
-          x-text="busy ? 'Analyzing…' : 'Analyze & save'"></button>
+        <div x-show="entryMode === 'file'">
+          <div class="drop" @dragover.prevent @drop="onDrop($event)"
+            :class="fileName ? 'drop--set' : ''">
+            <input type="file" id="logfile" class="drop__input"
+              accept=".cbr,.log,.txt,.adi,.adif,text/plain" @change="pickFile($event)">
+            <label for="logfile" class="drop__label"
+              x-text="fileName || 'Choose a file, or drop it here'"></label>
+          </div>
+          <button class="btn" @click="upload()" :disabled="!file || !token || busy"
+            x-text="busy ? 'Analyzing…' : 'Analyze &amp; save'"></button>
+        </div>
+
+        <div x-show="entryMode === 'manual'">
+          <datalist id="contestkeys">
+            <option>CWT</option><option>K1USN-SST</option><option>MST</option>
+            <option>CQ-WW-CW</option><option>CQ-WW-SSB</option>
+            <option>CQ-WPX-CW</option><option>CQ-WPX-SSB</option><option>CQ-160-CW</option>
+            <option>ARRL-DX-CW</option><option>ARRL-DX-SSB</option><option>ARRL-160</option>
+            <option>ARRL-SS-CW</option><option>ARRL-SS-SSB</option><option>ARRL-FIELD-DAY</option>
+            <option>NAQP-CW</option><option>NAQP-SSB</option><option>NA-SPRINT-CW</option>
+            <option>IARU-HF</option><option>STEW-PERRY</option><option>WAE-CW</option>
+          </datalist>
+          <div class="man-grid">
+            <label>Contest
+              <input list="contestkeys" x-model="man.contest" placeholder="CWT">
+            </label>
+            <label>My callsign
+              <input x-model="man.mycall" placeholder="K3LR" spellcheck="false">
+            </label>
+            <label>My sent exchange
+              <input x-model="man.myexch" placeholder="599  ·  TIM PA  ·  3A EPA" spellcheck="false">
+            </label>
+            <label>Default band
+              <select x-model="man.band">
+                <option>160m</option><option>80m</option><option>40m</option>
+                <option>30m</option><option>20m</option><option>17m</option>
+                <option>15m</option><option>12m</option><option>10m</option>
+                <option>6m</option><option>2m</option>
+              </select>
+            </label>
+            <label>Default mode
+              <select x-model="man.mode">
+                <option>CW</option><option>SSB</option><option>RTTY</option><option>FT8</option>
+              </select>
+            </label>
+            <label>Date (UTC)
+              <input type="date" x-model="man.date">
+            </label>
+          </div>
+
+          <label class="analyze-field" style="margin-top:1rem">
+            QSOs — one per line: <code>[HHMM] [band] CALL [their exchange…]</code>
+            <textarea x-model="man.qsos" rows="10" spellcheck="false"
+              placeholder="W1AW BOB CT&#10;1307 K5ZD RANDY MA&#10;40m DL1XYZ HANS DL&#10;&#10;# or paste raw QSO: / ADIF lines, they pass straight through"></textarea>
+          </label>
+          <p class="empty" x-text="manCount + (manCount === 1 ? ' QSO' : ' QSOs') + ' recognised'"></p>
+          <button class="btn" @click="analyzeManual()"
+            :disabled="!man.mycall || !manCount || !token || busy"
+            x-text="busy ? 'Analyzing…' : 'Analyze &amp; save'"></button>
+        </div>
 
         <p x-show="error" class="analyze-error" x-text="error"></p>
 
@@ -182,6 +237,7 @@
 
   <script src="/js/chrome.js"></script>
   <script src="/js/report.js"></script>
+  <script src="/js/manual.js"></script>
   <script src="/js/analyze.js"></script>
 </body>
 </html>

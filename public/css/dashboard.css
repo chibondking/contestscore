@@ -448,6 +448,37 @@ body {
 
 .analyze-error { color: var(--red); font-size: 0.85rem; margin-top: 0.75rem; }
 
+/* Manual-entry form */
+.man-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem 1rem;
+}
+.man-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.man-grid input,
+.man-grid select,
+.analyze-field textarea {
+  padding: 0.5rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+.analyze-field textarea {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  resize: vertical;
+}
+
 /* Banner shown on stats.html / charts.html when viewing an uploaded log */
 .analyze-banner {
   display: flex;

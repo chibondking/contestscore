@@ -162,8 +162,10 @@ just a second transport into `src/udp/dispatch.js`, not a separate code path.
   dashboard uses; unlike the Charts page it keys time off N1MM's own QSO
   timestamp rather than server ingestion time (see `stats.js` `qsoTime()`).
 - **`/analyze` (Analyze)** — upload a submitted Cabrillo (`.cbr`/`.log`) or
-  ADIF (`.adi`) log and get the full Stats + Charts treatment for it, saved
-  at a shareable `/analyze/<id>` link. The file is parsed server-side and
+  ADIF (`.adi`) log — or type the QSOs straight in with the **Enter
+  manually** toggle (header fields + one `[HHMM] [band] CALL exchange…` per
+  line, turned into a Cabrillo client-side) — and get the full Stats +
+  Charts treatment for it, saved at a shareable `/analyze/<id>` link. The file is parsed server-side and
   each worked call is resolved against a bundled country file
   (`src/analyze/cty.csv`) to fill in continent / DXCC / CQ zone, so the
   geographic breakdowns work for any contest. For ~20 common contests
@@ -394,6 +396,7 @@ public/
   js/
     dashboard.js, charts.js, stats.js, analyze.js, compare.js, admin.js   Per-page Alpine.js logic (not ES modules -- see CLAUDE.md)
     report.js   renderReport() -- self-contained HTML report for a saved analysis (also unit-tested)
+    manual.js   buildManualCabrillo() -- the "Enter manually" form -> a Cabrillo string (also unit-tested)
     chrome.js                           Shared header/nav/footer, injected into every page
   css/dashboard.css        Shared styling, dark theme
 config/default.json       Default configuration

@@ -28,6 +28,14 @@ function analyze() {
     savedRetention: null,
     savedError: '',
     savedLoading: false,
+    // Manual entry (no file -- form + paste box -> generated Cabrillo)
+    entryMode: 'file',   // 'file' | 'manual'
+    man: {
+      contest: '', mycall: '', myexch: '',
+      band: '20m', mode: 'CW',
+      date: new Date().toISOString().slice(0, 10),
+      qsos: '',
+    },
 
     init() {
       const m = location.pathname.match(/^\/analyze\/([A-Za-z0-9_-]{4,40})$/);
@@ -150,11 +158,17 @@ function analyze() {
 
     async upload() {
       if (!this.file || !this.token || this.busy) return;
+      await this.uploadText(await this.file.text(), this.fileName);
+    },
+
+    // Shared by the file path and the manual-entry path -- POST raw text to
+    // /api/analyze and hand off to the result page.
+    async uploadText(text, filename) {
+      if (!this.token || this.busy) return;
       this.busy = true;
       this.error = '';
       try {
-        const text = await this.file.text();
-        const r = await fetch(`/api/analyze?filename=${encodeURIComponent(this.fileName)}`, {
+        const r = await fetch(`/api/analyze?filename=${encodeURIComponent(filename)}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'text/plain' },
           body: text,
@@ -170,6 +184,18 @@ function analyze() {
         this.error = `Upload failed: ${err}`;
         this.busy = false;
       }
+    },
+
+    // Manual entry: how many QSO lines currently parse (live counter).
+    get manCount() {
+      return parseManualLines(this.man.qsos).length;
+    },
+
+    analyzeManual() {
+      if (!this.man.mycall || !this.manCount || !this.token || this.busy) return;
+      const text = buildManualCabrillo(this.man);
+      const name = `manual-${(this.man.contest || 'log').replace(/[^A-Za-z0-9]+/g, '-')}.cbr`;
+      this.uploadText(text, name);
     },
 
     get shareUrl() {

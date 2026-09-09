@@ -275,6 +275,14 @@ CREATE TABLE IF NOT EXISTS analyzed_logs (
 - **Nav.** `chrome.js` highlights **Analyze** (not Stats/Charts) whenever
   the page URL carries `?log=<id>`, so a result view reads as part of the
   analyzer.
+- **Manual entry.** An "Enter manually" toggle on the upload page: header
+  fields (contest, my call, my sent exchange, default band/mode, date) plus
+  a paste box, one QSO per line as `[HHMM] [band] CALL [their exchange…]`
+  (raw `QSO:` / ADIF lines pass through). `public/js/manual.js`
+  `buildManualCabrillo()` turns the form into a Cabrillo string that goes to
+  the **same** `POST /api/analyze` — so the exchange maps, cty enrichment
+  and every stat apply with zero manual-entry code server-side. Round-trip
+  tested (form → Cabrillo → `analyzeLog`) in `test/analyze/manual.test.js`.
 
 ## Risks
 
