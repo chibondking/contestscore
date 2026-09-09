@@ -98,4 +98,67 @@ function analyzeLog(text, filename) {
   };
 }
 
-module.exports = { analyzeLog, detectFormat, newId };
+function topValue(values) {
+  const counts = new Map();
+  for (const v of values) {
+    if (!v) continue;
+    counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  let best = '';
+  let n = 0;
+  for (const [v, c] of counts) if (c > n) { best = v; n = c; }
+  return best;
+}
+
+// Snapshot the realtime `qsos` table (rows from src/db/queries.getQsos)
+// into the same { meta, qsos, excluded } shape a file upload produces.
+// The live feed is already full fidelity -- N1MM sends points, multiplier
+// flags, operator, run status and the parsed exchange fields on every
+// <contactinfo> -- so there's no exchange grammar or format detection to
+// do here, just a field remap plus enrichGeo() for any older logger that
+// left continent/zone/prefix blank.
+function analyzeLiveQsos(rows) {
+  const qsos = (rows || []).map((r) => ({
+    call: r.call || '', band: r.band || '', mode: r.mode || '',
+    operator: r.operator || '', mycall: r.mycall || '',
+    countryprefix: r.countryprefix || '', continent: r.continent || '',
+    zone: r.zone || '', section: r.section || '', gridsquare: r.gridsquare || '',
+    op_name: r.op_name || '', power: r.power || '', prec: r.prec || '',
+    ck: r.ck || '', exchange1: r.exchange1 || '', rcv_nr: r.rcv_nr || '',
+    snt_nr: r.snt_nr || '', wpxprefix: r.wpxprefix || '',
+    is_mult1: r.is_mult1 ? 1 : 0, is_mult2: r.is_mult2 ? 1 : 0, is_mult3: r.is_mult3 ? 1 : 0,
+    points: Number(r.points) || 0,
+    is_run_qso: r.is_run_qso ? 1 : 0, run1run2: r.run1run2 || '',
+    n1mm_timestamp: r.n1mm_timestamp || r.logged_at || '',
+    logged_at: r.logged_at || '',
+  }));
+
+  for (const q of qsos) enrichGeo(q);
+
+  const contest = topValue(qsos.map((q, i) => rows[i].contestname));
+  const spec = specForContest(contest);
+
+  return {
+    meta: {
+      filename: `live: ${contest || 'contest'}`,
+      format: 'live',
+      contest: contest || '',
+      contest_key: spec ? spec.key : null,
+      // N1MM already parsed the exchange into fields for us.
+      exchange_parsed: true,
+      station_call: topValue(qsos.map((q) => q.mycall)),
+      operators: [...new Set(qsos.map((q) => q.operator).filter(Boolean))].join(' '),
+      claimed_score: null,
+      qso_count: qsos.length,
+      excluded_count: 0,
+      has_points: qsos.some((q) => q.points),
+      has_mults: qsos.some((q) => q.is_mult1 || q.is_mult2 || q.is_mult3),
+      has_operator: qsos.some((q) => q.operator),
+      has_run_flag: qsos.some((q) => q.is_run_qso),
+    },
+    qsos,
+    excluded: [],
+  };
+}
+
+module.exports = { analyzeLog, analyzeLiveQsos, detectFormat, newId };

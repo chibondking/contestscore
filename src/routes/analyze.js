@@ -2,9 +2,9 @@ const { Router } = require('express');
 const express = require('express');
 const {
   insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,
-  pruneAnalyzedLogs,
+  pruneAnalyzedLogs, getQsos,
 } = require('../db/queries');
-const { analyzeLog, newId } = require('../analyze');
+const { analyzeLog, analyzeLiveQsos, newId } = require('../analyze');
 
 const router = Router();
 
@@ -51,6 +51,12 @@ router.post('/', requireToken, rawBody, (req, res) => {
     return res.status(422).json({ error: 'No QSOs found in the log' });
   }
 
+  res.status(201).json(persist(result, Buffer.byteLength(text, 'utf8')));
+});
+
+// Store an { meta, qsos, excluded } result and enforce retention.
+// Returns { id, meta }.
+function persist(result, rawBytes) {
   const id = newId();
   insertAnalyzedLog({
     id,
@@ -67,17 +73,25 @@ router.post('/', requireToken, rawBody, (req, res) => {
     has_mults: result.meta.has_mults,
     has_operator: result.meta.has_operator,
     has_run_flag: result.meta.has_run_flag,
-    raw_bytes: Buffer.byteLength(text, 'utf8'),
+    raw_bytes: rawBytes || 0,
     parsed_json: JSON.stringify({ qsos: result.qsos, excluded: result.excluded || [] }),
   });
-
   try {
     pruneAnalyzedLogs({ keep: KEEP, ttlDays: TTL_DAYS });
   } catch (err) {
     console.warn('analyzer: retention prune failed', err.message);
   }
+  return { id, meta: result.meta };
+}
 
-  res.status(201).json({ id, meta: result.meta });
+// POST /api/analyze/from-live  -- snapshot the realtime `qsos` table (the
+// full-fidelity N1MM feed) into a saved analysis. No body.
+router.post('/from-live', requireToken, (req, res) => {
+  const rows = getQsos();
+  if (!rows.length) {
+    return res.status(422).json({ error: 'No QSOs in the live contest database' });
+  }
+  res.status(201).json(persist(analyzeLiveQsos(rows), 0));
 });
 
 // GET /api/analyze  -- list saved analyses (auth: it's a private index).

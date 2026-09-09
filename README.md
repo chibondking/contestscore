@@ -161,11 +161,15 @@ just a second transport into `src/udp/dispatch.js`, not a separate code path.
   from `/api/qsos` and live-refreshed via the same socket events the main
   dashboard uses; unlike the Charts page it keys time off N1MM's own QSO
   timestamp rather than server ingestion time (see `stats.js` `qsoTime()`).
-- **`/analyze` (Analyze)** — upload a submitted Cabrillo (`.cbr`/`.log`) or
-  ADIF (`.adi`) log — or type the QSOs straight in with the **Enter
-  manually** toggle (header fields + one `[HHMM] [band] CALL exchange…` per
-  line, turned into a Cabrillo client-side) — and get the full Stats +
-  Charts treatment for it, saved at a shareable `/analyze/<id>` link. The file is parsed server-side and
+- **`/analyze` (Analyze)** — get the full Stats + Charts treatment for a
+  contest log, saved at a shareable `/analyze/<id>` link, from any of three
+  sources: **upload** a submitted Cabrillo (`.cbr`/`.log`) or ADIF (`.adi`);
+  **type** the QSOs in with the *Enter manually* toggle (header fields + one
+  `[HHMM] [band] CALL exchange…` per line, turned into a Cabrillo
+  client-side); or **snapshot the live contest** — `POST /api/analyze/from-live`
+  copies the realtime `qsos` table straight in, which is the full N1MM feed
+  so points / multipliers / per-operator / run all come with it, nothing to
+  export. The file is parsed server-side and
   each worked call is resolved against a bundled country file
   (`src/analyze/cty.csv`) to fill in continent / DXCC / CQ zone, so the
   geographic breakdowns work for any contest. For ~20 common contests
@@ -221,6 +225,7 @@ never gets forwarded to a client.
 | POST   | `/api/ingest/{radio,contact,score}` | Raw N1MM XML bytes from the ContestPulse bridge (bearer token required, dispatched by XML root element like the UDP listeners) |
 | POST   | `/api/ingest/heartbeat` | `{ "station_id": "..." }` liveness ping from ContestPulse |
 | POST   | `/api/analyze`          | Upload raw Cabrillo/ADIF text (`?filename=`), bearer token required. Returns `{ id, meta }` |
+| POST   | `/api/analyze/from-live` | Snapshot the realtime `qsos` table into an analysis (no body, bearer token). Returns `{ id, meta }` |
 | GET    | `/api/analyze`          | `{ items, retention }` — saved analyses + effective keep/TTL (bearer token required) |
 | GET    | `/api/analyze/:id`      | A saved analysis as `{ meta, qsos }` — **public** (shareable link) |
 | DELETE | `/api/analyze/:id`      | Delete a saved analysis (bearer token required) |

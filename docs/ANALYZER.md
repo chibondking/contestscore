@@ -283,6 +283,15 @@ CREATE TABLE IF NOT EXISTS analyzed_logs (
   the **same** `POST /api/analyze` — so the exchange maps, cty enrichment
   and every stat apply with zero manual-entry code server-side. Round-trip
   tested (form → Cabrillo → `analyzeLog`) in `test/analyze/manual.test.js`.
+- **Snapshot the live contest.** A "Live contest" toggle:
+  `POST /api/analyze/from-live` (token-gated, no body) reads the realtime
+  `qsos` table and stores it as an analysis. That data is already the full
+  N1MM feed — points, multiplier flags, operator, run status, the parsed
+  exchange — so `analyzeLiveQsos()` (`src/analyze/index.js`) just remaps the
+  rows and runs `enrichGeo()` for anything an older logger left blank; no
+  format detection or exchange grammar. `format` is `'live'`, and all the
+  points/mults/operator/run breakdowns show. `test/analyze/live.test.js` +
+  a route test cover it.
 
 ## Risks
 

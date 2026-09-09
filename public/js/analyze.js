@@ -28,8 +28,10 @@ function analyze() {
     savedRetention: null,
     savedError: '',
     savedLoading: false,
-    // Manual entry (no file -- form + paste box -> generated Cabrillo)
-    entryMode: 'file',   // 'file' | 'manual'
+    // Entry source: an uploaded file, typed-in QSOs, or a snapshot of the
+    // realtime `qsos` table.
+    entryMode: 'file',   // 'file' | 'manual' | 'live'
+    liveCount: null,     // QSOs currently in the live contest DB
     man: {
       contest: '', mycall: '', myexch: '',
       band: '20m', mode: 'CW',
@@ -48,6 +50,12 @@ function analyze() {
       // Reuse the admin page's remembered token -- same secret.
       try { this.token = localStorage.getItem('contestpulse_admin_token') || ''; } catch { /* storage off */ }
       if (this.token) this.loadSaved();
+      // /api/qsos is public -- get the live contest QSO count for the
+      // "snapshot the live contest" panel.
+      fetch('/api/qsos')
+        .then((r) => (r.ok ? r.json() : []))
+        .then((rows) => { this.liveCount = Array.isArray(rows) ? rows.length : 0; })
+        .catch(() => { this.liveCount = 0; });
     },
 
     saveToken() {
@@ -196,6 +204,30 @@ function analyze() {
       const text = buildManualCabrillo(this.man);
       const name = `manual-${(this.man.contest || 'log').replace(/[^A-Za-z0-9]+/g, '-')}.cbr`;
       this.uploadText(text, name);
+    },
+
+    // Snapshot the realtime qsos table into a saved analysis -- full N1MM
+    // fidelity (points / mults / operator / run), no export needed.
+    async analyzeLive() {
+      if (!this.token || this.busy || !this.liveCount) return;
+      this.busy = true;
+      this.error = '';
+      try {
+        const r = await fetch('/api/analyze/from-live', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.token}` },
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          this.error = body.error || `Snapshot failed (${r.status})`;
+          this.busy = false;
+          return;
+        }
+        window.location.href = `/analyze/${body.id}`;
+      } catch (err) {
+        this.error = `Snapshot failed: ${err}`;
+        this.busy = false;
+      }
     },
 
     get shareUrl() {

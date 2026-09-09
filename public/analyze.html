@@ -37,6 +37,21 @@
         <div class="analyze-actions" style="margin-bottom:1rem">
           <button class="btn" :class="entryMode === 'file' ? '' : 'btn--ghost'" @click="entryMode = 'file'">Upload file</button>
           <button class="btn" :class="entryMode === 'manual' ? '' : 'btn--ghost'" @click="entryMode = 'manual'">Enter manually</button>
+          <button class="btn" :class="entryMode === 'live' ? '' : 'btn--ghost'" @click="entryMode = 'live'">Live contest</button>
+        </div>
+
+        <div x-show="entryMode === 'live'">
+          <p class="empty" style="max-width:60ch;margin-bottom:1rem">
+            Snapshot the contest running on the dashboard right now — the full
+            N1MM feed straight from the <code>qsos</code> table, so points,
+            multipliers, per-operator and run/S&amp;P are all included with
+            nothing to export or type.
+            <span x-show="liveCount !== null"
+              x-text="'Currently ' + Number(liveCount).toLocaleString() + (liveCount === 1 ? ' QSO.' : ' QSOs.')"></span>
+          </p>
+          <button class="btn" @click="analyzeLive()"
+            :disabled="!token || !liveCount || busy"
+            x-text="busy ? 'Snapshotting…' : 'Snapshot the live contest'"></button>
         </div>
 
         <div x-show="entryMode === 'file'">

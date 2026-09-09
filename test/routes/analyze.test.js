@@ -5,7 +5,7 @@ const http = require('node:http');
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { initDb, closeDb } = require('../../src/db/index');
-const { resetStatements } = require('../../src/db/queries');
+const { resetStatements, upsertQso } = require('../../src/db/queries');
 
 let server;
 let baseUrl;
@@ -112,6 +112,50 @@ describe('GET /api/analyze/:id', () => {
   it('404s an unknown id', async () => {
     const res = await fetch(`${baseUrl}/api/analyze/doesnotexist`);
     assert.equal(res.status, 404);
+  });
+});
+
+describe('POST /api/analyze/from-live', () => {
+  it('503 without a token, 422 when the live DB is empty, 201 with QSOs', async () => {
+    const noAuth = await fetch(`${baseUrl}/api/analyze/from-live`, { method: 'POST' });
+    assert.equal(noAuth.status, 503);
+
+    process.env.CONTESTSCORE_API_TOKEN = 'sekret';
+    const empty = await fetch(`${baseUrl}/api/analyze/from-live`, {
+      method: 'POST', headers: { Authorization: 'Bearer sekret' },
+    });
+    assert.equal(empty.status, 422); // no QSOs ingested in this test file
+
+    upsertQso({
+      ext_id: 'live-1', call: 'K3LR', band: '14', mode: 'CW', operator: 'WT2P',
+      mycall: 'WT2P', contestname: 'CQ-WPX-CW', contestnr: '1',
+      countryprefix: 'K', continent: 'NA', zone: '5',
+      is_mult1: 1, points: 3, is_run_qso: 1,
+      n1mm_timestamp: '2026-09-06 12:00:00',
+    });
+    upsertQso({
+      ext_id: 'live-2', call: 'DL1XYZ', band: '7', mode: 'CW', operator: 'WT2P',
+      mycall: 'WT2P', contestname: 'CQ-WPX-CW', contestnr: '1',
+      countryprefix: 'DL', continent: 'EU', zone: '14',
+      points: 6, n1mm_timestamp: '2026-09-06 12:05:00',
+    });
+
+    const res = await fetch(`${baseUrl}/api/analyze/from-live`, {
+      method: 'POST', headers: { Authorization: 'Bearer sekret' },
+    });
+    assert.equal(res.status, 201);
+    const body = await res.json();
+    assert.match(body.id, /^[A-Za-z0-9]{10}$/);
+    assert.equal(body.meta.format, 'live');
+    assert.equal(body.meta.qso_count, 2);
+    assert.equal(body.meta.has_points, true);
+    assert.equal(body.meta.contest_key, 'CQ-WPX');
+
+    delete process.env.CONTESTSCORE_API_TOKEN;
+    const fetched = await fetch(`${baseUrl}/api/analyze/${body.id}`).then((r) => r.json());
+    assert.equal(fetched.qsos.length, 2);
+    assert.equal(fetched.qsos[0].points, 3);
+    assert.equal(fetched.qsos[1].continent, 'EU');
   });
 });
 
