@@ -16,6 +16,14 @@ them. If a feature request isn't about showing contest results in real
 time, it needs its own explicit justification, not an appeal to matching
 the original.
 
+The **offline log analyzer** (`/analyze`, `docs/ANALYZER.md`) is the one
+sanctioned exception, agreed with the maintainer. It shows the *same*
+contest-results breakdowns for a whole log that's already finished --
+uploaded, pasted, or snapshotted from the live DB -- and it does so by
+reusing the Stats/Charts rendering, adding one nav link. It is contest
+results, just post-hoc. It is **not** a licence to add non-results
+features to the analyzer either (a scoring engine, spot overlays, etc.).
+
 ## What This Does
 
 Listens for UDP broadcast packets from contesting logging software (N1MM+,
@@ -67,6 +75,27 @@ just routes to the right one first.
 HTTP server (Express) on port 3000 serves the dashboard and a REST API for
 historical data. Socket.io runs on the same port.
 
+### The offline log analyzer
+
+`src/analyze/` + `src/routes/analyze.js` are a second, self-contained path
+that shares nothing with the realtime pipeline except the browser
+rendering. It takes a whole contest log -- an uploaded Cabrillo/ADIF file,
+a pasted shorthand form, or a one-click snapshot of the live `qsos` table
+-- parses it into the *same* per-QSO array the Stats and Charts pages
+already consume, stores it in `analyzed_logs`, and serves it at a
+shareable `/analyze/<id>`. `stats.js` / `charts.js` gained one hook, a
+`?log=<id>` query param, that makes them fetch a stored analysis instead
+of the live feed. No sockets, no `qsos` table, no separate analysis
+engine. **Full detail in `docs/ANALYZER.md`** -- read it before touching
+`src/analyze/`.
+
+One piece is shared back into realtime: `src/analyze/geo.js`'s
+`enrichGeo(qso)` fills a QSO's blank `continent` / `zone` / `countryprefix`
+from the bundled country file, and `src/udp/index.js` calls it on every
+incoming `contact:new` so the dashboard's by-continent breakdown works for
+a logger (TR4W, older N1MM) that omits those fields. Fill-only, never
+overrides the packet.
+
 ## ContestPulse Bridge
 
 N1MM's UDP broadcasts are LAN-local (often literal broadcast addressing),
@@ -111,12 +140,15 @@ just somewhere that can see N1MM's LAN broadcasts.
 - Frontend: Vanilla JS + Alpine.js + Chart.js (all CDN, no build step)
 - No TypeScript, no bundler, no framework. This runs on a Raspberry Pi.
 
-None of the three page scripts (`dashboard.js`/`admin.js`/`charts.js`) are
-loaded as `type="module"` -- see the comment on each page's `<script>` tag.
-A module's top-level declarations don't land on the global scope Alpine
-evaluates `x-data="..."` against, so a module-loaded page silently fails to
-initialize at all. This bit the dashboard once already (see git history);
-don't reintroduce it on a new page.
+No page script (`dashboard.js` / `charts.js` / `stats.js` / `analyze.js` /
+`compare.js` / `admin.js`, plus the shared `chrome.js` / `manual.js` /
+`report.js`) is loaded as `type="module"` -- see the comment on each
+page's `<script>` tag. A module's top-level declarations don't land on the
+global scope Alpine evaluates `x-data="..."` against, so a module-loaded
+page silently fails to initialize at all. This bit the dashboard once
+already (see git history); don't reintroduce it on a new page. `manual.js`
+and `report.js` guard a `module.exports` at the bottom so their pure
+functions are also unit-testable under Node -- that's the only concession.
 
 ## Project Structure
 
@@ -127,12 +159,21 @@ contestscore/
       radioListener.js      # dgram socket on :12060
       contactListener.js    # dgram socket on :12061
       scoreListener.js      # dgram socket on :12062
-      index.js              # starts all listeners, wires to emitter
+      index.js              # starts all listeners, wires to emitter (also calls analyze/geo enrichGeo)
     parsers/
       radio.js              # parses RadioInfo XML
       contact.js            # parses ContactInfo XML
       score.js              # parses Score XML
       lookup.js             # parses ExternalCallsignLookup XML
+    analyze/                # offline log analyzer (see docs/ANALYZER.md)
+      index.js              # analyzeLog(text) / analyzeLiveQsos(rows) orchestrator
+      cabrillo.js           # Cabrillo text -> { meta, qsos, flags }
+      adif.js               # ADIF text -> { meta, qsos, flags }
+      contests.js           # per-contest exchange grammars + generic fallback
+      cty.js                # country-file parser/resolver (callsign -> entity/continent/zone)
+      geo.js                # enrichGeo(qso): fill blank continent/zone/prefix; shared with src/udp
+      bands.js              # canonicalBand(mhz)
+      cty.csv               # bundled "big CTY" data (refreshed by cty-refresh.yml)
     db/
       index.js              # opens DB, runs migrations
       schema.sql            # table definitions
@@ -141,28 +182,46 @@ contestscore/
       index.js              # socket.io setup, event->broadcast mapping
     routes/
       api.js                # REST endpoints for historical data
-    app.js                  # Express setup, mounts routes
+      ingest.js             # POST /api/ingest/* (ContestPulse HTTP transport)
+      analyze.js            # POST/GET/DELETE /api/analyze* (the log analyzer)
+    app.js                  # Express setup, mounts routes, serves /analyze + /compare shells
     server.js               # entry point: starts HTTP + UDP
   public/
     index.html              # dashboard shell
-    charts.html             # rate-over-time / score-over-time trend charts
+    charts.html             # trend charts + spec-driven "more charts" grid
+    stats.html              # SH5/CBS-style post-contest breakdown tables
+    analyze.html            # analyzer: upload / manual / live tabs + result landing
+    compare.html            # two analyses side by side
     admin.html              # DB reset UI
     js/
       dashboard.js          # socket.io client, DOM updates
-      charts.js             # Chart.js line charts, polled not socket-driven
+      charts.js             # Chart.js; ?log=<id> loads a saved analysis instead of the live feed
+      stats.js              # stats tables; same ?log=<id> hook
+      analyze.js            # analyzer page logic (upload/manual/live/compare/saved list)
+      compare.js            # log-vs-log comparison
+      manual.js             # buildManualCabrillo(): manual form -> Cabrillo string
+      report.js             # renderReport(): self-contained HTML report for a saved analysis
+      chrome.js             # shared header/nav/footer; highlights Analyze when URL has ?log=
       admin.js
     css/
-      dashboard.css         # shared by all three pages
+      dashboard.css         # shared by every page
+  contestpulse/             # standalone Go relay (LAN UDP -> HTTPS ingest); see "ContestPulse Bridge"
   config/
     default.json            # ports, DB path, feature flags
-  migrations/               # numbered SQL migration files
+  migrations/               # numbered SQL migration files, run on startup
+  deploy/                   # DEPLOY.md + the production deploy script + nginx/systemd units
+  docs/
+    ANALYZER.md             # the log analyzer, in full
   test/
     parsers/                # unit tests for parser logic
+    analyze/                # analyzer unit tests (parsers, cty, contests, manual, live, report, ...)
     udp/                    # integration tests with mock UDP senders
+    routes/                 # REST API integration tests (in-memory SQLite)
   CLAUDE.md                 # this file
   package.json
   .env.example
 ```
+
 
 ## UDP Packet Types
 
@@ -262,6 +321,13 @@ Core tables:
   wrong for any multi-band contest.
 - `settings` -- key/value config (contest name, operator, etc.)
 - `callsign_cache` -- lookup results to avoid re-querying QRZ/HamDB
+- `analyzed_logs` -- one row per saved analysis (the offline log analyzer).
+  The parsed QSO array lives in `parsed_json` as `{"qsos":[…],"excluded":[…]}`;
+  `has_points`/`has_mults`/`has_operator`/`has_run_flag` tell the result
+  page which sections the source could populate. **Deliberately separate
+  from `qsos`** -- an analysis is a saved artifact and must survive
+  `DELETE /api/db`. Retention (`ANALYZE_KEEP` / `ANALYZE_TTL_DAYS`) is
+  enforced on every write. See `docs/ANALYZER.md`.
 
 Schema lives in `src/db/schema.sql`. Migrations are numbered files in
 `migrations/` and run automatically on startup.
@@ -312,6 +378,17 @@ Environment variables override config file. See `.env.example`.
 - `POST /api/ingest/heartbeat` -- `{ "station_id": "..." }` liveness ping
   from ContestPulse, same auth as above
 
+Log analyzer (`src/routes/analyze.js`, see `docs/ANALYZER.md`). Writes need
+the same bearer token as `DELETE /api/db`; reading a saved analysis is
+public (it's a share link):
+- `POST /api/analyze?filename=` -- raw Cabrillo/ADIF text -> a stored
+  analysis; returns `{ id, meta }`
+- `POST /api/analyze/from-live` -- snapshot the live `qsos` table into an
+  analysis (no body)
+- `GET /api/analyze` -- `{ items, retention }` saved-analyses index
+- `GET /api/analyze/:id` -- **public** -- `{ meta, qsos, excluded }`
+- `DELETE /api/analyze/:id` -- remove one
+
 ## Key Behaviors and Constraints
 
 **Duplicate QSO handling**: QSOs are identified primarily by N1MM's own `<ID>`
@@ -356,6 +433,15 @@ Dashboard should be readable on a TV across the room.
   network, no DB.
 - UDP integration tests: spin up a test UDP sender, verify the full
   listener -> parser -> DB -> socket.io pipeline. Use a temp DB file.
+- REST integration tests (`test/routes/`): in-memory SQLite, a real
+  `http.Server`, `fetch` against it.
+- Analyzer tests (`test/analyze/`): the Cabrillo/ADIF parsers, the cty
+  resolver, one fixture per contest exchange grammar, and round trips
+  (manual form -> Cabrillo -> `analyzeLog`; live rows -> `analyzeLiveQsos`).
+  The pure suites also run under Deno on a machine without Node
+  (`deno test --allow-read --no-check --unstable-detect-cjs`).
+- ContestPulse has its own Go tests (`contestpulse/*_test.go`, run in CI by
+  `.github/workflows/contestpulse-build.yml`).
 - No E2E browser tests for now; the frontend is thin enough to test manually.
 
 Run tests: `npm test`
@@ -441,3 +527,6 @@ not built):
 - Multi-server aggregation (one dashboard aggregating multiple contestscore
   instances across sites)
 - Authentication (local network tool, no auth planned)
+- Log analyzer deferrals (a scoring engine for bare Cabrillo, in-browser
+  "quick look", N-way compare) -- see the "Not done" list in
+  `docs/ANALYZER.md`.

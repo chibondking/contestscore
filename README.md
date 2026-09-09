@@ -116,7 +116,14 @@ ContestPulse-relayed HTTP path (remote/public deployment) run every packet
 through the exact same parser/DB/emit functions — the ingest routes are
 just a second transport into `src/udp/dispatch.js`, not a separate code path.
 
-## Dashboard pages
+Alongside the realtime pipeline there's an **offline log analyzer**
+(`/analyze`): upload, type, or one-click-snapshot a whole contest log, and
+it renders through the same Stats and Charts pages via a `?log=<id>` hook.
+It shares nothing with the realtime path except that rendering (and the
+country-file lookup — see `enrichGeo` below). Full detail in
+[`docs/ANALYZER.md`](docs/ANALYZER.md).
+
+## Pages
 
 - **`/` (Dashboard)** — live Score and Rate cards (each with a small trend
   sparkline), Radios (band only — see Privacy below — plus a red/green
@@ -271,9 +278,12 @@ curl -X DELETE http://localhost:3000/api/db -H "X-Confirm: yes"
 | `LOOKUP_PROVIDER`          | `none`           |
 | `QRZ_USERNAME`             | —                |
 | `QRZ_PASSWORD`             | —                |
-| `CONTESTSCORE_API_TOKEN`   | — (unset = no auth required; required for `/api/ingest/*`, optional but recommended for `DELETE /api/db`) |
+| `CONTESTSCORE_API_TOKEN`   | — (unset = no auth required; required for `/api/ingest/*` and analyzer writes, optional but recommended for `DELETE /api/db`) |
 | `BRIDGE_STALE_AFTER_MS`    | `30000` (ContestPulse heartbeat default is 10s) |
 | `BRIDGE_OFFLINE_AFTER_MS`  | — (see `src/state/bridgeStatus.js`) |
+| `ANALYZE_KEEP`             | `200` — newest saved analyses to keep |
+| `ANALYZE_TTL_DAYS`         | `365` — max age of a saved analysis (0 disables) |
+| `ANALYZE_MAX_BYTES`       | `5242880` — max upload size |
 
 Copy `.env.example` to `.env` and fill in any values you want to override.
 
@@ -383,6 +393,12 @@ page under the rolling `contestpulse-latest` tag. Configure
 and run `contestpulse-<platform> config.json` — nothing else to install.
 See `contestpulse/` and `deploy/DEPLOY.md` for details.
 
+Its HTTP client (`contestpulse/httpclient.go`) uses a short
+`IdleConnTimeout` and retries once on a fresh connection after any
+transport error, so a keep-alive connection the reverse-proxy/tunnel
+silently dropped heals itself instead of wedging every POST until a manual
+restart.
+
 ## Project layout
 
 ```
@@ -410,8 +426,9 @@ scripts/
   sendTestPacket.js        UDP traffic simulator
   deploy.sh                Manual trigger for the production deploy script, from any machine
 deploy/                    DEPLOY.md + the production deploy script
-contestpulse/              Standalone Go relay binary (see above)
-.github/workflows/         CI (test on every push) + auto-deploy + ContestPulse cross-compile/release
+docs/ANALYZER.md           the offline log analyzer, in full
+contestpulse/              Standalone Go relay (Go sources + its own tests)
+.github/workflows/         CI + auto-deploy + ContestPulse cross-compile/release + monthly cty.csv refresh PR
 test/
   parsers/                Parser unit tests
   analyze/                Cabrillo/ADIF/cty parser + orchestrator unit tests
