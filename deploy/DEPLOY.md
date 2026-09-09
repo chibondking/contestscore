@@ -114,6 +114,15 @@ port request it. If a port conflict persists after that, some other program
 holds the port exclusively and the real fix is separating the ports, not
 more socket options on ContestPulse's end.
 
+**Every POST suddenly `context deadline exceeded (while awaiting headers)`,
+fixed by restarting ContestPulse?** That was a stale keep-alive connection
+through the Cloudflare Tunnel -- ContestPulse held a pooled TCP connection
+the tunnel had silently dropped, and kept trying to reuse the dead socket.
+Since the fix in `contestpulse/httpclient.go` (short `IdleConnTimeout` plus
+a one-shot retry on a fresh connection after any transport error) it heals
+itself; a build from before that change needs the manual restart. Grab the
+current binary from the `contestpulse-latest` release.
+
 ## Alternative: raw UDP over Tailscale/ZeroTier
 
 If you'd rather not run an extra process, the UDP listeners already bind to

@@ -3,12 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"sync"
-	"time"
 )
 
 // relay listens on one local UDP port for N1MM broadcast traffic and
@@ -35,14 +36,30 @@ func newRelay(label string, port int, targetURL, apiToken string) *relay {
 		port:      port,
 		targetURL: targetURL,
 		apiToken:  apiToken,
-		client:    &http.Client{Timeout: 5 * time.Second},
+		client:    newIngestClient(),
 	}
 }
 
 // forward posts one datagram's bytes upstream. Split out from run() so a
 // test can drive it directly against an httptest.Server, without a real UDP
 // socket in the loop.
+//
+// A transport error (no HTTP response came back at all -- timeout, reset,
+// connection refused) gets one retry after dropping idle connections, so a
+// single half-open keep-alive socket heals itself instead of wedging every
+// subsequent post. An actual HTTP response, even a 4xx/5xx, is not retried:
+// the pipe works, the server just said no.
 func (r *relay) forward(packet []byte) error {
+	err := r.postOnce(packet)
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		r.client.CloseIdleConnections()
+		err = r.postOnce(packet)
+	}
+	return err
+}
+
+func (r *relay) postOnce(packet []byte) error {
 	req, err := http.NewRequest("POST", r.targetURL, bytes.NewReader(packet))
 	if err != nil {
 		return fmt.Errorf("building request: %w", err)

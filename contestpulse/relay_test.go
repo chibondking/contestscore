@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -59,6 +60,58 @@ func TestForwardReturnsErrorWhenServerUnreachable(t *testing.T) {
 	r := newRelay("radio", 0, "http://127.0.0.1:1", "secret123") // port 1: nothing listens there
 	if err := r.forward([]byte("x")); err == nil {
 		t.Fatal("expected an error when the server is unreachable, got nil")
+	}
+}
+
+// A half-open keep-alive connection (the failure mode that once wedged
+// ContestPulse) should heal on its own: the first post gets no response,
+// forward() drops idle conns and retries once on a fresh connection.
+func TestForwardRetriesOnceAfterATransportError(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if atomic.AddInt32(&hits, 1) == 1 {
+			// Simulate a dead connection: take it and drop it, no response.
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				t.Error("ResponseWriter is not a Hijacker")
+				return
+			}
+			conn, _, err := hj.Hijack()
+			if err != nil {
+				t.Errorf("hijack: %v", err)
+				return
+			}
+			conn.Close()
+			return
+		}
+		w.WriteHeader(202)
+	}))
+	defer srv.Close()
+
+	r := newRelay("score", 0, srv.URL, "secret123")
+	if err := r.forward([]byte("<dynamicresults/>")); err != nil {
+		t.Fatalf("expected success after one retry, got: %v", err)
+	}
+	if got := atomic.LoadInt32(&hits); got != 2 {
+		t.Fatalf("server hits: got %d, want 2 (first failed, retried once)", got)
+	}
+}
+
+// An actual HTTP error response means the pipe works -- don't retry it.
+func TestForwardDoesNotRetryOnHTTPError(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(401)
+	}))
+	defer srv.Close()
+
+	r := newRelay("score", 0, srv.URL, "wrong-token")
+	if err := r.forward([]byte("x")); err == nil {
+		t.Fatal("expected an error on HTTP 401")
+	}
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Fatalf("server hits: got %d, want 1 (a 401 must not be retried)", got)
 	}
 }
 

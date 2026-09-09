@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -35,13 +37,25 @@ func newHeartbeat(stationID, targetURL, apiToken string, interval time.Duration)
 		targetURL: targetURL,
 		apiToken:  apiToken,
 		interval:  interval,
-		client:    &http.Client{Timeout: 5 * time.Second},
+		client:    newIngestClient(),
 	}
 }
 
 // send posts one heartbeat. Split out from run() for the same testability
-// reason as relay.forward().
+// reason as relay.forward(). Retries once on a transport error (no response
+// came back), after dropping idle connections -- same rationale as
+// relay.forward.
 func (h *heartbeat) send() error {
+	err := h.sendOnce()
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		h.client.CloseIdleConnections()
+		err = h.sendOnce()
+	}
+	return err
+}
+
+func (h *heartbeat) sendOnce() error {
 	body, err := json.Marshal(heartbeatPayload{StationID: h.stationID})
 	if err != nil {
 		return fmt.Errorf("marshal heartbeat: %w", err)
