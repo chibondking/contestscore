@@ -19,6 +19,14 @@
 
   <header class="header" data-page="dashboard">
     <span class="grid-locator" x-show="score.grid6" x-text="score.grid6"></span>
+    <!-- Space weather (SFI / A / K). Populated from GET /api/solar +
+         solar:update; hidden until the first reading lands (or entirely if
+         SOLAR_ENABLED=false, since /api/solar then stays { updated:null }). -->
+    <span class="solar-chip" x-show="solar.updated" :title="solarTooltip()">
+      <span x-text="'SFI ' + (solar.sfi ?? '—')"></span>
+      <span x-text="'A ' + (solar.a ?? '—')"></span>
+      <span x-text="'K ' + (solar.k ?? '—')"></span>
+    </span>
     <!-- Feed Status used to be its own card; a deployment only ever has one
          bridge feeding it, so a full card was more real estate than the
          information warranted. It lives here now, next to the connection

@@ -4,25 +4,36 @@ A real-time ham radio contesting dashboard. Inspired by the Node-RED-based
 Node-Red-Contesting-Dashboard, rebuilt as a clean, maintainable Node.js
 application.
 
-## Prime Directive
+## Scope
 
-Display realtime contest results -- radio state, QSOs, and score. That's
-it. This is **not** a goal of feature-parity with the original Node-RED
-dashboard, which also had DX cluster/RBN spot display with a map, a
-streaming-overlay mode, Pi system monitoring, and several other panels
-unrelated to contest results themselves. Those are out of scope on
-purpose, not "not yet" -- don't add them just because the original had
-them. If a feature request isn't about showing contest results in real
-time, it needs its own explicit justification, not an appeal to matching
-the original.
+The heart of contestscore is **realtime contest results** -- radio state,
+QSOs, and score, pushed live to the browser. That part is built and it
+works; it must stay fast, legible across the room, and correct, and it's
+what every design decision is weighed against first.
 
-The **offline log analyzer** (`/analyze`, `docs/ANALYZER.md`) is the one
-sanctioned exception, agreed with the maintainer. It shows the *same*
-contest-results breakdowns for a whole log that's already finished --
-uploaded, pasted, or snapshotted from the live DB -- and it does so by
-reusing the Stats/Charts rendering, adding one nav link. It is contest
-results, just post-hoc. It is **not** a licence to add non-results
-features to the analyzer either (a scoring engine, spot overlays, etc.).
+Around that core, **operating aids that genuinely help while a contest is
+running** are in scope when each earns its place on its own merits -- not
+by an appeal to feature-parity with the original Node-RED dashboard, which
+is still not a goal. The test is: *does this help the person running the
+contest, right now, without bloating or slowing the results view?* What's
+passed that test so far:
+
+- the **offline log analyzer** (`/analyze`, `docs/ANALYZER.md`) -- the
+  same results breakdowns for a whole finished log (uploaded, pasted, or
+  snapshotted from the live DB), reusing the Stats/Charts rendering. It is
+  **not** a licence to pile non-results features onto the analyzer (a
+  scoring engine, spot overlays);
+- **callsign lookup** (`src/lookup/`, HamQTH) and the **Possible Busts**
+  panel it feeds -- a live data-quality signal on the log;
+- **space-weather indices** (SFI / A / K, `src/solar/`) in the header --
+  propagation context for the operator.
+
+An earlier version of this section said "realtime results and nothing
+else," with a long list of things "permanently out of scope." That was
+deliberate scaffolding to get a focused, usable dashboard built first, and
+it did its job. Scope now widens **feature by feature, with the
+maintainer** -- it is not licence to port every panel the old dashboard
+had. When you add something outside the results core, say so here.
 
 ## What This Does
 
@@ -183,6 +194,8 @@ contestscore/
     lookup/                 # live-dashboard callsign lookup (HamQTH). NOT used by src/analyze/
       index.js              # provider resolution, the paced/de-duped queue, prime()
       hamqth.js             # HamQTH XML API client (session token, <search> normalisation)
+    solar/                  # space-weather poller (hamqsl.com -> solar_snapshots + solar:update)
+      index.js              # fetch loop, XML parse, latest-reading accessor
     routes/
       api.js                # REST endpoints for historical data
       ingest.js             # POST /api/ingest/* (ContestPulse HTTP transport)
@@ -323,7 +336,14 @@ Core tables:
   recently inserted row" as "the current score" (the original design) is
   wrong for any multi-band contest.
 - `settings` -- key/value config (contest name, operator, etc.)
-- `callsign_cache` -- lookup results to avoid re-querying QRZ/HamDB
+- `callsign_cache` -- lookup results (N1MM `<lookupinfo>` or HamQTH), keyed
+  by the suffix-stripped call; `source` says which. Wiped by `DELETE /api/db`.
+- `solar_snapshots` -- one row per hamqsl.com fetch (~2-hourly): SFI / A /
+  K / sunspots + `fetched_at`. Append-only, and **NOT** wiped by
+  `DELETE /api/db` -- it's ambient data, and the history is what a future
+  rate-vs-conditions view of a from-live analysis will join against. Slow
+  age-based prune (`SOLAR_RETENTION_DAYS`). A brand-new table, so
+  `schema.sql` alone covers fresh + existing DBs; no migration file.
 - `analyzed_logs` -- one row per saved analysis (the offline log analyzer).
   The parsed QSO array lives in `parsed_json` as `{"qsos":[…],"excluded":[…]}`;
   `has_points`/`has_mults`/`has_operator`/`has_run_flag` tell the result
@@ -344,6 +364,8 @@ Schema lives in `src/db/schema.sql`. Migrations are numbered files in
 - Callsign lookup provider: `hamqth` | `none` (see "Callsign Lookup" below;
   `qrz`/`hamdb` are in the config shape but unimplemented)
 - HamQTH / QRZ credentials (also via env vars)
+- Space weather (`solar`): `enabled`, `refreshMinutes` (default 120),
+  `retentionDays` (default 365) -- see `src/solar/`
 
 Environment variables override config file. See `.env.example`.
 
@@ -353,7 +375,9 @@ Environment variables override config file. See `.env.example`.
 - `contact:new` -- new QSO logged
 - `contact:delete` -- QSO deleted in N1MM+
 - `score:update` -- current score snapshot
-- `lookup:result` -- callsign lookup result
+- `lookup:result` -- callsign lookup result (N1MM `<lookupinfo>` or HamQTH);
+  the dashboard also uses a `found === false` one to refresh the busts panel
+- `solar:update` -- a fresh space-weather reading landed (`src/solar/`)
 - `bridge:status` -- a ContestPulse (or other bridge) station's realtime/
   stale/offline status changed
 - `db:cleared` -- database was wiped (pre-contest reset)
@@ -362,8 +386,12 @@ Environment variables override config file. See `.env.example`.
 
 - `GET /api/qsos` -- all QSOs, optional `?band=&mode=&operator=`
 - `GET /api/features` -- optional-feature switches the dashboard reads before
-  showing/hiding panels; currently `{ lookup: { provider, enabled } }`. Read
-  live from env per request.
+  showing/hiding panels: `{ lookup: { provider, enabled }, solar: { enabled } }`.
+  Read live from env per request.
+- `GET /api/solar` -- newest space-weather reading
+  `{ sfi, a, k, sunspots, xray, geomag, updated }`, or `{ updated: null }`
+  before the first fetch. Backed by `solar_snapshots`; live updates arrive
+  on the `solar:update` socket event.
 - `GET /api/busts` -- `{ enabled, busts: [{ call, band, mode, operator,
   logged_at }] }`: logged QSOs whose suffix-stripped call the HamQTH lookup
   marked not-found. `enabled: false` (empty list) when lookup is off, so the
@@ -556,18 +584,49 @@ flag table -- deriving it fresh means a correction in the logger clears it
 with no extra bookkeeping, and it's wiped by `DELETE /api/db` for free
 (the cache is). Dashboard only; the analyzer has no equivalent.
 
+## Space Weather
+
+`src/solar/` polls `hamqsl.com/solarxml.php` (N0NBH's feed) every
+`refreshMinutes` (default 120 -- the data barely moves faster), parses out
+SFI / A / K / sunspots with `xml2js`, appends each fetch to
+`solar_snapshots`, and emits `solar:update`. `createSolarService({ io })`
+is started from `server.js` alongside `startMonitor`; its timer is
+`unref()`ed so it never holds the process open. A failed fetch logs and
+leaves the last good reading in place -- like the lookup queue, an upstream
+outage can't touch the core dashboard.
+
+`GET /api/solar` reads the newest row straight from `solar_snapshots`
+(`latestSolar()`), so the header chip survives a restart with no gap. The
+persisted **history** is the real reason for the table: a later feature
+will join `solar_snapshots.fetched_at` against a from-live analysis's time
+span to chart QSO rate vs. conditions (noted in `docs/ANALYZER.md`'s "Not
+done"). Manually-uploaded logs get nothing -- there's no captured solar for
+an arbitrary past date.
+
+Dashboard header only; `SOLAR_ENABLED=false` disables the poll and the
+chip. The analyzer never triggers a fetch.
+
 ## What Is NOT in Scope
 
-**Permanently out of scope** (see Prime Directive -- these aren't contest
-*results*, so matching the original dashboard isn't a reason to add them):
+Two hard rules that don't move:
+- The realtime results view stays the priority. An aid that slows it,
+  clutters it, or fights it for attention on the main screen belongs on
+  its own page or behind a toggle.
+- The **offline analyzer makes no network calls** -- no lookup, no solar
+  fetch. A saved analysis has to be reproducible offline.
+
+**Still out, but "would need a concrete case" rather than "never":**
 - DX cluster / RBN spot display, with or without a map. contestscore does
   not parse, store, or relay N1MM's `<spot>` broadcasts -- `src/udp/
   contactListener.js` explicitly and silently ignores them (see its
   comment) rather than treating an unrecognized packet as a bug to fix.
   N1MM already has its own direct spot integrations (e.g. to FlexRadio);
-  this app doesn't need to duplicate or sit in the middle of that.
-- Streaming-overlay mode, Pi system monitoring, weather/lightning alerts,
-  and the other original panels unrelated to contest results themselves.
+  sitting in the middle of that is a different product. This one has a
+  standalone rationale beyond "not results," so it's the least likely to
+  be revisited.
+- Streaming-overlay mode, Pi system monitoring, weather/lightning alerts.
+  Not results, and not something the operator reaches for mid-QSO. No
+  plans -- bring a specific need.
 
 **Not yet, but plausible later** (these ARE about contest results, just
 not built):

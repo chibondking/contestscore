@@ -126,6 +126,27 @@ CREATE TABLE IF NOT EXISTS callsign_cache (
   cached_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Space-weather readings (SFI / A / K / sunspots) polled from hamqsl.com,
+-- one row per fetch (~every 2h). Append-only, and deliberately NOT wiped by
+-- DELETE /api/db (clearAll) -- this is ambient data, not contest data, and
+-- the history is what a later "how did the rate track the K index" analysis
+-- of a from-live snapshot will join against. Kept trimmed by a slow
+-- age-based prune (src/solar/). A brand-new table, so schema.sql alone
+-- covers both fresh and existing DBs -- no migration file needed.
+CREATE TABLE IF NOT EXISTS solar_snapshots (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  sfi            INTEGER,
+  a_index        INTEGER,
+  k_index        INTEGER,
+  sunspots       INTEGER,
+  xray           TEXT,
+  geomag         TEXT,
+  source_updated TEXT,                       -- hamqsl's own "updated" string, raw
+  fetched_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_solar_fetched ON solar_snapshots(fetched_at);
+
 -- Uploaded Cabrillo/ADIF logs for the offline analyzer (see
 -- docs/ANALYZER.md and src/routes/analyze.js). Deliberately separate from
 -- `qsos`: that table is the realtime contest and is wiped by

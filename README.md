@@ -10,11 +10,14 @@ or behind a reverse proxy as a public scoreboard (with a bearer-token-
 protected ingest API and a small Go relay, **ContestPulse**, to get N1MM's
 LAN-local broadcasts there — see below). No build step either way.
 
-**Prime directive**: display realtime contest results — radio state, QSOs,
-score — and nothing else. DX cluster/RBN spots, a streaming-overlay mode,
-and the other non-score panels from the original Node-RED dashboard this
-project was inspired by are permanently out of scope, not "not yet". See
-`CLAUDE.md` for the full reasoning and the current N1MM wire-format notes.
+**Scope**: the core is realtime contest results — radio state, QSOs, score,
+live in the browser — and it stays the priority. Around it, operating aids
+that help while a contest is running earn their place one at a time: the
+offline log analyzer, HamQTH callsign lookup + a "possible busts" panel,
+and SFI/A/K space-weather indices in the header. Feature-parity with the
+original Node-RED dashboard is still not a goal (no DX-cluster/RBN spot map,
+no streaming overlay). See `CLAUDE.md` for the full reasoning and the
+current N1MM wire-format notes.
 
 ## Requirements
 
@@ -222,7 +225,8 @@ never gets forwarded to a client.
 | Method | Path                    | Description                                          |
 |--------|-------------------------|-------------------------------------------------------|
 | GET    | `/api/version`          | Commit + deploy timestamp, for spotting a stale/cached page |
-| GET    | `/api/features`         | Optional-feature switches the dashboard reads (e.g. `lookup.enabled`) |
+| GET    | `/api/features`         | Optional-feature switches the dashboard reads (`lookup.enabled`, `solar.enabled`) |
+| GET    | `/api/solar`            | Latest space-weather reading (`sfi/a/k/sunspots/updated`), or `{ updated: null }` |
 | GET    | `/api/qsos`             | All QSOs. Filters: `?band=20&mode=CW&operator=W1OP`  |
 | GET    | `/api/score`            | Latest score snapshot (`total`/`score_total` both present) |
 | GET    | `/api/score/history`    | Full score time series                               |
@@ -253,7 +257,8 @@ curl -X DELETE http://localhost:3000/api/db -H "X-Confirm: yes"
 | `contact:new`    | New QSO logged (also fires on a `contactreplace` edit-in-place) |
 | `contact:delete` | QSO deleted in N1MM+                             |
 | `score:update`   | Current score snapshot, including `grid6`        |
-| `lookup:result`  | Callsign lookup result                           |
+| `lookup:result`  | Callsign lookup result (N1MM `<lookupinfo>` or HamQTH) |
+| `solar:update`   | Fresh space-weather reading (SFI/A/K)            |
 | `bridge:status`  | A ContestPulse station's realtime/stale/offline status changed |
 | `db:cleared`     | Database wiped                                   |
 
@@ -312,6 +317,17 @@ hint, not a verdict: a brand-new licensee or a special-event call can land
 there too. The list is derived fresh from the current log, so a call fixed
 in the logger drops off within a minute. The card is hidden entirely when
 lookup is off.
+
+## Space weather
+
+The dashboard header shows current **SFI / A / K** (hover for sunspots,
+X-ray, geomagnetic field, and the reading's age). The server polls
+[hamqsl.com](https://www.hamqsl.com/) every `SOLAR_REFRESH_MINUTES`
+(default 120), keeps every reading in `solar_snapshots`, and pushes updates
+over the `solar:update` event. The history is retained (`SOLAR_RETENTION_DAYS`,
+default 365) and is **not** wiped by `DELETE /api/db` — a later feature will
+chart contest rate against conditions for a from-live analysis. Set
+`SOLAR_ENABLED=false` to turn the poll and the header chip off.
 
 ## Database
 

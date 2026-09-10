@@ -7,6 +7,7 @@ const assert = require('node:assert/strict');
 const { initDb, closeDb } = require('../../src/db/index');
 const {
   resetStatements, insertScoreBreakdown, upsertRadio, upsertQso, cacheCallsign, clearQsos,
+  insertSolarSnapshot,
 } = require('../../src/db/queries');
 
 let server;
@@ -123,11 +124,19 @@ describe('GET /api/features', () => {
     delete process.env.HAMQTH_PASSWORD;
   });
 
-  it('reports lookup disabled by default', async () => {
+  it('reports lookup disabled by default, solar enabled', async () => {
     const res = await fetch(`${baseUrl}/api/features`);
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.deepEqual(body.lookup, { provider: 'none', enabled: false });
+    assert.deepEqual(body.solar, { enabled: true });
+  });
+
+  it('reflects SOLAR_ENABLED=false', async () => {
+    process.env.SOLAR_ENABLED = 'false';
+    const body = await (await fetch(`${baseUrl}/api/features`)).json();
+    assert.deepEqual(body.solar, { enabled: false });
+    delete process.env.SOLAR_ENABLED;
   });
 
   it('reports hamqth once a provider + credentials are configured', async () => {
@@ -195,5 +204,29 @@ describe('GET /api/busts', () => {
     upsertQso({ ext_id: 'e', call: 'W1AW', band: '20', mode: 'CW', operator: 'WT2P' });
     const body = await (await fetch(`${baseUrl}/api/busts`)).json();
     assert.deepEqual(body, { enabled: true, busts: [] });
+  });
+});
+
+describe('GET /api/solar', () => {
+  it('is { updated: null } before any reading', async () => {
+    clearQsos(); // does not touch solar_snapshots
+    const body = await (await fetch(`${baseUrl}/api/solar`)).json();
+    assert.equal(body.updated, null);
+  });
+
+  it('returns the newest stored reading', async () => {
+    insertSolarSnapshot({ sfi: 140, a: 5, k: 2, sunspots: 88, xray: 'C1.0', geomag: 'QUIET' });
+    const body = await (await fetch(`${baseUrl}/api/solar`)).json();
+    assert.equal(body.sfi, 140);
+    assert.equal(body.a, 5);
+    assert.equal(body.k, 2);
+    assert.equal(body.sunspots, 88);
+    assert.ok(body.updated); // fetched_at default
+  });
+
+  it('survives clearQsos() -- solar is ambient, not contest data', async () => {
+    clearQsos();
+    const body = await (await fetch(`${baseUrl}/api/solar`)).json();
+    assert.equal(body.sfi, 140);
   });
 });

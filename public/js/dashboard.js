@@ -37,6 +37,9 @@ function dashboard() {
     // Server-derived from the live log + cache, so a call fixed in the
     // logger drops off on the next fetch (the 60s poll or a lookup:result).
     busts: [],
+    // Latest space-weather reading from GET /api/solar / solar:update.
+    // { updated: null } until the first server-side fetch lands.
+    solar: { updated: null },
     // "Last updated" ticker: lastUpdateAt bumps on every socket event or
     // successful poll; now ticks every second so secondsSinceUpdate()
     // counts up live in the header even between events, proving the page
@@ -96,6 +99,11 @@ function dashboard() {
         if (data && data.found === false) this.fetchBusts();
       });
 
+      socket.on('solar:update', (data) => {
+        if (data) this.solar = data;
+        this.touch();
+      });
+
       socket.on('score:update', (data) => {
         this.score = data;
         this.fetchScoreHistory();
@@ -124,6 +132,7 @@ function dashboard() {
       this.fetchVersion();
       this.fetchFeatures();
       this.fetchBusts();
+      this.fetchSolar();
       // The rate windows decay purely with elapsed time, so they need to be
       // re-fetched on a timer even when nothing else is happening.
       setInterval(() => this.fetchRate(), 30000);
@@ -366,6 +375,32 @@ function dashboard() {
       if (!loggedAt) return '—';
       const d = new Date(loggedAt.replace(' ', 'T') + 'Z');
       return Number.isNaN(d.getTime()) ? '—' : `${d.toISOString().slice(11, 16)}z`;
+    },
+
+    async fetchSolar() {
+      try {
+        this.solar = await fetch('/api/solar').then((r) => r.json());
+      } catch (err) {
+        console.error('Failed to load solar data:', err);
+      }
+    },
+
+    // Hover text for the header chip -- the fuller picture the three
+    // headline numbers leave out.
+    solarTooltip() {
+      const s = this.solar;
+      const parts = [];
+      if (s.sfi != null) parts.push(`SFI ${s.sfi}`);
+      if (s.sunspots != null) parts.push(`SN ${s.sunspots}`);
+      if (s.a != null) parts.push(`A ${s.a}`);
+      if (s.k != null) parts.push(`K ${s.k}`);
+      if (s.xray) parts.push(`X-ray ${s.xray}`);
+      if (s.geomag) parts.push(s.geomag);
+      if (s.updated) {
+        const d = new Date(s.updated.replace(' ', 'T') + 'Z');
+        if (!Number.isNaN(d.getTime())) parts.push(`updated ${d.toISOString().slice(0, 16).replace('T', ' ')}Z`);
+      }
+      return parts.join('  ·  ');
     },
   };
 }

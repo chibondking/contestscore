@@ -22,5 +22,10 @@
       "username": "",
       "password": ""
     }
+  },
+  "solar": {
+    "enabled": true,
+    "refreshMinutes": 120,
+    "retentionDays": 365
   }
 }

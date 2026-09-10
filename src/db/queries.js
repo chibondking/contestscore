@@ -233,6 +233,16 @@ function prepare() {
       "SELECT call FROM callsign_cache WHERE source = 'hamqth' AND json_extract(data, '$.found') = 0"
     ),
 
+    // Space weather (src/solar/). Append-only; NOT part of clearAll.
+    insertSolarSnapshot: db.prepare(`
+      INSERT INTO solar_snapshots (sfi, a_index, k_index, sunspots, xray, geomag, source_updated)
+      VALUES (@sfi, @a_index, @k_index, @sunspots, @xray, @geomag, @source_updated)
+    `),
+    getLatestSolar: db.prepare('SELECT * FROM solar_snapshots ORDER BY id DESC LIMIT 1'),
+    pruneSolarByAge: db.prepare(
+      "DELETE FROM solar_snapshots WHERE fetched_at < datetime('now', @modifier)"
+    ),
+
     insertAnalyzedLog: _insertAnalyzedLog,
     getAnalyzedLog: _getAnalyzedLog,
     listAnalyzedLogs: _listAnalyzedLogs,
@@ -356,6 +366,22 @@ function cacheCallsign(call, data, source) {
 }
 function getNotFoundCalls() { return prepare().getNotFoundCalls.all().map((r) => r.call); }
 
+function insertSolarSnapshot(r = {}) {
+  return prepare().insertSolarSnapshot.run({
+    sfi: r.sfi ?? null,
+    a_index: r.a ?? null,
+    k_index: r.k ?? null,
+    sunspots: r.sunspots ?? null,
+    xray: r.xray ?? null,
+    geomag: r.geomag ?? null,
+    source_updated: r.source_updated ?? null,
+  });
+}
+function getLatestSolar() { return prepare().getLatestSolar.get() || null; }
+function pruneSolarSnapshots({ ttlDays = 365 } = {}) {
+  if (ttlDays > 0) prepare().pruneSolarByAge.run({ modifier: `-${ttlDays} days` });
+}
+
 // --- Analyzer -------------------------------------------------------------
 
 // row: { id, filename, format, contest, station_call, operators,
@@ -401,6 +427,7 @@ module.exports = {
   insertScoreBreakdown, getLatestScore, getScoreHistory, getScoreBreakdown,
   getSetting, setSetting,
   getCachedCallsign, cacheCallsign, getNotFoundCalls,
+  insertSolarSnapshot, getLatestSolar, pruneSolarSnapshots,
   insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,
   pruneAnalyzedLogs,
   resetStatements,

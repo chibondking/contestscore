@@ -4,6 +4,7 @@ const { initDb } = require('./db');
 const { startListeners } = require('./udp');
 const { initSocket } = require('./socket');
 const { startMonitor } = require('./state/bridgeStatus');
+const { createSolarService } = require('./solar');
 const config = require('../config/default.json');
 
 const port = process.env.HTTP_PORT || config.http.port;
@@ -20,6 +21,7 @@ app.set('io', io);
 
 startListeners(io);
 startMonitor(io);
+createSolarService({ io }).start();
 
 httpServer.listen(port, host, () => {
   console.log(`contestscore running at http://${host}:${port}`);

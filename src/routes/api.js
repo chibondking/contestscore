@@ -8,6 +8,7 @@ const {
 const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
 const { resolveLookupConfig, stripSuffix } = require('../lookup');
+const { resolveSolarConfig, latestSolar } = require('../solar');
 const { freqToBand } = require('../parsers/util');
 
 const router = Router();
@@ -26,7 +27,14 @@ router.get('/features', (req, res) => {
   const lk = resolveLookupConfig();
   res.json({
     lookup: { provider: lk.enabled ? lk.provider : 'none', enabled: lk.enabled },
+    solar: { enabled: resolveSolarConfig().enabled },
   });
+});
+
+// GET /api/solar -- the most recent space-weather reading (SFI / A / K /
+// sunspots) for the header. `{ updated: null }` until the first fetch lands.
+router.get('/solar', (req, res) => {
+  res.json(latestSolar());
 });
 
 // GET /api/qsos  optional ?band=&mode=&operator=
