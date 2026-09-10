@@ -327,7 +327,10 @@ Core tables:
   (`ext_id`, upserted via `ON CONFLICT` so a `contactreplace` edit updates in
   place); a `(call, band, mode, contestnr, mycall)` natural key is the
   fallback dedupe path for loggers that never send an `ID`.
-- `radio_state` -- latest state per radio (upsert by RadioNr)
+- `radio_state` -- latest state per radio (upsert by `(station_name,
+  radio_nr)`). Wiped by `DELETE /api/db` -- a pre-contest reset should drop
+  radios that were on last time but aren't now, so they stop showing as
+  connected.
 - `score_snapshots` -- one row per (band, mode) entry from each `Score`
   broadcast's `<breakdown>`, plus a `band='total' mode='ALL'` row per
   broadcast holding the contest grand total (`is_total = 1`). All rows from

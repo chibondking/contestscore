@@ -63,6 +63,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_qsos_ext_id ON qsos(ext_id) WHERE ext_id I
 -- station_name (N1MM's own StationName/NetBIOS name) disambiguates that;
 -- '' is the fallback for a packet with no StationName, which still works
 -- correctly for the common single-station case.
+-- Wiped by DELETE /api/db (clearAll): a pre-contest reset should drop a
+-- radio that was on last contest but is offline now, otherwise its stale
+-- row keeps rendering as a connected radio on every page load.
 CREATE TABLE IF NOT EXISTS radio_state (
   station_name    TEXT NOT NULL DEFAULT '',
   radio_nr        INTEGER NOT NULL,

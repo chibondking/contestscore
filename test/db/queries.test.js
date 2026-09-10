@@ -182,6 +182,17 @@ describe('radio_state', () => {
     assert.equal(radios.length, before);
     assert.equal(radios.find((r) => r.station_name === 'STATION-A').mode, 'SSB');
   });
+
+  // A pre-contest reset (DELETE /api/db) must drop stale radios too --
+  // otherwise a machine that was on last contest but is offline now keeps
+  // showing as a connected radio on every page load until its row is
+  // manually removed.
+  it('clearQsos also clears radio_state', () => {
+    q.upsertRadio(RADIO);
+    assert.ok(q.getRadios().length > 0);
+    q.clearQsos();
+    assert.equal(q.getRadios().length, 0);
+  });
 });
 
 describe('score_snapshots', () => {

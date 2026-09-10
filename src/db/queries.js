@@ -34,6 +34,7 @@ function prepare() {
   const _delQsos   = db.prepare('DELETE FROM qsos');
   const _delScores = db.prepare('DELETE FROM score_snapshots');
   const _delCache  = db.prepare('DELETE FROM callsign_cache');
+  const _delRadios = db.prepare('DELETE FROM radio_state');
 
   const cols = QSO_COLUMNS.join(', ');
   const placeholders = QSO_COLUMNS.map((c) => `@${c}`).join(', ');
@@ -205,6 +206,7 @@ function prepare() {
       _delQsos.run();
       _delScores.run();
       _delCache.run();
+      _delRadios.run();
     }),
 
     upsertRadio: _upsertRadio,
