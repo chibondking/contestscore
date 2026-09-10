@@ -162,69 +162,6 @@ function charts() {
       });
     },
 
-    // Per-operator breakdown, same bucketing idea as rateOverTime() but
-    // split by q.operator instead of pooled -- the original Node-RED
-    // dashboard's per-op stats, as a time series instead of a single
-    // snapshot table. All operators share the same bucket timeline (the
-    // union of every bucket any operator has a QSO in) so their lines land
-    // on a common x-axis. QSOs and points are cumulative (running total,
-    // the natural way to show "contribution" building up); rate and
-    // multiplier count are per-bucket, matching the overall rate chart.
-    // Multiplier credit is is_mult1/2/3 (N1MM per-QSO multiplier flags,
-    // stored on the qso row) rather than score_snapshots' mults column --
-    // that column is a per-broadcast contest total, not attributable to one
-    // operator.
-    operatorTimeSeries(bucketMinutes = this.autoBucketMinutes()) {
-      const bucketMs = bucketMinutes * 60000;
-      const perHour = 60 / bucketMinutes;
-      const operators = [...new Set(this.qsos.map((q) => q.operator || '—'))];
-      const perOp = new Map(operators.map((op) => [op, new Map()]));
-      const allBuckets = new Set();
-
-      for (const q of this.qsos) {
-        if (!q.logged_at) continue;
-        const t = new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime();
-        if (Number.isNaN(t)) continue;
-        const bucket = Math.floor(t / bucketMs) * bucketMs;
-        allBuckets.add(bucket);
-        const op = q.operator || '—';
-        const bucketMap = perOp.get(op);
-        const entry = bucketMap.get(bucket) || { qsos: 0, points: 0, mults: 0 };
-        entry.qsos += 1;
-        entry.points += Number(q.points) || 0;
-        entry.mults += (q.is_mult1 ? 1 : 0) + (q.is_mult2 ? 1 : 0) + (q.is_mult3 ? 1 : 0);
-        bucketMap.set(bucket, entry);
-      }
-
-      const buckets = [...allBuckets].sort((a, b) => a - b);
-      const labels = buckets.map((b) => new Date(b).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-
-      const series = operators.map((op, i) => {
-        let cumQsos = 0;
-        let cumPoints = 0;
-        const qsosOverTime = [];
-        const rateOverTime = [];
-        const scoreOverTime = [];
-        const multsOverTime = [];
-        for (const bucket of buckets) {
-          const entry = perOp.get(op).get(bucket) || { qsos: 0, points: 0, mults: 0 };
-          cumQsos += entry.qsos;
-          cumPoints += entry.points;
-          qsosOverTime.push(cumQsos);
-          rateOverTime.push(Math.round(entry.qsos * perHour));
-          scoreOverTime.push(cumPoints);
-          multsOverTime.push(entry.mults);
-        }
-        return {
-          operator: op,
-          color: CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length],
-          qsosOverTime, rateOverTime, scoreOverTime, multsOverTime,
-        };
-      });
-
-      return { labels, series };
-    },
-
     // Total QSOs per operator, as of right now -- a bar chart, not a time
     // series. This is the "at a glance" panel that stays visible outside
     // detailed mode: over a 48-hour contest, "who's worked the most QSOs
@@ -249,10 +186,12 @@ function charts() {
       const totals = this.operatorTotals();
       const labels = totals.map((t) => t.operator);
       const values = totals.map((t) => t.qsos);
-      // Same fixed categorical order as the detailed per-operator line
-      // charts -- an operator's color stays consistent whether Detailed
-      // view is on or off.
-      const colors = totals.map((_, i) => CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length]);
+      // Every per-operator chart on the page colours an op the same way --
+      // by its rank in total QSOs (busiest op = palette slot 0) -- so a
+      // colour means the same operator across the QSO, Rate, Score and Mult
+      // charts. See operatorColorMap().
+      const colorFor = operatorColorMap(this.qsos);
+      const colors = labels.map((op) => colorFor.get(op));
 
       if (operatorQsoChart) {
         operatorQsoChart.data.labels = labels;
@@ -272,21 +211,33 @@ function charts() {
       });
     },
 
+    // QSOs per clock-hour, stacked by operator: each hour's bar is the
+    // station's total for that hour, split into who made them. A 1-hour
+    // bucket count is itself the hourly rate, so this is "rate by operator"
+    // read as a column chart rather than several overlapping lines.
     renderOperatorRateChart() {
-      operatorRateChart = renderMultiSeriesChart(
-        operatorRateChart, 'operatorRateChart', this.operatorTimeSeries(), 'rateOverTime',
+      operatorRateChart = upsertChart(
+        operatorRateChart, 'operatorRateChart', buildOperatorRateByHour(this.qsos),
       );
     },
 
+    // One bar per operator: total QSO points contributed so far. "Score
+    // contribution" as a share-of-the-whole snapshot, matching the QSOs by
+    // Operator bar above rather than a running-total line.
     renderOperatorScoreChart() {
-      operatorScoreChart = renderMultiSeriesChart(
-        operatorScoreChart, 'operatorScoreChart', this.operatorTimeSeries(), 'scoreOverTime',
+      operatorScoreChart = upsertChart(
+        operatorScoreChart, 'operatorScoreChart',
+        buildOperatorContribution(this.qsos, (q) => Number(q.points) || 0, 'Points'),
       );
     },
 
+    // One bar per operator: total multiplier credit (is_mult1/2/3, the
+    // N1MM per-QSO flags on the qso row -- not score_snapshots.mults, which
+    // is a per-broadcast contest total and not attributable to an operator).
     renderOperatorMultChart() {
-      operatorMultChart = renderMultiSeriesChart(
-        operatorMultChart, 'operatorMultChart', this.operatorTimeSeries(), 'multsOverTime',
+      operatorMultChart = upsertChart(
+        operatorMultChart, 'operatorMultChart',
+        buildOperatorContribution(this.qsos, multCount, 'Mults'),
       );
     },
 
@@ -356,7 +307,7 @@ function charts() {
         return;
       }
 
-      // Same detached-canvas guard as renderMultiSeriesChart(): the
+      // Same detached-canvas guard as upsertChart(): the
       // x-if="qsos.length > 0" wrapper can remove and re-create these
       // canvases, orphaning the old instance.
       if (current && current.canvas !== canvas) {
@@ -393,58 +344,108 @@ const CATEGORICAL_COLORS = [
   '#e66767', // red
 ];
 
-// Shared renderer for the four per-operator charts (QSOs/rate/score/mults
-// over time) -- same series set, same x-axis, only the y-values (picked out
-// by `key`) differ. `existingChart` is the caller's own closure variable
-// (see charts()'s Alpine-reactivity note above); this returns the chart
-// instance to store back into it, whether reused or freshly created.
-function renderMultiSeriesChart(existingChart, canvasId, { labels, series }, key) {
+// Create-or-update a Chart.js instance for a canvas that Alpine may have
+// swapped out from under us (the per-operator cards live inside
+// charts.html's `x-if="detailed"` block, so their <canvas> is destroyed
+// and rebuilt every time the toggle flips). `existingChart` is the
+// caller's own closure variable; this returns the instance to store back
+// into it. A null `cfg` means "no data" -- any live chart is torn down so
+// the box goes blank instead of showing the last render.
+function upsertChart(existingChart, canvasId, cfg) {
   const canvas = document.getElementById(canvasId);
   if (!canvas || typeof Chart === 'undefined') return existingChart;
 
-  // These three charts live inside charts.html's `x-if="detailed"` block,
-  // which destroys and recreates their <canvas> elements every time the
-  // toggle flips -- a stale chart instance bound to the now-removed canvas
-  // needs to be torn down rather than reused, or .update() would silently
-  // target a detached canvas while the freshly-mounted one stays blank.
   if (existingChart && existingChart.canvas !== canvas) {
     existingChart.destroy();
     existingChart = null;
   }
-
-  const datasets = series.map((s) => ({
-    label: s.operator,
-    data: s[key],
-    borderColor: s.color,
-    backgroundColor: s.color,
-    fill: false,
-    tension: 0.3,
-    pointRadius: 0,
-    borderWidth: 2,
-  }));
-
+  if (!cfg) {
+    if (existingChart) existingChart.destroy();
+    return null;
+  }
   if (existingChart) {
-    existingChart.data.labels = labels;
-    existingChart.data.datasets = datasets;
+    existingChart.data = cfg.data;
+    existingChart.options = cfg.options;
     existingChart.update();
     return existingChart;
   }
-
-  return new Chart(canvas, {
-    type: 'line',
-    data: { labels, datasets },
-    options: multiSeriesChartOptions(),
-  });
+  return new Chart(canvas, cfg);
 }
 
-// Per-operator charts always have >=1 series and typically several, so
-// (per the dataviz skill) the legend stays on -- unlike the single-series
-// overall rate/score charts above, where the card title already names the
-// one series and a legend box would be redundant.
-function multiSeriesChartOptions() {
-  const opts = trendChartOptions();
-  opts.plugins.legend = { display: true, labels: { color: '#e6edf3' } };
-  return opts;
+// operator -> palette colour, assigned by the operator's rank in total
+// QSOs (busiest = slot 0). Every per-operator chart uses this, so a colour
+// identifies the same operator across the QSO / Rate / Score / Mult charts.
+function operatorColorMap(qsos) {
+  const totals = new Map();
+  for (const q of qsos) {
+    const op = q.operator || '—';
+    totals.set(op, (totals.get(op) || 0) + 1);
+  }
+  const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([op]) => op);
+  return new Map(ranked.map((op, i) => [op, CATEGORICAL_COLORS[i % CATEGORICAL_COLORS.length]]));
+}
+
+// QSOs per clock-hour (fixed 60-min buckets, UTC-aligned -- same timeAxis
+// the rest of the page uses), stacked by operator. Each hour's column is
+// the station's total for that hour; the segments are who made them.
+function buildOperatorRateByHour(qsos) {
+  if (!qsos.length) return null;
+  const { buckets, bucketMs, label: fmt } = timeAxis(qsos, 60);
+  if (!buckets.length) return null;
+
+  const colorFor = operatorColorMap(qsos);
+  const ops = [...colorFor.keys()];
+  const grid = new Map(ops.map((op) => [op, new Map(buckets.map((b) => [b, 0]))]));
+  for (const q of qsos) {
+    const t = qLoggedTime(q);
+    if (Number.isNaN(t)) continue;
+    const b = Math.floor(t / bucketMs) * bucketMs;
+    const row = grid.get(q.operator || '—');
+    if (row && row.has(b)) row.set(b, row.get(b) + 1);
+  }
+
+  return {
+    type: 'bar',
+    data: {
+      labels: buckets.map(fmt),
+      datasets: ops.map((op) => ({
+        label: op,
+        data: buckets.map((b) => grid.get(op).get(b)),
+        backgroundColor: colorFor.get(op),
+        borderWidth: 0,
+      })),
+    },
+    options: stackedChartOptions(),
+  };
+}
+
+// One bar per operator: the running total of `valueFn` (QSO points, or
+// multiplier credit) contributed so far, sorted biggest-first. The
+// snapshot counterpart of the QSOs by Operator bar.
+function buildOperatorContribution(qsos, valueFn, seriesLabel) {
+  if (!qsos.length) return null;
+  const totals = new Map();
+  for (const q of qsos) {
+    const op = q.operator || '—';
+    totals.set(op, (totals.get(op) || 0) + valueFn(q));
+  }
+  if (!totals.size) return null;
+
+  const colorFor = operatorColorMap(qsos);
+  const ops = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([op]) => op);
+  return {
+    type: 'bar',
+    data: {
+      labels: ops,
+      datasets: [{
+        label: seriesLabel,
+        data: ops.map((op) => totals.get(op)),
+        backgroundColor: ops.map((op) => colorFor.get(op)),
+        borderRadius: 4,
+      }],
+    },
+    options: barChartOptions(),
+  };
 }
 
 // A categorical bar per operator, direct-labeled on the x-axis -- color

@@ -58,32 +58,40 @@
       <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
     </section>
 
-    <template x-if="detailed">
+    <!-- Per-operator breakdowns. An uploaded log that carried no per-QSO
+         operator field can't be split this way at all; one that carried no
+         points / mults drops just that chart (same gating as the "more
+         charts" grid via logMeta.has_*). The live feed always has all three. -->
+    <template x-if="detailed && (!logMeta || logMeta.has_operator)">
       <div class="grid" style="padding: 0; grid-column: 1 / -1;">
 
         <section class="card card--wide" id="operator-rate-chart">
-          <h2>Rate by Operator</h2>
+          <h2>Rate by Operator (QSOs per hour)</h2>
           <div class="chart-box chart-box--trend">
             <canvas id="operatorRateChart" x-effect="renderOperatorRateChart()"></canvas>
           </div>
           <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
         </section>
 
-        <section class="card card--wide" id="operator-score-chart">
-          <h2>Score Contribution by Operator</h2>
-          <div class="chart-box chart-box--trend">
-            <canvas id="operatorScoreChart" x-effect="renderOperatorScoreChart()"></canvas>
-          </div>
-          <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
-        </section>
+        <template x-if="!logMeta || logMeta.has_points">
+          <section class="card card--wide" id="operator-score-chart">
+            <h2>Score Contribution by Operator</h2>
+            <div class="chart-box chart-box--trend">
+              <canvas id="operatorScoreChart" x-effect="renderOperatorScoreChart()"></canvas>
+            </div>
+            <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+          </section>
+        </template>
 
-        <section class="card card--wide" id="operator-mult-chart">
-          <h2>Multiplier Contribution by Operator</h2>
-          <div class="chart-box chart-box--trend">
-            <canvas id="operatorMultChart" x-effect="renderOperatorMultChart()"></canvas>
-          </div>
-          <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
-        </section>
+        <template x-if="!logMeta || logMeta.has_mults">
+          <section class="card card--wide" id="operator-mult-chart">
+            <h2>Multiplier Contribution by Operator</h2>
+            <div class="chart-box chart-box--trend">
+              <canvas id="operatorMultChart" x-effect="renderOperatorMultChart()"></canvas>
+            </div>
+            <p x-show="qsos.length === 0" class="empty">No QSOs logged yet</p>
+          </section>
+        </template>
 
       </div>
     </template>
