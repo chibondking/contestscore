@@ -89,6 +89,19 @@ function prepare() {
     ORDER BY logged_at DESC
   `);
 
+  // Fetch a single stored row the same way upsertQso decides identity: by
+  // ext_id when N1MM sent one, else by the natural key that backs the
+  // qsos UNIQUE constraint. Used to re-read a QSO right after writing it so
+  // the socket payload carries the DB-assigned columns the parsed packet
+  // lacks (id, and logged_at -- see the getQsoCountSince note below).
+  const _getQsoByExtId = db.prepare('SELECT * FROM qsos WHERE ext_id = @ext_id');
+  const _getQsoByNaturalKey = db.prepare(`
+    SELECT * FROM qsos
+    WHERE call = @call AND band = @band AND mode = @mode
+      AND contestnr = @contestnr AND mycall = @mycall
+    ORDER BY id DESC LIMIT 1
+  `);
+
   // logged_at is our own ingestion timestamp (datetime('now'), UTC), not
   // N1MM's n1mm_timestamp -- using it means the rate reflects when this
   // server actually recorded the QSO, consistent regardless of clock skew
@@ -201,6 +214,8 @@ function prepare() {
     deleteQsoByExtId: _deleteQsoByExtId,
     deleteQsoFallback: _deleteQsoFallback,
     getQsos: _getQsos,
+    getQsoByExtId: _getQsoByExtId,
+    getQsoByNaturalKey: _getQsoByNaturalKey,
     getQsoCountSince: _getQsoCountSince,
     clearAll: db.transaction(() => {
       _delQsos.run();
@@ -292,6 +307,25 @@ function getQsos({ band, mode, operator } = {}) {
     operator: operator || null,
   });
 }
+
+// The row for `qso` as actually stored, or null if it isn't there. Carries
+// the columns the parsed packet doesn't -- notably `logged_at`, our own UTC
+// ingest timestamp, which the dashboard's per-operator peak-rate buckets
+// key off. Identity resolves the same way upsertQso writes it: by ext_id
+// when present, else by the (call, band, mode, contestnr, mycall) natural
+// key.
+function getPersistedQso(qso) {
+  const q = prepare();
+  if (qso.ext_id) return q.getQsoByExtId.get({ ext_id: qso.ext_id }) || null;
+  return q.getQsoByNaturalKey.get({
+    call:      qso.call      || '',
+    band:      qso.band      || '',
+    mode:      qso.mode      || '',
+    contestnr: qso.contestnr || '',
+    mycall:    qso.mycall    || '',
+  }) || null;
+}
+
 function clearQsos() { return prepare().clearAll(); }
 
 // N1MM-style rate meter: QSO count in each of several trailing windows,
@@ -424,7 +458,7 @@ function pruneAnalyzedLogs({ keep = 200, ttlDays = 365 } = {}) {
 }
 
 module.exports = {
-  upsertQso, deleteQso, getQsos, clearQsos, getQsoRate,
+  upsertQso, deleteQso, getQsos, getPersistedQso, clearQsos, getQsoRate,
   upsertRadio, getRadios,
   insertScoreBreakdown, getLatestScore, getScoreHistory, getScoreBreakdown,
   getSetting, setSetting,

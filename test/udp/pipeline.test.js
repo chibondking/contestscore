@@ -136,6 +136,11 @@ describe('contact pipeline', () => {
     assert.ok(evt);
     assert.equal(evt.payload.call, 'DL1ABC');
     assert.equal(evt.payload.continent, 'EU');
+    // The emitted payload is the stored row, so it carries the DB-assigned
+    // columns the parsed packet never had -- the dashboard's per-operator
+    // peak-rate buckets depend on logged_at being present here.
+    assert.ok(evt.payload.id, 'emitted contact:new should carry the DB row id');
+    assert.match(evt.payload.logged_at, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
   });
 
   it('contactreplace updates the existing row instead of duplicating it', async () => {
@@ -153,11 +158,20 @@ describe('contact pipeline', () => {
   <ID>pipeline-test-0001</ID>
   <IsOriginal>False</IsOriginal>
 </contactreplace>`;
+    const before = getQsos().find((q) => q.ext_id === 'pipeline-test-0001');
+    io.events.length = 0;
     await send(xml, CONTACT_PORT);
     await waitFor(() => (getQsos().find((q) => q.ext_id === 'pipeline-test-0001') || {}).points === 3);
 
     const rows = getQsos().filter((q) => q.ext_id === 'pipeline-test-0001');
     assert.equal(rows.length, 1); // updated in place, not duplicated
+
+    // The re-emitted contact:new is the updated row, keeping its original
+    // logged_at -- an edit must not shove the QSO into the current rate bucket.
+    const evt = io.events.find((e) => e.name === 'contact:new');
+    assert.ok(evt);
+    assert.equal(evt.payload.points, 3);
+    assert.equal(evt.payload.logged_at, before.logged_at);
   });
 
   it('contactdelete removes the row and emits contact:delete', async () => {

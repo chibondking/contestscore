@@ -3,7 +3,7 @@ const { createRadioListener } = require('./radioListener');
 const { createContactListener } = require('./contactListener');
 const { createScoreListener } = require('./scoreListener');
 const {
-  upsertRadio, upsertQso, deleteQso, insertScoreBreakdown, cacheCallsign,
+  upsertRadio, upsertQso, getPersistedQso, deleteQso, insertScoreBreakdown, cacheCallsign,
 } = require('../db/queries');
 const { freqToBand } = require('../parsers/util');
 const { enrichGeo } = require('../analyze/geo');
@@ -42,8 +42,14 @@ function startListeners(io) {
     // override. Keeps the dashboard's by-continent breakdown working
     // regardless of logger. Same helper the log analyzer uses.
     enrichGeo(data);
-    safely('contact:new', () => upsertQso(data));
-    io.emit('contact:new', data);
+    // Emit the row as stored, not the parsed packet: the DB fills `logged_at`
+    // (our UTC ingest time) and `id`, and the parsed packet carries neither.
+    // The dashboard's per-operator peak-rate buckets key off `logged_at`, so
+    // emitting the raw packet drops every live QSO after page load from that
+    // aggregate -- the columns freeze at the initial /api/qsos snapshot.
+    let persisted = null;
+    safely('contact:new', () => { upsertQso(data); persisted = getPersistedQso(data); });
+    io.emit('contact:new', persisted || data);
     if (data.call) lookup.enqueue(data.call);
   });
 
