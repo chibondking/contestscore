@@ -30,6 +30,13 @@ function dashboard() {
     // Only changes on a real deploy -- a stale/cached page would show an
     // old timestamp here even though nothing else looks obviously wrong.
     version: {},
+    // Optional-feature switches from GET /api/features. `lookup.enabled`
+    // gates the Possible Busts card entirely -- no lookup provider, no card.
+    features: {},
+    // QSOs whose callsign HamQTH doesn't recognise (from GET /api/busts).
+    // Server-derived from the live log + cache, so a call fixed in the
+    // logger drops off on the next fetch (the 60s poll or a lookup:result).
+    busts: [],
     // "Last updated" ticker: lastUpdateAt bumps on every socket event or
     // successful poll; now ticks every second so secondsSinceUpdate()
     // counts up live in the header even between events, proving the page
@@ -77,7 +84,16 @@ function dashboard() {
           data.ext_id ? q.ext_id !== data.ext_id : !(q.call === data.call && q.band === data.band)
         ));
         this.fetchRate();
+        this.fetchBusts(); // a deleted QSO may have been a flagged bust
         this.touch();
+      });
+
+      // The lookup:result event fires for both N1MM's own <lookupinfo> and
+      // the HamQTH queue. A not-found result is a new possible bust -- pull
+      // the freshly-derived list rather than trying to reconstruct the row
+      // (band/mode/op) from the lookup payload, which doesn't carry it.
+      socket.on('lookup:result', (data) => {
+        if (data && data.found === false) this.fetchBusts();
       });
 
       socket.on('score:update', (data) => {
@@ -99,15 +115,21 @@ function dashboard() {
         this.score = {};
         this.scoreHistory = [];
         this.radios = [];
+        this.busts = [];
         this.fetchRate(); // trailing windows should drop to zero, not linger
         this.touch();
       });
 
       this.fetchInitialState();
       this.fetchVersion();
+      this.fetchFeatures();
+      this.fetchBusts();
       // The rate windows decay purely with elapsed time, so they need to be
       // re-fetched on a timer even when nothing else is happening.
       setInterval(() => this.fetchRate(), 30000);
+      // Slow safety-net poll so a bust that was corrected in the logger
+      // clears even if the lookup:result / contact events were missed.
+      setInterval(() => this.fetchBusts(), 60000);
       // Drives the header's live "updated Xs ago" ticker.
       setInterval(() => { this.now = Date.now(); }, 1000);
     },
@@ -320,6 +342,30 @@ function dashboard() {
       } catch (err) {
         console.error('Failed to load version info:', err);
       }
+    },
+
+    async fetchFeatures() {
+      try {
+        this.features = await fetch('/api/features').then((r) => r.json());
+      } catch (err) {
+        console.error('Failed to load features:', err);
+      }
+    },
+
+    async fetchBusts() {
+      try {
+        const res = await fetch('/api/busts').then((r) => r.json());
+        this.busts = res.busts || [];
+      } catch (err) {
+        console.error('Failed to refresh busts:', err);
+      }
+    },
+
+    // DB logged_at is UTC "YYYY-MM-DD HH:MM:SS"; show just HH:MMz.
+    bustTime(loggedAt) {
+      if (!loggedAt) return '—';
+      const d = new Date(loggedAt.replace(' ', 'T') + 'Z');
+      return Number.isNaN(d.getTime()) ? '—' : `${d.toISOString().slice(11, 16)}z`;
     },
   };
 }

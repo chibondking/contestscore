@@ -259,6 +259,12 @@ body {
 
 .empty { color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }
 
+/* Possible Busts: an attention panel, not an error one -- reuse the
+   dashboard's amber/orange --run token (same as the grid locator / RUN
+   flag) rather than the red reserved for hard failure states. */
+#busts h2 { color: var(--run); }
+.bust-call { color: var(--run); font-weight: 700; }
+
 /* Recent QSOs + continent breakdown side panel */
 .log-layout {
   display: flex;

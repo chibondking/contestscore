@@ -100,6 +100,36 @@
       <p x-show="radios.length === 0" class="empty">No radio data yet</p>
     </section>
 
+    <!-- Possible busts: callsigns HamQTH doesn't recognise. Only rendered
+         when live lookup is enabled (features.lookup.enabled from
+         /api/features) AND there's at least one -- an empty card would just
+         be noise. The list is derived server-side from the current log, so
+         a call fixed in the logger drops off within a minute. -->
+    <section class="card card--wide" id="busts"
+             x-show="features.lookup && features.lookup.enabled && busts.length > 0">
+      <h2 x-text="'Possible Busts (' + busts.length + ')'"></h2>
+      <table class="qso-table">
+        <thead>
+          <tr><th>Call</th><th>Band</th><th>Mode</th><th>Operator</th><th>Logged</th></tr>
+        </thead>
+        <tbody>
+          <template x-for="b in busts" :key="b.call + b.band + b.mode">
+            <tr>
+              <td class="bust-call" x-text="b.call"></td>
+              <td x-text="b.band"></td>
+              <td x-text="b.mode"></td>
+              <td x-text="b.operator || '—'"></td>
+              <td x-text="bustTime(b.logged_at)"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <p class="empty">
+        Not found in HamQTH — could be a miscopy, or just a new / special-event /
+        rare-DX call. Worth a second look before the log deadline.
+      </p>
+    </section>
+
     <section class="card card--wide" id="operators" x-show="qsos.length > 0">
       <h2>Operators</h2>
       <table class="qso-table">

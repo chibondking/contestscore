@@ -364,6 +364,14 @@ Environment variables override config file. See `.env.example`.
 - `GET /api/features` -- optional-feature switches the dashboard reads before
   showing/hiding panels; currently `{ lookup: { provider, enabled } }`. Read
   live from env per request.
+- `GET /api/busts` -- `{ enabled, busts: [{ call, band, mode, operator,
+  logged_at }] }`: logged QSOs whose suffix-stripped call the HamQTH lookup
+  marked not-found. `enabled: false` (empty list) when lookup is off, so the
+  dashboard hides the panel. Derived fresh from `qsos` + `callsign_cache`
+  each call -- a call corrected in the logger stops matching on the next
+  fetch. No new socket event: the dashboard re-fetches this on any
+  `lookup:result` with `found === false`, on `contact:delete`, and on a 60s
+  safety poll.
 - `GET /api/score` -- current score
 - `GET /api/score/history` -- score time series
 - `GET /api/radios` -- current state of all radios
@@ -536,6 +544,17 @@ blocks, and every failure path logs and continues.
 
 Results are cached in `callsign_cache` to avoid re-querying during a
 contest; the cache is cleared on `DELETE /api/db`.
+
+**Possible Busts panel** (`public/index.html` `#busts`): a dashboard card
+listing logged QSOs whose call HamQTH didn't recognise -- a likely miscopy.
+Server side it's just `GET /api/busts` joining `qsos` against the
+not-found `callsign_cache` rows (`json_extract(data,'$.found') = 0`,
+`source = 'hamqth'`) on the suffix-stripped call. Client side it's gated on
+`features.lookup.enabled` AND a non-empty list, so it's invisible unless
+lookup is on and something is actually flagged. Deliberately not a stored
+flag table -- deriving it fresh means a correction in the logger clears it
+with no extra bookkeeping, and it's wiped by `DELETE /api/db` for free
+(the cache is). Dashboard only; the analyzer has no equivalent.
 
 ## What Is NOT in Scope
 

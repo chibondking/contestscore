@@ -3,10 +3,11 @@ const {
   getQsos, clearQsos, getQsoRate,
   getRadios,
   getLatestScore, getScoreHistory,
+  getNotFoundCalls,
 } = require('../db/queries');
 const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
-const { resolveLookupConfig } = require('../lookup');
+const { resolveLookupConfig, stripSuffix } = require('../lookup');
 const { freqToBand } = require('../parsers/util');
 
 const router = Router();
@@ -76,6 +77,33 @@ router.get('/rate', (req, res) => {
 // socket event.
 router.get('/bridges', (req, res) => {
   res.json(getStatuses());
+});
+
+// GET /api/busts -- logged QSOs whose callsign HamQTH doesn't recognise
+// (a likely miscopy). `{ enabled: false, busts: [] }` when lookup is off,
+// so the dashboard can hide the panel entirely. Derived fresh from the
+// current qsos + cache, so a call corrected in the logger simply stops
+// matching on the next fetch. Matches on the suffix-stripped call, since
+// that's what the lookup queue keys the cache by.
+router.get('/busts', (req, res) => {
+  if (!resolveLookupConfig().enabled) return res.json({ enabled: false, busts: [] });
+
+  const notFound = new Set(getNotFoundCalls());
+  const seen = new Set();
+  const busts = [];
+  if (notFound.size) {
+    for (const q of getQsos()) {
+      if (!notFound.has(stripSuffix(q.call))) continue;
+      const key = `${q.call}|${q.band}|${q.mode}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      busts.push({
+        call: q.call, band: q.band, mode: q.mode,
+        operator: q.operator || '', logged_at: q.logged_at,
+      });
+    }
+  }
+  res.json({ enabled: true, busts });
 });
 
 // DELETE /api/db  requires X-Confirm: yes, plus a bearer token whenever

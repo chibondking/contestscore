@@ -5,7 +5,9 @@ const http = require('node:http');
 const { describe, it, before, after, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { initDb, closeDb } = require('../../src/db/index');
-const { resetStatements, insertScoreBreakdown, upsertRadio } = require('../../src/db/queries');
+const {
+  resetStatements, insertScoreBreakdown, upsertRadio, upsertQso, cacheCallsign, clearQsos,
+} = require('../../src/db/queries');
 
 let server;
 let baseUrl;
@@ -140,5 +142,58 @@ describe('GET /api/features', () => {
     process.env.LOOKUP_PROVIDER = 'hamqth';
     const body = await (await fetch(`${baseUrl}/api/features`)).json();
     assert.deepEqual(body.lookup, { provider: 'none', enabled: false });
+  });
+});
+
+describe('GET /api/busts', () => {
+  const enableLookup = () => {
+    process.env.LOOKUP_PROVIDER = 'hamqth';
+    process.env.HAMQTH_USERNAME = 'W1AW';
+    process.env.HAMQTH_PASSWORD = 'x';
+  };
+
+  beforeEach(() => { clearQsos(); });
+  afterEach(() => {
+    clearQsos();
+    delete process.env.LOOKUP_PROVIDER;
+    delete process.env.HAMQTH_USERNAME;
+    delete process.env.HAMQTH_PASSWORD;
+  });
+
+  it('is disabled (and empty) when lookup is off', async () => {
+    const body = await (await fetch(`${baseUrl}/api/busts`)).json();
+    assert.deepEqual(body, { enabled: false, busts: [] });
+  });
+
+  it('lists logged QSOs whose base call HamQTH did not find', async () => {
+    enableLookup();
+    cacheCallsign('WT2ZZZ', { call: 'WT2ZZZ', source: 'hamqth', found: false }, 'hamqth');
+    cacheCallsign('W1AW', { call: 'W1AW', source: 'hamqth', found: true }, 'hamqth');
+    upsertQso({ ext_id: 'a', call: 'WT2ZZZ', band: '20', mode: 'CW', operator: 'WT2P' });
+    upsertQso({ ext_id: 'b', call: 'W1AW', band: '20', mode: 'CW', operator: 'WT2P' });   // found -> not a bust
+    upsertQso({ ext_id: 'c', call: 'K3LR', band: '15', mode: 'CW', operator: 'WT2P' });   // uncached -> not a bust
+
+    const body = await (await fetch(`${baseUrl}/api/busts`)).json();
+    assert.equal(body.enabled, true);
+    assert.equal(body.busts.length, 1);
+    assert.equal(body.busts[0].call, 'WT2ZZZ');
+    assert.equal(body.busts[0].band, '20');
+    assert.equal(body.busts[0].operator, 'WT2P');
+  });
+
+  it('matches a portable call against its suffix-stripped cache entry', async () => {
+    enableLookup();
+    cacheCallsign('N0XXX', { call: 'N0XXX', source: 'hamqth', found: false }, 'hamqth');
+    upsertQso({ ext_id: 'd', call: 'N0XXX/7', band: '40', mode: 'SSB', operator: 'K1ABC' });
+
+    const body = await (await fetch(`${baseUrl}/api/busts`)).json();
+    assert.deepEqual(body.busts.map((b) => b.call), ['N0XXX/7']);
+  });
+
+  it('returns an empty list when lookup is on but nothing is flagged', async () => {
+    enableLookup();
+    upsertQso({ ext_id: 'e', call: 'W1AW', band: '20', mode: 'CW', operator: 'WT2P' });
+    const body = await (await fetch(`${baseUrl}/api/busts`)).json();
+    assert.deepEqual(body, { enabled: true, busts: [] });
   });
 });

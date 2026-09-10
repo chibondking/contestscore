@@ -226,6 +226,12 @@ function prepare() {
     cacheCallsign: db.prepare(
       'INSERT OR REPLACE INTO callsign_cache (call, data, source) VALUES (?, ?, ?)'
     ),
+    // Base calls the HamQTH lookup marked not-found -- raw material for the
+    // dashboard's possible-busts panel. json_extract is SQLite's JSON1,
+    // bundled with better-sqlite3.
+    getNotFoundCalls: db.prepare(
+      "SELECT call FROM callsign_cache WHERE source = 'hamqth' AND json_extract(data, '$.found') = 0"
+    ),
 
     insertAnalyzedLog: _insertAnalyzedLog,
     getAnalyzedLog: _getAnalyzedLog,
@@ -348,6 +354,7 @@ function getCachedCallsign(call) { return prepare().getCachedCallsign.get(call);
 function cacheCallsign(call, data, source) {
   return prepare().cacheCallsign.run(call, JSON.stringify(data), source);
 }
+function getNotFoundCalls() { return prepare().getNotFoundCalls.all().map((r) => r.call); }
 
 // --- Analyzer -------------------------------------------------------------
 
@@ -393,7 +400,7 @@ module.exports = {
   upsertRadio, getRadios,
   insertScoreBreakdown, getLatestScore, getScoreHistory, getScoreBreakdown,
   getSetting, setSetting,
-  getCachedCallsign, cacheCallsign,
+  getCachedCallsign, cacheCallsign, getNotFoundCalls,
   insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,
   pruneAnalyzedLogs,
   resetStatements,

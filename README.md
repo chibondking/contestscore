@@ -229,6 +229,7 @@ never gets forwarded to a client.
 | GET    | `/api/radios`           | Current state of all radios (`band`, never the exact frequency) |
 | GET    | `/api/rate`             | N1MM-style rate meter: QSOs/hr for trailing 10/30/60 min |
 | GET    | `/api/bridges`          | Realtime/stale/offline status per ContestPulse station |
+| GET    | `/api/busts`            | Logged QSOs HamQTH doesn't recognise (`{ enabled, busts }`); `enabled:false` when lookup is off |
 | DELETE | `/api/db`               | Wipe all contest data (requires `X-Confirm: yes`, plus a bearer token if `CONTESTSCORE_API_TOKEN` is set) |
 | POST   | `/api/ingest/{radio,contact,score}` | Raw N1MM XML bytes from the ContestPulse bridge (bearer token required, dispatched by XML root element like the UDP listeners) |
 | POST   | `/api/ingest/heartbeat` | `{ "station_id": "..." }` liveness ping from ContestPulse |
@@ -303,6 +304,14 @@ result is pushed to the dashboard as a `lookup:result` event. This is a
 **live-dashboard feature only** — the offline analyzer never makes lookup
 calls. Results are cached in SQLite for the duration of the contest and wiped
 on `DELETE /api/db`. `GET /api/features` reports whether lookup is on.
+
+**Possible Busts panel.** When lookup is enabled, the dashboard shows a card
+listing logged QSOs whose callsign HamQTH doesn't recognise (after stripping
+`/P`, `/4`, `/QRP`, … suffixes) — a likely miscopy like `WT2ZZZ`. It's a
+hint, not a verdict: a brand-new licensee or a special-event call can land
+there too. The list is derived fresh from the current log, so a call fixed
+in the logger drops off within a minute. The card is hidden entirely when
+lookup is off.
 
 ## Database
 
