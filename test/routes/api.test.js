@@ -113,3 +113,32 @@ describe('GET /api/version', () => {
     assert.ok(!Number.isNaN(Date.parse(body.deployedAt)));
   });
 });
+
+describe('GET /api/features', () => {
+  afterEach(() => {
+    delete process.env.LOOKUP_PROVIDER;
+    delete process.env.HAMQTH_USERNAME;
+    delete process.env.HAMQTH_PASSWORD;
+  });
+
+  it('reports lookup disabled by default', async () => {
+    const res = await fetch(`${baseUrl}/api/features`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual(body.lookup, { provider: 'none', enabled: false });
+  });
+
+  it('reports hamqth once a provider + credentials are configured', async () => {
+    process.env.LOOKUP_PROVIDER = 'hamqth';
+    process.env.HAMQTH_USERNAME = 'W1AW';
+    process.env.HAMQTH_PASSWORD = 'x';
+    const body = await (await fetch(`${baseUrl}/api/features`)).json();
+    assert.deepEqual(body.lookup, { provider: 'hamqth', enabled: true });
+  });
+
+  it('a provider without credentials stays disabled', async () => {
+    process.env.LOOKUP_PROVIDER = 'hamqth';
+    const body = await (await fetch(`${baseUrl}/api/features`)).json();
+    assert.deepEqual(body.lookup, { provider: 'none', enabled: false });
+  });
+});

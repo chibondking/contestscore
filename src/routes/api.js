@@ -6,6 +6,7 @@ const {
 } = require('../db/queries');
 const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
+const { resolveLookupConfig } = require('../lookup');
 const { freqToBand } = require('../parsers/util');
 
 const router = Router();
@@ -15,6 +16,16 @@ const router = Router();
 // changes on a real deploy, never on its own).
 router.get('/version', (req, res) => {
   res.json(getVersionInfo());
+});
+
+// GET /api/features -- runtime feature switches the dashboard needs to know
+// about so it can show/hide optional panels (e.g. the busts panel only
+// exists when callsign lookup is enabled). Read live from env each call.
+router.get('/features', (req, res) => {
+  const lk = resolveLookupConfig();
+  res.json({
+    lookup: { provider: lk.enabled ? lk.provider : 'none', enabled: lk.enabled },
+  });
 });
 
 // GET /api/qsos  optional ?band=&mode=&operator=

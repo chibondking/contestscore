@@ -200,6 +200,9 @@ The pure suites run under Deno on a machine without Node
 - **No scoring engine.** Points / multipliers for a bare Cabrillo would
   mean reimplementing per-contest scoring; deliberately out of scope. Use
   an ADIF export or the live snapshot when you need them.
+- **No callsign lookup.** `src/lookup/` (HamQTH) is a live-dashboard
+  feature; the analyzer never calls it, so a saved analysis stays
+  reproducible offline. Geo enrichment here is the bundled `cty.csv` only.
 - ADIF removed-QSO detection is limited to `APP_N1MM_ISCLAIMEDQSO`.
 - No in-browser "quick look" (parse without saving) — the parsers are pure
   enough for it, it's just not wired up.

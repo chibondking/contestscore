@@ -13,7 +13,12 @@
   },
   "lookup": {
     "provider": "none",
+    "prg": "contestscore",
     "qrz": {
+      "username": "",
+      "password": ""
+    },
+    "hamqth": {
       "username": "",
       "password": ""
     }

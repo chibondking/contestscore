@@ -7,6 +7,7 @@ const {
 } = require('../db/queries');
 const { freqToBand } = require('../parsers/util');
 const { enrichGeo } = require('../analyze/geo');
+const { createLookupService } = require('../lookup');
 const config = require('../../config/default.json');
 
 const emitter = new EventEmitter();
@@ -19,6 +20,10 @@ function safely(label, fn) {
 }
 
 function startListeners(io) {
+  // Live callsign lookup (HamQTH). No-op unless LOOKUP_PROVIDER + creds are
+  // set. Never used by the offline analyzer.
+  const lookup = createLookupService({ emitter });
+
   emitter.on('radio:update', (data) => {
     safely('radio:update', () => upsertRadio(data));
     // The exact freq/tx_freq stay in radio_state (upsertRadio, above) --
@@ -39,6 +44,7 @@ function startListeners(io) {
     enrichGeo(data);
     safely('contact:new', () => upsertQso(data));
     io.emit('contact:new', data);
+    if (data.call) lookup.enqueue(data.call);
   });
 
   emitter.on('contact:delete', (data) => {
@@ -65,10 +71,15 @@ function startListeners(io) {
     });
   });
 
+  // Single writer to callsign_cache -- fed by N1MM's own <lookupinfo>
+  // (source 'n1mm') and by the HamQTH lookup service (source 'hamqth').
   emitter.on('lookup:result', (data) => {
-    safely('lookup:result', () => { if (data.call) cacheCallsign(data.call, data, 'n1mm'); });
+    safely('lookup:result', () => { if (data.call) cacheCallsign(data.call, data, data.source || 'n1mm'); });
     io.emit('lookup:result', data);
   });
+
+  // Back-fill lookups for QSOs already logged (server restarted mid-contest).
+  lookup.prime();
 
   const radioPort = Number(process.env.UDP_RADIO_PORT) || config.udp.radioPort;
   const contactPort = Number(process.env.UDP_CONTACT_PORT) || config.udp.contactPort;

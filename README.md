@@ -222,6 +222,7 @@ never gets forwarded to a client.
 | Method | Path                    | Description                                          |
 |--------|-------------------------|-------------------------------------------------------|
 | GET    | `/api/version`          | Commit + deploy timestamp, for spotting a stale/cached page |
+| GET    | `/api/features`         | Optional-feature switches the dashboard reads (e.g. `lookup.enabled`) |
 | GET    | `/api/qsos`             | All QSOs. Filters: `?band=20&mode=CW&operator=W1OP`  |
 | GET    | `/api/score`            | Latest score snapshot (`total`/`score_total` both present) |
 | GET    | `/api/score/history`    | Full score time series                               |
@@ -292,11 +293,16 @@ Copy `.env.example` to `.env` and fill in any values you want to override.
 Set `lookup.provider` in `config/default.json` (or `LOOKUP_PROVIDER` env var):
 
 - `none` — disabled (default)
-- `hamdb` — free, no credentials needed, limited DXCC coverage
-- `qrz` — requires an XML-data subscription; set `QRZ_USERNAME` / `QRZ_PASSWORD`
+- `hamqth` — free account at [hamqth.com](https://www.hamqth.com/); set
+  `HAMQTH_USERNAME` / `HAMQTH_PASSWORD`
+- `qrz`, `hamdb` — named in the config but **not implemented yet**
 
-Lookup results are cached in SQLite for the duration of the contest and wiped
-on `DELETE /api/db`.
+With a provider enabled, every new QSO's callsign is looked up in the
+background (one request at a time, paced, de-duped against the cache) and the
+result is pushed to the dashboard as a `lookup:result` event. This is a
+**live-dashboard feature only** — the offline analyzer never makes lookup
+calls. Results are cached in SQLite for the duration of the contest and wiped
+on `DELETE /api/db`. `GET /api/features` reports whether lookup is on.
 
 ## Database
 

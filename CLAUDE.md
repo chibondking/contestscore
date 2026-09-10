@@ -180,6 +180,9 @@ contestscore/
       queries.js            # all prepared statements
     socket/
       index.js              # socket.io setup, event->broadcast mapping
+    lookup/                 # live-dashboard callsign lookup (HamQTH). NOT used by src/analyze/
+      index.js              # provider resolution, the paced/de-duped queue, prime()
+      hamqth.js             # HamQTH XML API client (session token, <search> normalisation)
     routes/
       api.js                # REST endpoints for historical data
       ingest.js             # POST /api/ingest/* (ContestPulse HTTP transport)
@@ -338,8 +341,9 @@ Schema lives in `src/db/schema.sql`. Migrations are numbered files in
 - UDP ports (defaults: 12060, 12061, 12062)
 - HTTP port (default: 3000)
 - DB path (default: ./data/qsos.db)
-- Callsign lookup provider: `qrz` | `hamdb` | `none`
-- QRZ credentials (also via env vars)
+- Callsign lookup provider: `hamqth` | `none` (see "Callsign Lookup" below;
+  `qrz`/`hamdb` are in the config shape but unimplemented)
+- HamQTH / QRZ credentials (also via env vars)
 
 Environment variables override config file. See `.env.example`.
 
@@ -357,6 +361,9 @@ Environment variables override config file. See `.env.example`.
 ## REST API
 
 - `GET /api/qsos` -- all QSOs, optional `?band=&mode=&operator=`
+- `GET /api/features` -- optional-feature switches the dashboard reads before
+  showing/hiding panels; currently `{ lookup: { provider, enabled } }`. Read
+  live from env per request.
 - `GET /api/score` -- current score
 - `GET /api/score/history` -- score time series
 - `GET /api/radios` -- current state of all radios
@@ -499,13 +506,36 @@ To run as a service, use the provided `contestscore.service` systemd unit file.
 
 ## Callsign Lookup
 
-Providers (configured in `config/default.json`):
-- `hamdb` -- free, limited DXCC coverage, no credentials needed
-- `qrz` -- requires XML subscription, credentials via env or config
-- `none` -- disables lookup
+`src/lookup/` -- a **live-dashboard-only** subsystem. `src/analyze/` must
+never import it (a saved analysis has to be reproducible offline). Provider
+via `config/default.json` `lookup.provider` or `LOOKUP_PROVIDER`:
 
-Results are cached in the `callsign_cache` table to avoid re-querying during
-a contest. Cache is cleared on DB reset.
+- `hamqth` -- the only implemented provider. Free account; creds via
+  `HAMQTH_USERNAME` / `HAMQTH_PASSWORD` (env, or `lookup.hamqth` in config).
+  Session-token XML API (`src/lookup/hamqth.js`); token cached ~55 min,
+  refreshed on expiry.
+- `qrz`, `hamdb` -- present in the config shape and the docs' history, but
+  not implemented. Don't claim they work.
+- `none` (default) -- `createLookupService` returns an inert object;
+  `enqueue()` is a no-op.
+
+`src/udp/index.js` calls `lookup.enqueue(call)` on every `contact:new`
+(covers `contactreplace` too). The service strips portable suffixes
+(`stripSuffix`), skips anything already in `callsign_cache` (any source) or
+already queued/in-flight, then works the queue **one request at a time**
+with a ~350 ms gap and exponential backoff on error -- an upstream outage
+only slows the queue, it can't touch the dashboard. Each result is emitted
+as `lookup:result` (the same event N1MM's own `<lookupinfo>` uses); the
+`udp/index.js` handler is the single writer to `callsign_cache`, tagging the
+row with `data.source` (`'n1mm'` or `'hamqth'`). `prime()` runs once at
+startup to back-fill lookups for QSOs already logged (restart mid-contest).
+
+This is the first outbound HTTP the Node process makes (ContestPulse aside,
+which is a separate Go program). Keep it that way by default: nothing here
+blocks, and every failure path logs and continues.
+
+Results are cached in `callsign_cache` to avoid re-querying during a
+contest; the cache is cleared on `DELETE /api/db`.
 
 ## What Is NOT in Scope
 
