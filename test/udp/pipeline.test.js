@@ -174,6 +174,34 @@ describe('contact pipeline', () => {
     assert.equal(evt.payload.logged_at, before.logged_at);
   });
 
+  it('corrects a hardcoded continent/countryprefix from the callsign (not1mm sends NA/K on every QSO)', async () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<contactinfo>
+  <contestname>CQ-WPX-CW</contestname>
+  <contestnr>73</contestnr>
+  <mycall>K1TTT</mycall>
+  <band>14</band>
+  <operator>K1TTT</operator>
+  <mode>CW</mode>
+  <call>JA1ABC</call>
+  <continent>NA</continent>
+  <countryprefix>K</countryprefix>
+  <points>1</points>
+  <radionr>1</radionr>
+  <ID>pipeline-test-cont</ID>
+  <IsOriginal>True</IsOriginal>
+</contactinfo>`;
+    await send(xml, CONTACT_PORT);
+    await waitFor(() => getQsos().some((q) => q.ext_id === 'pipeline-test-cont'));
+
+    const row = getQsos().find((q) => q.ext_id === 'pipeline-test-cont');
+    assert.equal(row.continent, 'AS');
+    assert.equal(row.countryprefix, 'JA');
+    const evt = io.events.filter((e) => e.name === 'contact:new').at(-1);
+    assert.equal(evt.payload.continent, 'AS');
+    assert.equal(evt.payload.countryprefix, 'JA');
+  });
+
   it('contactdelete removes the row and emits contact:delete', async () => {
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <contactdelete>

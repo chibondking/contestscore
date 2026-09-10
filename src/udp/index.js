@@ -37,11 +37,13 @@ function startListeners(io) {
   });
 
   emitter.on('contact:new', (data) => {
-    // Fill continent / CQ zone / DXCC prefix from the country file when the
-    // logger didn't send them (TR4W, older N1MM) -- fill only, never
-    // override. Keeps the dashboard's by-continent breakdown working
-    // regardless of logger. Same helper the log analyzer uses.
-    enrichGeo(data);
+    // Fill continent / CQ zone / DXCC prefix from the country file. zone is
+    // fill-only; continent + countryprefix are forced from the callsign
+    // because not1mm's contactinfo packet hardcodes continent="NA"
+    // countryprefix="K" on every QSO, which otherwise dumps the whole log
+    // into the NA bucket on the dashboard. Same helper the log analyzer
+    // uses (analyzer keeps the plain fill-only behaviour).
+    enrichGeo(data, { override: ['continent', 'countryprefix'] });
     // Emit the row as stored, not the parsed packet: the DB fills `logged_at`
     // (our UTC ingest time) and `id`, and the parsed packet carries neither.
     // The dashboard's per-operator peak-rate buckets key off `logged_at`, so

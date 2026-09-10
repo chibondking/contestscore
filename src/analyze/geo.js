@@ -38,19 +38,38 @@ function resolveCall(call) {
   return r ? r(call) : null;
 }
 
-// Fill blank continent / zone / countryprefix on `qso` in place. Returns
-// the same object. A zone of '0' counts as blank (some loggers emit it).
-function enrichGeo(qso) {
+// Fill blank continent / zone / countryprefix on `qso` in place from the
+// country file. Returns the same object. A zone of '0' counts as blank
+// (some loggers emit it).
+//
+// `override`: field names ('continent' / 'countryprefix' / 'zone') to take
+// from the country file even when the packet already carries a value. The
+// realtime pipeline passes ['continent', 'countryprefix'] because some
+// loggers send a hardcoded default on every QSO -- not1mm's contactinfo
+// (ADD) packet always says continent="NA" countryprefix="K" -- and a stale
+// constant is worse than the cty.csv answer keyed off the actual call. An
+// override never blanks a real value: it only applies when the lookup
+// itself produced something. Zone is left fill-only even in the pipeline --
+// a logger's zone reflects the operator's entered exchange, which beats a
+// prefix guess for a portable/rover.
+function enrichGeo(qso, { override = [] } = {}) {
   if (!qso || !qso.call) return qso;
-  const needs = !qso.continent || !qso.countryprefix || !qso.zone || qso.zone === '0';
-  if (!needs) return qso;
+  const ov = new Set(override);
+  const missing = !qso.continent || !qso.countryprefix || !qso.zone || qso.zone === '0';
+  if (!missing && ov.size === 0) return qso;
 
   const hit = resolveCall(qso.call);
   if (!hit) return qso;
 
-  if (!qso.continent) qso.continent = hit.continent || '';
-  if (!qso.zone || qso.zone === '0') qso.zone = hit.cqzone || '';
-  if (!qso.countryprefix) qso.countryprefix = hit.prefix || '';
+  if (!qso.continent || ov.has('continent')) {
+    qso.continent = hit.continent || qso.continent || '';
+  }
+  if (!qso.zone || qso.zone === '0' || ov.has('zone')) {
+    qso.zone = hit.cqzone || qso.zone || '';
+  }
+  if (!qso.countryprefix || ov.has('countryprefix')) {
+    qso.countryprefix = hit.prefix || qso.countryprefix || '';
+  }
   return qso;
 }
 

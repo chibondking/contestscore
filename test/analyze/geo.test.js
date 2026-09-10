@@ -17,6 +17,23 @@ describe('enrichGeo (shared by the analyzer and the realtime pipeline)', () => {
     assert.deepEqual(q, { call: 'DL1XYZ', continent: 'XX', zone: '99', countryprefix: 'ZZ' });
   });
 
+  it('override: forces the named fields from the country file over a stale packet value', () => {
+    // not1mm's contactinfo packet hardcodes continent=NA countryprefix=K on
+    // every QSO; the realtime pipeline passes override to correct it.
+    const q = { call: 'DL1XYZ', continent: 'NA', zone: '5', countryprefix: 'K' };
+    enrichGeo(q, { override: ['continent', 'countryprefix'] });
+    assert.equal(q.continent, 'EU');
+    assert.equal(q.countryprefix, 'DL');
+    assert.equal(q.zone, '5'); // not in the override list -> left as sent
+  });
+
+  it('override: keeps the packet value when the lookup produces nothing', () => {
+    const q = { call: '12345', continent: 'NA', countryprefix: 'K' };
+    enrichGeo(q, { override: ['continent', 'countryprefix'] });
+    assert.equal(q.continent, 'NA');
+    assert.equal(q.countryprefix, 'K');
+  });
+
   it('treats a zone of "0" as blank', () => {
     const q = { call: 'JA1ABC', continent: 'AS', zone: '0', countryprefix: 'JA' };
     enrichGeo(q);
