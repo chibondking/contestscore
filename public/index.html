@@ -55,69 +55,78 @@
 
   <main class="grid">
 
-    <section class="card card--large" id="score">
-      <h2>Score</h2>
-      <div class="score-row">
-        <div class="metric">
-          <span class="metric__value" x-text="score.qsos ?? '—'"></span>
-          <span class="metric__label">QSOs</span>
-        </div>
-        <div class="metric">
-          <span class="metric__value" x-text="score.mults ?? '—'"></span>
-          <span class="metric__label">Mults</span>
-        </div>
-        <div class="metric">
-          <span class="metric__value" x-text="score.total ?? '—'"></span>
-          <span class="metric__label">Total</span>
-        </div>
-      </div>
-      <div class="sparkline">
-        <canvas id="scoreSparkline" x-effect="renderScoreSparkline()"></canvas>
-      </div>
-    </section>
+    <!-- Its own flex row (.top-row, dashboard.css), not 3 more items in the
+         grid above -- see that rule's comment for why: a fixed-track
+         approach only keeps all three on one row at widths that happen to
+         divide evenly, and drops Radios to its own row (often next to
+         unclaimed empty space) at others. -->
+    <div class="top-row">
 
-    <section class="card card--large" id="rate">
-      <h2>Rate</h2>
-      <div class="score-row" x-show="rate.length > 0">
-        <template x-for="r in rate" :key="r.minutes">
+      <section class="card card--large" id="score">
+        <h2>Score</h2>
+        <div class="score-row">
           <div class="metric">
-            <span class="metric__value" x-text="r.rate_per_hour ?? '—'"></span>
-            <span class="metric__label" x-text="(r.minutes ?? '?') + ' min'"></span>
+            <span class="metric__value" x-text="score.qsos ?? '—'"></span>
+            <span class="metric__label">QSOs</span>
+          </div>
+          <div class="metric">
+            <span class="metric__value" x-text="score.mults ?? '—'"></span>
+            <span class="metric__label">Mults</span>
+          </div>
+          <div class="metric">
+            <span class="metric__value" x-text="score.total ?? '—'"></span>
+            <span class="metric__label">Total</span>
+          </div>
+        </div>
+        <div class="sparkline">
+          <canvas id="scoreSparkline" x-effect="renderScoreSparkline()"></canvas>
+        </div>
+      </section>
+
+      <section class="card card--large" id="rate">
+        <h2>Rate</h2>
+        <div class="score-row" x-show="rate.length > 0">
+          <template x-for="r in rate" :key="r.minutes">
+            <div class="metric">
+              <span class="metric__value" x-text="r.rate_per_hour ?? '—'"></span>
+              <span class="metric__label" x-text="(r.minutes ?? '?') + ' min'"></span>
+            </div>
+          </template>
+        </div>
+        <p x-show="rate.length === 0" class="empty">Loading…</p>
+        <div class="sparkline">
+          <canvas id="rateSparkline" x-effect="renderRateSparkline()"></canvas>
+        </div>
+      </section>
+
+      <section class="card card--compact" id="radios">
+        <h2>Radios</h2>
+        <!-- Band only, never the exact frequency -- for some contests,
+             broadcasting the running frequency to anyone with the dashboard
+             URL amounts to cheerleading/spotting your own run. r.band is
+             computed server-side (src/parsers/util.js's freqToBand()); the
+             exact freq/tx_freq are stripped before this ever reaches the
+             browser, not just hidden here -- see the API/socket layer's own
+             comments for why UI-only hiding wasn't enough. -->
+        <template x-for="r in radios" :key="(r.station_name || '') + ':' + r.radio_nr">
+          <div class="radio-row">
+            <span class="radio-nr" x-text="radioLabel(r)"></span>
+            <span class="radio-freq" x-text="r.band || '—'"></span>
+            <span class="radio-mode" x-text="r.mode || '—'"></span>
+            <!-- N1MM reports IsTransmitting independent of IsRunning (a S&P
+                 radio transmits too, briefly, calling a station) -- red
+                 while actually keying the transmitter, green at every other
+                 moment (listening), so a multi-multi's whole radio list
+                 reads at a glance without needing the band/mode text. -->
+            <span class="tx-dot" :class="r.is_transmitting ? 'tx-dot--tx' : 'tx-dot--rx'" :title="r.is_transmitting ? 'Transmitting' : 'Receiving'"></span>
+            <span class="radio-op" x-text="r.op_call || '—'"></span>
+            <span class="radio-run" x-show="r.is_running">RUN</span>
           </div>
         </template>
-      </div>
-      <p x-show="rate.length === 0" class="empty">Loading…</p>
-      <div class="sparkline">
-        <canvas id="rateSparkline" x-effect="renderRateSparkline()"></canvas>
-      </div>
-    </section>
+        <p x-show="radios.length === 0" class="empty">No radio data yet</p>
+      </section>
 
-    <section class="card card--compact" id="radios">
-      <h2>Radios</h2>
-      <!-- Band only, never the exact frequency -- for some contests,
-           broadcasting the running frequency to anyone with the dashboard
-           URL amounts to cheerleading/spotting your own run. r.band is
-           computed server-side (src/parsers/util.js's freqToBand()); the
-           exact freq/tx_freq are stripped before this ever reaches the
-           browser, not just hidden here -- see the API/socket layer's own
-           comments for why UI-only hiding wasn't enough. -->
-      <template x-for="r in radios" :key="(r.station_name || '') + ':' + r.radio_nr">
-        <div class="radio-row">
-          <span class="radio-nr" x-text="radioLabel(r)"></span>
-          <span class="radio-freq" x-text="r.band || '—'"></span>
-          <span class="radio-mode" x-text="r.mode || '—'"></span>
-          <!-- N1MM reports IsTransmitting independent of IsRunning (a S&P
-               radio transmits too, briefly, calling a station) -- red while
-               actually keying the transmitter, green at every other moment
-               (listening), so a multi-multi's whole radio list reads at a
-               glance without needing the band/mode text. -->
-          <span class="tx-dot" :class="r.is_transmitting ? 'tx-dot--tx' : 'tx-dot--rx'" :title="r.is_transmitting ? 'Transmitting' : 'Receiving'"></span>
-          <span class="radio-op" x-text="r.op_call || '—'"></span>
-          <span class="radio-run" x-show="r.is_running">RUN</span>
-        </div>
-      </template>
-      <p x-show="radios.length === 0" class="empty">No radio data yet</p>
-    </section>
+    </div>
 
     <!-- Possible busts: callsigns HamQTH doesn't recognise. Only rendered
          when live lookup is enabled (features.lookup.enabled from

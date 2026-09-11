@@ -260,16 +260,33 @@ body {
 
 .card--wide { grid-column: 1 / -1; }
 
-/* Caps this card's width within its grid track so the Operators card
-   (full-width, see .card--wide) reads as the larger, more prominent panel --
-   Radios is secondary status at a glance, not the thing a viewer is meant
-   to study during a 48-hour contest. */
-.card--compact { max-width: 380px; }
+/* Score/Rate/Radios: the "at a glance" row, its own flex container rather
+   than 3 more items in the auto-fill .grid above. A fixed-track approach
+   (Score/Rate spanning 2 grid tracks, Radios capped at a max-width) only
+   keeps all three on one row at whichever widths happen to divide evenly
+   into that many tracks -- at others, the instant Score+Rate's 2 tracks
+   fill a row exactly, Radios has nowhere left and drops to its own row,
+   often next to a stripe of empty space neither card claimed. Flex shares
+   instead of discrete tracks means the three fill the available width
+   continuously at any size, and only wrap (Score/Rate first, Radios under
+   them) once there genuinely isn't room -- the same mechanism a mobile
+   layout wants anyway, just a narrower trigger point. */
+.top-row {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
 
-/* Score and Rate are the headline numbers -- give them two grid tracks'
-   worth of width instead of the default single-card share, now that Feed
-   Status has moved into the header and freed up the row. */
-.card--large { grid-column: span 2; }
+/* Score and Rate are the headline numbers -- keep their larger (2x) share
+   of the row against Radios' 1x, same hierarchy the old 2-tracks-vs-capped
+   arrangement had, just continuous instead of stepped. */
+.top-row > .card--large { flex: 2 1 320px; }
+
+/* Secondary status at a glance, not the thing a viewer is meant to study
+   for 48 hours -- narrower share, and (unlike the old fixed max-width) still
+   free to grow past it if Score/Rate have already wrapped off this row. */
+.top-row > .card--compact { flex: 1 1 280px; }
 
 .card h2 {
   font-size: 0.8rem;
@@ -331,7 +348,7 @@ body {
   /* flex-wrap, not nowrap: radioLabel() switches from a short "R1" to
      "<station_name> R1" the moment more than one distinct station reports
      (see dashboard.js), and that can easily run longer than this
-     card's own deliberately-narrow max-width (.card--compact, 380px).
+     card's own deliberately-narrow share of .top-row's width.
      .radio-nr below is nowrap so the label itself never fragments
      character-by-character into the next cell -- if the row's other
      cells don't fit next to it, THEY wrap down to their own line as a
