@@ -328,7 +328,18 @@ body {
 .radio-row {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  /* flex-wrap, not nowrap: radioLabel() switches from a short "R1" to
+     "<station_name> R1" the moment more than one distinct station reports
+     (see dashboard.js), and that can easily run longer than this
+     card's own deliberately-narrow max-width (.card--compact, 380px).
+     .radio-nr below is nowrap so the label itself never fragments
+     character-by-character into the next cell -- if the row's other
+     cells don't fit next to it, THEY wrap down to their own line as a
+     whole, a clean two-line row instead of overlapping text. The common
+     single-station "R1" case still fits on one line, unchanged. */
+  flex-wrap: wrap;
+  row-gap: 0.15rem;
+  column-gap: 1rem;
   padding: 0.4rem 0;
   border-bottom: 1px solid var(--border);
   font-size: 0.95rem;
@@ -336,12 +347,12 @@ body {
 
 .radio-row:last-child { border-bottom: none; }
 
-.radio-nr   { color: var(--muted); width: 2rem; }
+.radio-nr   { color: var(--muted); flex: 0 0 auto; white-space: nowrap; }
 /* Band abbreviation only now (never the exact frequency -- see the Radios
    card's own comment), so this only needs to fit "160m"/"70cm". */
-.radio-freq { color: var(--text);  width: 3rem; }
-.radio-mode { color: var(--accent); width: 4rem; }
-.radio-op   { flex: 1; }
+.radio-freq { color: var(--text);  width: 3rem; flex: 0 0 auto; }
+.radio-mode { color: var(--accent); width: 4rem; flex: 0 0 auto; }
+.radio-op   { flex: 1 1 auto; min-width: 3.5rem; }
 .radio-run  { color: var(--run); font-size: 0.75rem; font-weight: bold; }
 
 /* TX/RX indicator -- red while the radio is actually keying the
