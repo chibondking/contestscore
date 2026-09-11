@@ -22,7 +22,8 @@ current N1MM wire-format notes.
 ## Requirements
 
 - Node.js 18+
-- N1MM+ (or TR4W) configured to broadcast UDP on the local network
+- N1MM+, [not1mm](https://github.com/mbridak/not1mm), or TR4W configured to
+  broadcast UDP on the local network
 
 ## Quick start
 
@@ -38,6 +39,47 @@ as packets arrive.
 npm run dev        # auto-reload with nodemon
 npm test           # run the test suite
 ```
+
+## Running fully local — no VPS, no ContestPulse
+
+The setup most single-station and club installs actually want: everything
+stays on your own LAN, contestscore listens for UDP directly, nothing
+leaves the building, no token, no HTTPS. ContestPulse only exists for the
+opposite case — a station that isn't reachable from the logging PC's LAN,
+e.g. a remote/rented site relaying to a VPS (see
+[ContestPulse](#contestpulse) below). If every logging PC is on the same
+LAN as the machine running contestscore, you don't need it at all.
+
+1. **Run contestscore** on a Pi (or any always-on machine on the LAN) — see
+   [Deployment on Raspberry Pi](#deployment-on-raspberry-pi) below.
+   Dashboard: `http://<hostname>.local:3000`, or `http://<lan-ip>:3000`,
+   from any device on the network.
+2. **Find that machine's LAN IP** — `hostname -I` on the Pi, or check your
+   router's client list.
+3. **Point each shack PC's logger at it.** Same three UDP ports either way
+   (radio 12060 / contact 12061 / score 12062 — see
+   [N1MM+ configuration](#n1mm-configuration) for the full port/broadcast
+   table), but the two loggers differ in *how* they're addressed:
+   - **N1MM+**: Config → Configure Ports, Mode Control, Winkey, etc. →
+     **Broadcast Data** tab. Destination can be the LAN's broadcast address
+     (e.g. `192.168.1.255`) or `255.255.255.255` — every machine on the
+     LAN, contestscore included, picks it up.
+   - **not1mm**: Settings → **N1MM** tab → check **Send N1MM packets** and
+     the Radio/Contact/Score sub-boxes, then set each port field to
+     `<contestscore-lan-ip>:12060` / `:12061` / `:12062` (radio and lookup
+     can share `:12060`). Point it at contestscore's own IP, **not** a
+     broadcast address — not1mm's sender never sets `SO_BROADCAST`, so a
+     broadcast destination fails silently (a `PermissionError` in its own
+     debug log, nothing reaches contestscore).
+4. **Multi-op**: repeat step 3 on every logging PC. They all send straight
+   to the same machine; only one should have Score broadcasts on (see
+   [N1MM+ configuration](#n1mm-configuration)'s note on that).
+
+That's the whole setup — no `CONTESTSCORE_API_TOKEN`, no reverse proxy, no
+ContestPulse binary anywhere in this picture. Those all belong to
+[Deploying publicly behind a reverse proxy](#deploying-publicly-behind-a-reverse-proxy)
+and [ContestPulse](#contestpulse), for when a station genuinely isn't on
+the same LAN.
 
 ## Simulating N1MM traffic (no radio required)
 
