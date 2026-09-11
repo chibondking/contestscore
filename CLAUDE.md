@@ -511,6 +511,14 @@ npm run test:send-score
 ```
 (scripts/sendTestPacket.js accepts --type radio|contact|score)
 
+Replay a captured real contest as live traffic (club demo / presentation,
+as opposed to sendTestPacket.js's synthetic data):
+```
+node tools/demo/snapshot.js
+node tools/demo/replay.js --reset --duration 8
+```
+See tools/demo/README.md.
+
 Clear the database:
 ```
 curl -X DELETE http://localhost:3000/api/db -H "X-Confirm: yes"

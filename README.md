@@ -58,6 +58,24 @@ node scripts/sendTestPacket.js --host 192.168.1.255  # broadcast to LAN
 `--type session` (the default) sends two radio-state packets then `--count`
 contacts, each followed by a score update.
 
+## Demo mode: replay a real contest for a presentation
+
+`tools/demo/` plays a *captured real contest* back as live UDP traffic —
+useful for showing the dashboard to a club without a radio or a contest in
+progress, unlike `sendTestPacket.js` above, which sends synthetic data.
+
+```bash
+node tools/demo/snapshot.js                        # capture a running instance
+node tools/demo/replay.js --reset --duration 8      # replay it into ~8 minutes
+```
+
+Real inter-QSO gaps are preserved but compressed (`--speed` / `--duration`,
+clamped so a lull becomes a beat, not a stall); `--interval` gives a flat
+cadence instead; `--loop` repeats for a booth. It's a ContestPulse
+stand-in — same `<contactinfo>` / `<dynamicresults>` / `<RadioInfo>` UDP
+packet shapes and ports — so a plain browser tab pointed at the dashboard
+is all a viewer needs; nothing here drives one. See `tools/demo/README.md`.
+
 ## N1MM+ configuration
 
 In N1MM+, go to **Config → Configure Ports, Mode Control, Winkey, etc.** and
@@ -454,8 +472,9 @@ public/
 config/default.json       Default configuration
 migrations/               Numbered SQL migration files
 scripts/
-  sendTestPacket.js        UDP traffic simulator
+  sendTestPacket.js        UDP traffic simulator (synthetic data)
   deploy.sh                Manual trigger for the production deploy script, from any machine
+tools/demo/                Replay a captured real contest as live UDP traffic (presentations)
 deploy/                    DEPLOY.md + the production deploy script
 docs/ANALYZER.md           the offline log analyzer, in full
 contestpulse/              Standalone Go relay (Go sources + its own tests)
