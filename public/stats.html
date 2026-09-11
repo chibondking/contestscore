@@ -158,11 +158,14 @@
     <!-- Duplicates -->
     <template x-if="hasData">
       <section class="card card--wide">
-        <h2>Duplicate QSOs</h2>
+        <h2>Duplicate QSOs<span class="hdr-scope" x-show="selectedOp !== 'ALL'" x-text="' — ' + selectedOp"></span></h2>
         <p class="empty" x-show="dupes.length === 0">None — no call logged twice on the same band &amp; mode group.</p>
         <div class="chips" x-show="dupes.length">
           <template x-for="d in dupes" :key="d.key">
-            <span class="chip chip--warn"><b x-text="d.call"></b> <span x-text="d.band"></span> <span>×</span><span x-text="d.n"></span></span>
+            <span class="chip chip--warn">
+              <b x-text="d.call"></b> <span x-text="d.band"></span> <span>×</span><span x-text="d.n"></span>
+              <span x-show="d.ops.length > 1" x-text="'(' + d.ops.join(', ') + ')'"></span>
+            </span>
           </template>
         </div>
       </section>

@@ -11,7 +11,10 @@
 // fallback.
 //
 // The operator dropdown in the header scopes every section except the
-// Operator Leaderboard (which always compares all operators).
+// Operator Leaderboard (which always compares all operators) and
+// Duplicate QSOs (always *detected* against the full log -- see dupes()
+// below for why -- the dropdown only narrows which already-found dupes
+// are shown).
 function stats() {
   return {
     qsos: [],
@@ -684,19 +687,32 @@ function stats() {
     // ================================================================
     // Duplicates -- same call on the same band + mode group more than once
     // ================================================================
+    // A dupe is a station-level fact, true regardless of which operator was
+    // at the key each time -- so it's always detected against the full log
+    // (this.qsos), never scopedQsos. Filtering to one operator *before*
+    // grouping would silently drop the other half of any pair logged by a
+    // different operator, hiding exactly the dupe a multi-op station most
+    // needs this panel to catch. Once detected, the operator picker narrows
+    // *which* dupes are shown (only ones that operator took part in) rather
+    // than re-running the detection scoped.
     get dupes() {
-      const seen = new Map();
-      for (const q of this.scopedQsos) {
+      const groups = new Map(); // key -> qsos[]
+      for (const q of this.qsos) {
         const k = `${(q.call || '').toUpperCase()}|${q.band || ''}|${modeGroup(q.mode)}`;
-        seen.set(k, (seen.get(k) || 0) + 1);
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(q);
       }
-      return [...seen.entries()]
-        .filter(([, n]) => n > 1)
-        .map(([k, n]) => {
+      const all = [...groups.entries()]
+        .filter(([, qs]) => qs.length > 1)
+        .map(([k, qs]) => {
           const [call, band] = k.split('|');
-          return { key: k, call, band: bandLabel(band), n };
-        })
-        .sort((a, b) => b.n - a.n);
+          const ops = [...new Set(qs.map((q) => q.operator || '—'))];
+          return { key: k, call, band: bandLabel(band), n: qs.length, ops };
+        });
+      const scoped = this.selectedOp === 'ALL'
+        ? all
+        : all.filter((d) => d.ops.includes(this.selectedOp));
+      return scoped.sort((a, b) => b.n - a.n);
     },
   };
 }
