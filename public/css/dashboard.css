@@ -42,6 +42,15 @@ body {
   padding: 0.75rem 1.5rem;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  /* Shared across every page via chrome.js -- pin it so the nav, live
+     status and (on the dashboard) the score/rate summary stay visible on
+     a long scroll instead of scrolling away with the first card. Direct
+     child of <body> on every page, so there's no ancestor overflow to
+     fight; the opaque background is what makes content passing underneath
+     look right rather than showing through. */
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .header h1 {
