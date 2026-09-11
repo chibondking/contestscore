@@ -18,6 +18,14 @@
 // "charts" | "admin" to pick the active nav link; any page-specific header
 // content (status badge, toggles, etc.) stays written directly in that
 // page's own HTML -- this only prepends the shared h1+nav ahead of it.
+// Dark is the site's default and is NOT remembered by prefers-color-scheme
+// -- this is a manual per-viewer choice, opt-in only. The actual
+// data-theme="light" attribute is set as early as possible by a small
+// inline script in each page's own <head> (before first paint, so a
+// viewer who chose light never sees a dark flash); this constant is only
+// used here to persist a *change*.
+const THEME_KEY = 'contestpulse_theme';
+
 (function () {
   const NAV_LINKS = [
     { page: 'dashboard', href: '/', label: 'Dashboard' },
@@ -39,6 +47,27 @@
       .map((l) => `<a href="${l.href}" class="nav__link${l.page === active ? ' nav__link--active' : ''}">${l.label}</a>`)
       .join('');
     header.insertAdjacentHTML('afterbegin', `<h1>ContestPulse</h1><nav class="nav">${nav}</nav>`);
+
+    // Theme switch, always the last (so: rightmost) header control on every
+    // page. A real checkbox drives it for keyboard/AT access; the pill is
+    // drawn in CSS off :checked (see .theme-toggle* in dashboard.css) rather
+    // than this script touching any style directly.
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    header.insertAdjacentHTML('beforeend', `
+      <label class="theme-toggle" title="Switch between dark and light theme">
+        <input type="checkbox" class="theme-toggle__input"${isLight ? ' checked' : ''}>
+        <span class="theme-toggle__track" aria-hidden="true"><span class="theme-toggle__thumb"></span></span>
+        <span>Light Mode</span>
+      </label>`);
+    header.querySelector('.theme-toggle__input').addEventListener('change', (e) => {
+      try { localStorage.setItem(THEME_KEY, e.target.checked ? 'light' : 'dark'); } catch { /* ignore */ }
+      // Chart.js canvases (charts.js/dashboard.js) pick their tick/grid
+      // colors once, at build time, off this same attribute -- a reload is
+      // the simplest way to guarantee every chart on the page (not just
+      // the plain CSS) comes back correctly themed, rather than each page
+      // needing its own "rebuild every chart" listener for a rare action.
+      location.reload();
+    });
   }
 
   const footer = document.querySelector('.footer');

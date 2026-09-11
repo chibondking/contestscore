@@ -448,11 +448,25 @@ function buildOperatorContribution(qsos, valueFn, seriesLabel) {
   };
 }
 
+// Chart.js draws onto a <canvas> -- none of it is reachable by dashboard.css's
+// var(--x) tokens, so tick/grid/legend colors are picked here instead,
+// matching those tokens' light/dark values exactly. Toggling the theme
+// reloads the page (see chrome.js), so every chart is always rebuilt fresh
+// right after data-theme lands on <html>; this only ever needs to read it
+// once per build, never react to a live change.
+function themeColors() {
+  const light = document.documentElement.getAttribute('data-theme') === 'light';
+  return light
+    ? { muted: '#5b5a52', text: '#1a1a1a', grid: '#c7c2a8' }
+    : { muted: '#8b949e', text: '#e6edf3', grid: '#262626' };
+}
+
 // A categorical bar per operator, direct-labeled on the x-axis -- color
 // distinguishes bars but doesn't carry meaning alone (the axis label
 // already does), so no legend, matching the same reasoning as the
 // dashboard's continent tiles.
 function barChartOptions() {
+  const c = themeColors();
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -460,19 +474,20 @@ function barChartOptions() {
     plugins: { legend: { display: false } },
     scales: {
       x: {
-        ticks: { color: '#8b949e' },
+        ticks: { color: c.muted },
         grid: { display: false },
       },
       y: {
         beginAtZero: true,
-        ticks: { color: '#e6edf3', precision: 0 },
-        grid: { color: '#262626' },
+        ticks: { color: c.text, precision: 0 },
+        grid: { color: c.grid },
       },
     },
   };
 }
 
 function trendChartOptions() {
+  const c = themeColors();
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -480,24 +495,24 @@ function trendChartOptions() {
     plugins: { legend: { display: false } },
     scales: {
       x: {
-        ticks: { color: '#8b949e', maxTicksLimit: 8, autoSkip: true },
-        grid: { color: '#262626' },
+        ticks: { color: c.muted, maxTicksLimit: 8, autoSkip: true },
+        grid: { color: c.grid },
       },
       y: {
         beginAtZero: true,
-        ticks: { color: '#e6edf3', precision: 0 },
-        grid: { color: '#262626' },
+        ticks: { color: c.text, precision: 0 },
+        grid: { color: c.grid },
       },
     },
   };
 }
 
-// A stacked bar/column: same dark axes as trendChartOptions() but with the
+// A stacked bar/column: same axes as trendChartOptions() but with the
 // legend on (each series is a band / continent / run-state that colour
 // alone has to carry) and both axes stacked.
 function stackedChartOptions() {
   const o = trendChartOptions();
-  o.plugins.legend = { display: true, labels: { color: '#e6edf3', boxWidth: 12 } };
+  o.plugins.legend = { display: true, labels: { color: themeColors().text, boxWidth: 12 } };
   o.scales.x.stacked = true;
   o.scales.y.stacked = true;
   return o;
@@ -509,7 +524,7 @@ function doughnutChartOptions() {
     maintainAspectRatio: false,
     animation: { duration: 200 },
     plugins: {
-      legend: { display: true, position: 'right', labels: { color: '#e6edf3', boxWidth: 12 } },
+      legend: { display: true, position: 'right', labels: { color: themeColors().text, boxWidth: 12 } },
     },
   };
 }
