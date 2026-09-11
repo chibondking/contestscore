@@ -411,6 +411,14 @@ function dashboard() {
 // either page, but with every axis/legend/grid stripped since this is
 // decorative-but-informative filler for a card, not an analytical chart.
 function sparklineConfig(values, borderColor, backgroundColor) {
+  // The ring around the highlighted point needs to sit on the card's own
+  // surface color to read as "floating" rather than a plain dot -- same
+  // white/near-black split as dashboard.css's --surface token. Chart.js
+  // draws on canvas, invisible to CSS, so it's picked once here, the same
+  // approach charts.js's themeColors() uses (a theme toggle reloads the
+  // page, so this never needs to react live).
+  const ring = document.documentElement.getAttribute('data-theme') === 'light' ? '#ffffff' : '#0a0a0a';
+  const isLast = (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1;
   return {
     type: 'line',
     data: {
@@ -421,8 +429,18 @@ function sparklineConfig(values, borderColor, backgroundColor) {
         backgroundColor,
         fill: true,
         tension: 0.3,
-        pointRadius: 0,
         borderWidth: 2,
+        // Every point stays invisible except the latest one, which gets a
+        // solid dot -- "where the number on the tile came from," at a
+        // glance, without needing the axis/legend this sparkline has no
+        // room for. Scriptable so it keeps tracking the last point across
+        // the .update() calls above (the trailing window keeps sliding),
+        // not just the point that happened to be last at first render.
+        pointRadius: (ctx) => (isLast(ctx) ? 4 : 0),
+        pointHoverRadius: (ctx) => (isLast(ctx) ? 4 : 0),
+        pointBackgroundColor: borderColor,
+        pointBorderColor: ring,
+        pointBorderWidth: 2,
       }],
     },
     options: {
