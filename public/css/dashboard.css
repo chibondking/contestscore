@@ -62,7 +62,18 @@ body {
 .header {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  /* wrap, not nowrap: the header carries a different mix on every page
+     (index.html alone can have the logo, nav, a grid-square chip, a solar
+     chip, bridge badges, the live status pill and the theme toggle all at
+     once) and none of it was ever going to fit one line on a phone. Rather
+     than a phone-only breakpoint, this is unconditional -- at any width,
+     whatever doesn't fit next to the logo/nav just flows onto its own
+     line, the same "reflow, don't overflow" approach .top-row and
+     .radio-row already use. row-gap separate from column-gap so wrapped
+     lines don't get the wider column spacing between them. */
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
+  column-gap: 1rem;
   padding: 0.75rem 1.5rem;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
@@ -78,12 +89,24 @@ body {
 }
 
 .header h1 {
+  flex: 0 0 auto;
+  white-space: nowrap;
   font-size: 1.25rem;
   letter-spacing: 0.1em;
   color: var(--accent);
 }
 
-.nav { display: flex; gap: 1rem; }
+/* Below ~640px the logo alone already claims most of a phone's width, so
+   there's no point trying to keep nav on that same line only to have it
+   immediately wrap link-by-link -- force it onto its own full line
+   instead, a deliberate two-row header (logo, then nav) rather than
+   whatever ragged split falling short by a few px would produce. Above
+   that, nav sits beside the logo exactly as it always has. */
+@media (max-width: 640px) {
+  .nav { flex: 1 1 100%; }
+}
+
+.nav { display: flex; flex-wrap: wrap; gap: 1rem; }
 
 .nav__link {
   color: var(--muted);
