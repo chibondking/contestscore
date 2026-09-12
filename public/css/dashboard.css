@@ -519,12 +519,12 @@ body {
 .continent-row:last-child { margin-bottom: 0; }
 
 /* --text, not --muted: the row's background rides continentTileStyle()'s
-   accent-blue alpha ramp up to a fairly saturated blue at the top of the
-   range, and --muted's gray sits too close to that blue in luminance to
-   read against it (the label all but vanished on a heavy EU count in
-   practice). --text at reduced opacity keeps the label visually secondary
-   next to __count while staying legible at every intensity, the same
-   guarantee __count already has by using --text outright. */
+   navy alpha ramp, and --muted's gray sits too close to that blue in
+   luminance to read against it at the top of the range (the label all but
+   vanished on a heavy EU count in practice). --text at reduced opacity
+   keeps the label visually secondary next to __count while staying legible
+   at every intensity, the same guarantee __count already has by using
+   --text outright. */
 .continent-row__label {
   font-size: 0.75rem;
   text-transform: uppercase;

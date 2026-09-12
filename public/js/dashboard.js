@@ -172,23 +172,26 @@ function dashboard() {
     // Sequential encoding (one hue, magnitude by intensity -- this is a
     // "compare magnitude across a labeled region" job, not an identity one,
     // so per the dataviz skill it's one hue, not a categorical palette).
-    // Reuses the dashboard's own existing --accent blue rather than
-    // introducing a second hue, scaling alpha instead of stepping through a
-    // light->dark ramp: this theme is permanently dark, so "recedes toward
-    // the surface" means low alpha, not a lighter tint (a light tint would
-    // stand out against the near-black background, the opposite of
-    // receding). Text stays --text at every intensity since alpha-over-near-
-    // black never gets bright enough to need dark text for contrast.
+    // A darker navy, not --accent itself: --accent (rgb(88,166,255), a
+    // light sky blue) is tuned to pop as a small link/highlight, but filled
+    // in behind a whole row at high alpha it got bright enough to wash out
+    // the label text sitting on top of it (reported live against a real
+    // EU=23 row). Scaling alpha instead of stepping through a light->dark
+    // ramp: this theme is permanently dark, so "recedes toward the surface"
+    // means low alpha, not a lighter tint (a light tint would stand out
+    // against the near-black background, the opposite of receding). Capped
+    // below full opacity so even the top of the ramp stays dark enough for
+    // --text on top to read clearly.
     continentTileStyle(code) {
       const counts = this.continentCounts();
       const max = Math.max(1, ...Object.values(counts));
       const count = counts[code] || 0;
       if (count === 0) return {};
       const intensity = count / max; // 0..1, empty tiles excluded above
-      const alpha = 0.15 + 0.65 * intensity;
+      const alpha = 0.2 + 0.5 * intensity;
       return {
-        background: `rgba(88, 166, 255, ${alpha})`,
-        borderColor: `rgba(88, 166, 255, ${Math.min(1, alpha + 0.2)})`,
+        background: `rgba(24, 68, 130, ${alpha})`,
+        borderColor: `rgba(24, 68, 130, ${Math.min(1, alpha + 0.2)})`,
       };
     },
 
