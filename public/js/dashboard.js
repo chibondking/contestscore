@@ -246,11 +246,14 @@ function dashboard() {
     // WAE (and a couple of other DARC-rules contests): a logged row can be
     // a QTC -- a relayed traffic report about an earlier QSO, not a new
     // contact -- rather than an ordinary QSO. N1MM marks which is which in
-    // the same field the Cabrillo line-type prefix comes from (QSO: vs
-    // QTC:), passed through untouched as qsos.exchange1. Most contests
-    // never populate it as anything but blank, so this is a no-op there.
+    // the same field the Cabrillo line-type prefix comes from, passed
+    // through untouched as qsos.exchange1 -- confirmed against a real
+    // packet as "SQTC" (sent) or "RQTC" (received), not the bare "QTC"
+    // originally guessed, hence the substring match rather than equality.
+    // Most contests never populate exchange1 as anything but blank or a
+    // real exchange value, so this stays a no-op there.
     isQtc(q) {
-      return (q.exchange1 || '').trim().toUpperCase() === 'QTC';
+      return /QTC/i.test(q.exchange1 || '');
     },
 
     async fetchInitialState() {
