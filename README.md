@@ -149,6 +149,57 @@ showed a Score broadcast landing on whatever port that station's config
 called "radio port." Content-based dispatch handles either case
 transparently instead of silently dropping real data.
 
+## Known gaps
+
+### WAE (Worked All Europe) multiplier attribution
+
+Confirmed against a live WAE SSB session on real N1MM+: the score
+broadcast's running multiplier total is correct (matches N1MM+'s own
+on-screen score window exactly), but N1MM+ never flags any individual
+`<contactinfo>` as a multiplier for this contest — `ismultiplier1/2/3`
+come across `False` on every QSO, even across several different countries
+worked. That's a gap in what N1MM+ itself broadcasts for WAE, not
+something contestscore's parser is missing — the pipeline faithfully
+relays exactly what's on the wire. Effect: the Charts page's **Multiplier
+Contribution by Operator** and **Cumulative Multipliers** cards stay empty
+for a WAE contest, since there's no per-QSO data to sum, even though the
+Score card's own total is right. Every other contest tested (CQ-WPX,
+CWT/CW-OPS) sends real per-QSO multiplier flags — this looks specific to
+WAE's broadcast path in N1MM+.
+
+Not currently planned to work around: doing so would mean contestscore
+computing its own multiplier tracking per contest type (WAE = country
+worked once regardless of band; most others differ) instead of trusting
+the logger's flag — a real feature, not a quick fix.
+
+### not1mm on Linux
+
+[not1mm](https://github.com/mbridak/not1mm) is a real, working N1MM-packet
+source (see "Running fully local" above), but its N1MM-broadcast code path
+is newer and less exercised than N1MM+'s. Bugs found and fixed upstream
+while getting it working with contestscore:
+
+- **Score never sent** — `send_n1mm_score` had no effect; not1mm never
+  emitted a score packet at all, UDP or otherwise. Fix:
+  [mbridak/not1mm#685](https://github.com/mbridak/not1mm/pull/685) (open).
+- **Continent/DXCC prefix hardcoded** — the `contactinfo` (ADD) packet
+  always said `continent="NA" countryprefix="K"` regardless of who was
+  worked, dumping the whole log into contestscore's NA continent bucket.
+  Fixed: [mbridak/not1mm#686](https://github.com/mbridak/not1mm/pull/686)
+  (merged).
+- **CQ zone frozen at "5"** — a key-name typo (`contact_info["zn"]`
+  instead of `["zone"]`) meant the zone field actually sent in the packet
+  never updated from its class-level default. Fixed:
+  [mbridak/not1mm#687](https://github.com/mbridak/not1mm/pull/687)
+  (merged).
+
+contestscore's realtime pipeline also now forces continent/countryprefix/
+zone from the callsign (cty.csv, `src/analyze/geo.js`) rather than
+trusting the packet at all, so the two merged fixes are belt-and-suspenders
+at this point for any logger, not just not1mm. The score gap (#685) has no
+such workaround, though: no score packet means no live score, until it
+either merges or you're running a not1mm build that already has it.
+
 ## Architecture
 
 ```
