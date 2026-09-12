@@ -721,6 +721,16 @@ body {
 }
 .chip b { color: var(--text); }
 .chip--warn { border-color: var(--red); color: var(--red); }
+/* QTC (WAE traffic report, not a new contact) marker next to a Recent QSOs
+   row -- --run, not --warn: notable/different, not a problem. */
+.chip--qtc {
+  border-color: var(--run);
+  color: var(--run);
+  font-weight: bold;
+  font-size: 0.7rem;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.45rem;
+}
 
 @media (max-width: 700px) {
   .log-layout { flex-direction: column; }

@@ -243,6 +243,16 @@ function dashboard() {
       return 'R' + r.radio_nr;
     },
 
+    // WAE (and a couple of other DARC-rules contests): a logged row can be
+    // a QTC -- a relayed traffic report about an earlier QSO, not a new
+    // contact -- rather than an ordinary QSO. N1MM marks which is which in
+    // the same field the Cabrillo line-type prefix comes from (QSO: vs
+    // QTC:), passed through untouched as qsos.exchange1. Most contests
+    // never populate it as anything but blank, so this is a no-op there.
+    isQtc(q) {
+      return (q.exchange1 || '').trim().toUpperCase() === 'QTC';
+    },
+
     async fetchInitialState() {
       try {
         const [qsos, score, scoreHistory, radios, bridges, rate] = await Promise.all([

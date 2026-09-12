@@ -189,7 +189,10 @@
             <tbody>
               <template x-for="q in qsos.slice(0, 20)" :key="q.ext_id ?? q.id ?? (q.call + q.band + q.mode)">
                 <tr>
-                  <td x-text="q.call"></td>
+                  <td>
+                    <span x-text="q.call"></span>
+                    <span class="chip chip--qtc" x-show="isQtc(q)" title="QTC -- relayed traffic, not a new contact">QTC</span>
+                  </td>
                   <td x-text="q.band"></td>
                   <td x-text="q.mode"></td>
                   <td x-text="q.operator"></td>
