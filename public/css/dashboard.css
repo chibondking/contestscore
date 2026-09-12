@@ -298,18 +298,27 @@ body {
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
+  /* start, not the flexbox-default stretch: stretch forces every card on
+     the row to match whichever one is tallest, in BOTH directions -- tried
+     letting Score/Rate's sparkline flex-grow into that stretched height
+     for a multi-op's tall Radios list, but stretch is symmetric, so on an
+     ordinary day with one radio it ran the other way instead: Score/Rate's
+     own modest minimum height became "tallest" and Radios got stretched to
+     match it, empty space and all. Radios' row count is the one genuinely
+     variable thing here -- Score/Rate's shape is normally constant -- so
+     this isn't a relationship stretch can express in either direction
+     without the see-saw. Simplest fix: don't try to match heights at all.
+     Three cards of different, content-sized heights sitting side by side
+     reads fine either way -- see .sparkline below for the fixed height
+     that makes that true at both ends (1 radio and a full multi-op bank). */
+  align-items: flex-start;
   gap: 1rem;
 }
 
 /* Score and Rate are the headline numbers -- keep their larger (2x) share
    of the row against Radios' 1x, same hierarchy the old 2-tracks-vs-capped
    arrangement had, just continuous instead of stepped. */
-/* display:flex column so .sparkline below can flex-grow to fill whatever
-   height .top-row's default align-items: stretch hands this card -- e.g.
-   a multi-op's Radios card with 8 entries stretches Score/Rate to match
-   its height too, and without this the sparkline stayed a fixed 70px,
-   leaving a slab of dead space under it instead of a bigger chart. */
-.top-row > .card--large { flex: 2 1 320px; display: flex; flex-direction: column; }
+.top-row > .card--large { flex: 2 1 320px; }
 
 /* Secondary status at a glance, not the thing a viewer is meant to study
    for 48 hours -- narrower share, and (unlike the old fixed max-width) still
@@ -329,12 +338,10 @@ body {
 
 /* Small in-card trend line for Score/Rate -- fills the extra width these
    cards picked up when Feed Status moved into the header. No axes/labels
-   (see sparklineConfig() in dashboard.js) -- just the shape of the trend. */
-/* flex-grow within .card--large's column (above), min-height as the floor
-   for the ordinary case where Radios isn't the tallest card in .top-row --
-   Chart.js's responsive:true + maintainAspectRatio:false (sparklineConfig()
-   in dashboard.js) already redraws to fill whatever size this ends up. */
-.sparkline { position: relative; width: 100%; flex: 1 1 auto; min-height: 70px; margin-top: 0.75rem; }
+   (see sparklineConfig() in dashboard.js) -- just the shape of the trend.
+   Fixed height, deliberately: see .top-row's comment on why this doesn't
+   try to track Radios' height instead. */
+.sparkline { position: relative; width: 100%; height: 70px; margin-top: 0.75rem; }
 
 .metric { display: flex; flex-direction: column; align-items: center; }
 
