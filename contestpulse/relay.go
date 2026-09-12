@@ -112,8 +112,20 @@ func (r *relay) run() {
 		packet := make([]byte, n) // copy before the next read reuses buf
 		copy(packet, buf[:n])
 
+		// contact only, not radio/score: those are frequent (radio on every
+		// VFO tick, score on the RTC service's own interval) and printing
+		// every one would drown out the log. Contact traffic is a few
+		// packets per QSO -- worth seeing in full, e.g. to check whether
+		// N1MM is actually broadcasting something for a given log entry
+		// (a WAE QTC, say) at all, not just whether the forward succeeded.
+		if r.label == "contact" {
+			log.Printf("[%s :%d] RX %d bytes: %s", r.label, r.port, n, packet)
+		}
+
 		if err := r.forward(packet); err != nil {
 			log.Printf("[%s :%d] %v", r.label, r.port, err)
+		} else if r.label == "contact" {
+			log.Printf("[%s :%d] SENT ok", r.label, r.port)
 		}
 	}
 }
