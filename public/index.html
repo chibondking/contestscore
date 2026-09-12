@@ -110,7 +110,7 @@
              comments for why UI-only hiding wasn't enough. -->
         <template x-for="r in radios" :key="(r.station_name || '') + ':' + r.radio_nr">
           <div class="radio-row">
-            <span class="radio-nr" x-text="radioLabel(r)"></span>
+            <span class="radio-nr" :title="radioLabel(r)" x-text="radioLabel(r)"></span>
             <span class="radio-freq" x-text="r.band || '—'"></span>
             <span class="radio-mode" x-text="r.mode || '—'"></span>
             <!-- N1MM reports IsTransmitting independent of IsRunning (a S&P

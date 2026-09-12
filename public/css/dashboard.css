@@ -304,7 +304,12 @@ body {
 /* Score and Rate are the headline numbers -- keep their larger (2x) share
    of the row against Radios' 1x, same hierarchy the old 2-tracks-vs-capped
    arrangement had, just continuous instead of stepped. */
-.top-row > .card--large { flex: 2 1 320px; }
+/* display:flex column so .sparkline below can flex-grow to fill whatever
+   height .top-row's default align-items: stretch hands this card -- e.g.
+   a multi-op's Radios card with 8 entries stretches Score/Rate to match
+   its height too, and without this the sparkline stayed a fixed 70px,
+   leaving a slab of dead space under it instead of a bigger chart. */
+.top-row > .card--large { flex: 2 1 320px; display: flex; flex-direction: column; }
 
 /* Secondary status at a glance, not the thing a viewer is meant to study
    for 48 hours -- narrower share, and (unlike the old fixed max-width) still
@@ -325,7 +330,11 @@ body {
 /* Small in-card trend line for Score/Rate -- fills the extra width these
    cards picked up when Feed Status moved into the header. No axes/labels
    (see sparklineConfig() in dashboard.js) -- just the shape of the trend. */
-.sparkline { position: relative; width: 100%; height: 70px; margin-top: 0.75rem; }
+/* flex-grow within .card--large's column (above), min-height as the floor
+   for the ordinary case where Radios isn't the tallest card in .top-row --
+   Chart.js's responsive:true + maintainAspectRatio:false (sparklineConfig()
+   in dashboard.js) already redraws to fill whatever size this ends up. */
+.sparkline { position: relative; width: 100%; flex: 1 1 auto; min-height: 70px; margin-top: 0.75rem; }
 
 .metric { display: flex; flex-direction: column; align-items: center; }
 
@@ -387,7 +396,21 @@ body {
 
 .radio-row:last-child { border-bottom: none; }
 
-.radio-nr   { color: var(--muted); flex: 0 0 auto; white-space: nowrap; }
+/* max-width + ellipsis, not just nowrap: a station name long enough to
+   still not fit this card's share of .top-row (e.g. a multi-op PC with a
+   verbose hostname) now truncates in place instead of pushing the rest of
+   the row down a line just for its own sake -- the row-wrap fallback
+   below still exists for when even the rest of the row doesn't fit
+   (narrow phone widths), but this keeps that rare on desktop. Full text
+   is one hover away via the title attribute (index.html). */
+.radio-nr   {
+  color: var(--muted);
+  flex: 0 1 auto;
+  max-width: 10rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* Band abbreviation only now (never the exact frequency -- see the Radios
    card's own comment), so this only needs to fit "160m"/"70cm". */
 .radio-freq { color: var(--text);  width: 3rem; flex: 0 0 auto; }
