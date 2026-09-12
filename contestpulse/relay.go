@@ -26,6 +26,14 @@ type relay struct {
 	apiToken  string
 	client    *http.Client
 
+	// logPackets gates the RX/SENT packet logging in run() below. Only
+	// meaningful when label == "contact" -- set directly by main.go from
+	// config.LogContactPackets rather than a newRelay() parameter, so the
+	// existing radio/score construction (and every test that doesn't care
+	// about this) stays untouched; it defaults to false (Go's zero value),
+	// same as "not logging" until something opts in.
+	logPackets bool
+
 	mu   sync.Mutex
 	conn net.PacketConn
 }
@@ -118,13 +126,15 @@ func (r *relay) run() {
 		// packets per QSO -- worth seeing in full, e.g. to check whether
 		// N1MM is actually broadcasting something for a given log entry
 		// (a WAE QTC, say) at all, not just whether the forward succeeded.
-		if r.label == "contact" {
+		// logPackets (config.json's log_contact_packets) is the further,
+		// user-facing on/off switch for this same contact-only logging.
+		if r.label == "contact" && r.logPackets {
 			log.Printf("[%s :%d] RX %d bytes: %s", r.label, r.port, n, packet)
 		}
 
 		if err := r.forward(packet); err != nil {
 			log.Printf("[%s :%d] %v", r.label, r.port, err)
-		} else if r.label == "contact" {
+		} else if r.label == "contact" && r.logPackets {
 			log.Printf("[%s :%d] SENT ok", r.label, r.port)
 		}
 	}

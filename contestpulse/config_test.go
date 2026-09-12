@@ -38,6 +38,25 @@ func TestLoadConfigValidWithDefaults(t *testing.T) {
 	if cfg.HeartbeatIntervalSeconds != defaultHeartbeatSeconds {
 		t.Fatalf("HeartbeatIntervalSeconds: got %v, want default %v", cfg.HeartbeatIntervalSeconds, defaultHeartbeatSeconds)
 	}
+	if cfg.LogContactPackets == nil || !*cfg.LogContactPackets {
+		t.Fatalf("LogContactPackets: got %v, want default true (an existing config with no opinion on this must keep behaving as it does today)", cfg.LogContactPackets)
+	}
+}
+
+func TestLoadConfigLogContactPacketsExplicitFalse(t *testing.T) {
+	path := writeTempConfig(t, `{
+		"station_id": "shack1",
+		"server_url": "https://scoreboard.wt2p.us",
+		"api_token": "secret123",
+		"log_contact_packets": false
+	}`)
+	cfg, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.LogContactPackets == nil || *cfg.LogContactPackets {
+		t.Fatalf("LogContactPackets: got %v, want false (explicit false must not be overridden by the default)", cfg.LogContactPackets)
+	}
 }
 
 func TestLoadConfigCustomPorts(t *testing.T) {

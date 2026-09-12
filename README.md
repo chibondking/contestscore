@@ -535,6 +535,15 @@ page under the rolling `contestpulse-latest` tag. Configure
 and run `contestpulse-<platform> config.json` — nothing else to install.
 See `contestpulse/` and `deploy/DEPLOY.md` for details.
 
+The contact relay prints every packet's raw bytes to the console as it
+receives them and confirms each successful forward (`log_contact_packets`,
+default `true`) — set it to `false` in config.json once you don't want the
+running commentary. radio/score never log regardless of this setting;
+they're frequent enough (every VFO tick, every RTC interval) to drown out
+exactly the traffic worth watching. Handy for confirming N1MM is actually
+broadcasting something for a given log entry at all — a WAE QTC, say —
+not just whether an already-received packet made it upstream.
+
 Its HTTP client (`contestpulse/httpclient.go`) uses a short
 `IdleConnTimeout` and retries once on a fresh connection after any
 transport error, so a keep-alive connection the reverse-proxy/tunnel

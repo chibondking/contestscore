@@ -5,5 +5,6 @@
   "radio_port": 12060,
   "contact_port": 12061,
   "score_port": 12062,
-  "heartbeat_interval_seconds": 10
+  "heartbeat_interval_seconds": 10,
+  "log_contact_packets": true
 }

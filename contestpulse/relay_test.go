@@ -228,6 +228,7 @@ func TestRunLogsContactPacketsButNotRadioOrScore(t *testing.T) {
 		probe.Close()
 
 		r := newRelay(label, port, srv.URL, "secret123")
+		r.logPackets = true // exercises the config-on case; the off case is covered below
 		go r.run()
 		time.Sleep(50 * time.Millisecond)
 
@@ -266,6 +267,48 @@ func TestRunLogsContactPacketsButNotRadioOrScore(t *testing.T) {
 				t.Fatalf("expected no RX/SENT logging for the %s relay, got line:\n%s", label, line)
 			}
 		}
+	}
+}
+
+// config.json's log_contact_packets: false (main.go wires this into
+// relay.logPackets) must silence the contact relay too, not just
+// radio/score -- logPackets is the user-facing override on top of the
+// label=="contact" gate above.
+func TestRunDoesNotLogContactPacketsWhenLogPacketsIsFalse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		io.ReadAll(req.Body)
+		w.WriteHeader(202)
+	}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	probe, err := net.ListenUDP("udp4", &net.UDPAddr{Port: 0, IP: net.IPv4zero})
+	if err != nil {
+		t.Fatalf("failed to find a free UDP port: %v", err)
+	}
+	port := probe.LocalAddr().(*net.UDPAddr).Port
+	probe.Close()
+
+	r := newRelay("contact", port, srv.URL, "secret123") // logPackets left false (the zero value)
+	go r.run()
+	defer r.stop()
+	time.Sleep(50 * time.Millisecond)
+
+	conn, err := net.Dial("udp4", "127.0.0.1:"+strconv.Itoa(port))
+	if err != nil {
+		t.Fatalf("failed to dial relay's UDP port: %v", err)
+	}
+	if _, err := conn.Write([]byte("<contactinfo><call>W1AW</call></contactinfo>")); err != nil {
+		t.Fatalf("failed to send UDP packet: %v", err)
+	}
+	conn.Close()
+	time.Sleep(100 * time.Millisecond)
+
+	if strings.Contains(buf.String(), "RX") || strings.Contains(buf.String(), "SENT ok") {
+		t.Fatalf("expected no RX/SENT logging with logPackets left false, got:\n%s", buf.String())
 	}
 }
 

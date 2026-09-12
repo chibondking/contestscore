@@ -37,9 +37,11 @@ func main() {
 	}
 
 	base := strings.TrimRight(cfg.ServerURL, "/") + "/api/ingest"
+	contactRelay := newRelay("contact", cfg.ContactPort, base+"/contact", cfg.APIToken)
+	contactRelay.logPackets = *cfg.LogContactPackets
 	relays := []*relay{
 		newRelay("radio", cfg.RadioPort, base+"/radio", cfg.APIToken),
-		newRelay("contact", cfg.ContactPort, base+"/contact", cfg.APIToken),
+		contactRelay,
 		newRelay("score", cfg.ScorePort, base+"/score", cfg.APIToken),
 	}
 	hb := newHeartbeat(

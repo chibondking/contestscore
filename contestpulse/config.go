@@ -40,6 +40,19 @@ type Config struct {
 	// only happen when the contest itself produces something, so they can't
 	// be relied on as a liveness signal during a quiet stretch. Default 10s.
 	HeartbeatIntervalSeconds float64 `json:"heartbeat_interval_seconds"`
+
+	// LogContactPackets controls whether the contact relay prints each
+	// packet's raw bytes on receipt and confirms each successful forward
+	// (see relay.go) -- useful for seeing live whether N1MM is actually
+	// broadcasting something for a given log entry at all, e.g. a WAE QTC.
+	// radio/score never log regardless of this setting: those are frequent
+	// enough (every VFO tick, every RTC interval) to drown out exactly the
+	// traffic worth watching. A *bool, not bool, so an omitted field reads
+	// as "unset" rather than JSON's zero-value false -- this defaults to
+	// on, and an existing config with no opinion on it keeps behaving
+	// exactly as it does today; set it to false once you don't want the
+	// noise anymore.
+	LogContactPackets *bool `json:"log_contact_packets"`
 }
 
 const (
@@ -79,6 +92,10 @@ func loadConfig(path string) (*Config, error) {
 	}
 	if cfg.HeartbeatIntervalSeconds <= 0 {
 		cfg.HeartbeatIntervalSeconds = defaultHeartbeatSeconds
+	}
+	if cfg.LogContactPackets == nil {
+		on := true
+		cfg.LogContactPackets = &on
 	}
 	return &cfg, nil
 }
