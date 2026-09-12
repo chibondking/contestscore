@@ -440,7 +440,16 @@ public (it's a share link):
 **Duplicate QSO handling**: QSOs are identified primarily by N1MM's own `<ID>`
 GUID (`ext_id`), upserted so a `contactreplace` edit updates the existing row
 in place. A `(call, band, mode, contestnr, mycall)` natural key with
-`INSERT OR IGNORE` is the fallback for loggers that never send an `ID`. See
+`INSERT OR IGNORE` is the fallback for loggers that never send an `ID` --
+that key is now a *partial* index, `WHERE ext_id IS NULL` (migrations/
+003_qsos_natural_key_ext_id_only.sql), so it only ever applies to that
+fallback case. It used to be a plain table-level UNIQUE(...) covering every
+row regardless of ext_id, which meant a WAE QTC report -- a distinct record,
+its own `<ID>`, often several in a row to the very same station+band+mode
+as an existing QSO -- collided with the natural key despite having a
+perfectly good ext_id of its own, and the INSERT just failed outright (a
+different unique index than the one ON CONFLICT(ext_id) targets); caught
+and logged by safely() in src/udp/index.js, invisible to any viewer. See
 `src/db/schema.sql`.
 
 **Score data only from master station**: Only one N1MM station should send

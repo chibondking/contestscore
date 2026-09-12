@@ -44,16 +44,33 @@ CREATE TABLE IF NOT EXISTS qsos (
   is_claimed_qso    INTEGER DEFAULT 1,
   sent_exchange     TEXT,
   n1mm_timestamp    TEXT,
-  logged_at         TEXT NOT NULL DEFAULT (datetime('now')),
-  -- Fallback dedupe key for loggers that never send <ID> (see idx_qsos_ext_id
-  -- below for the primary identity path). contestnr, not contestname, since
-  -- that's what contactdelete actually carries.
-  UNIQUE(call, band, mode, contestnr, mycall)
+  logged_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- N1MM's <ID> GUID uniquely and durably identifies a QSO row across
 -- contactreplace edits. Only enforced when present.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_qsos_ext_id ON qsos(ext_id) WHERE ext_id IS NOT NULL;
+
+-- Fallback dedupe key for loggers that never send <ID> -- see idx_qsos_ext_id
+-- above for the primary identity path. contestnr, not contestname, since
+-- that's what contactdelete actually carries.
+--
+-- Partial (WHERE ext_id IS NULL), not a plain table-level UNIQUE(...): a
+-- logger that *does* send a stable <ID> can legitimately log more than one
+-- row sharing the same (call, band, mode, contestnr, mycall) tuple -- a WAE
+-- QTC report, for instance, is a distinct record (its own <ID>, its own
+-- serial/misctext) sent to a station on the same band/mode you already
+-- logged a QSO with, sometimes several in a row to the same station. Each
+-- has a real ext_id, so idx_qsos_ext_id already identifies it correctly;
+-- with this as a *non*-partial constraint instead, every QTC after the
+-- first to that station+band+mode violated it (a different index than the
+-- one upsertQso's ON CONFLICT(ext_id) targets, so it wasn't a graceful
+-- update -- the INSERT just failed) and got silently dropped -- caught and
+-- logged by src/udp/index.js's safely(), never surfaced anywhere a viewer
+-- would see it. See migrations/003_qsos_natural_key_ext_id_only.sql for the
+-- migration that narrows this on an existing database.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_qsos_natural_key
+  ON qsos(call, band, mode, contestnr, mycall) WHERE ext_id IS NULL;
 
 -- Keyed by (station_name, radio_nr), not radio_nr alone: N1MM's RadioNr is
 -- only unique *within one PC's own config* (1 or 2 for that station's own

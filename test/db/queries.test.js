@@ -73,6 +73,31 @@ describe('QSOs', () => {
     assert.equal(q.getQsos({ call: undefined }).filter((r) => r.call === 'OH2BH').length, 1);
   });
 
+  // Regression: a WAE QTC report is a distinct record -- its own <ID>, its
+  // own serial/misctext -- logged to a station on the same band/mode as an
+  // existing QSO, and often several QTCs in a row to that same
+  // station+band+mode. Each has a real ext_id, so this must go through
+  // upsertQsoByExtId and insert as its own row every time, never collide
+  // with another ext_id-bearing row over the (call, band, mode, contestnr,
+  // mycall) natural key -- that key is a *fallback* for loggers with no
+  // <ID> (the test above), not a constraint on ext_id-identified rows.
+  // Before the natural-key index became partial (WHERE ext_id IS NULL,
+  // migrations/003), the second and third of these silently failed the
+  // INSERT (a different unique index than the one ON CONFLICT(ext_id)
+  // targets, so nothing about that clause covered it) and vanished with no
+  // trace visible anywhere a viewer would see it.
+  it('a QTC and its parent QSO (or several QTCs) can share a natural key when each has its own ext_id', () => {
+    const parent = { ...QSO, ext_id: 'qtc-parent', call: 'RU1A', band: '21', mode: 'USB' };
+    q.upsertQso(parent);
+    const qtc1 = q.upsertQso({ ...parent, ext_id: 'qtc-1', exchange1: 'SQTC', misctext: '3/4' });
+    const qtc2 = q.upsertQso({ ...parent, ext_id: 'qtc-2', exchange1: 'SQTC', misctext: '3/4' });
+    assert.equal(qtc1.changes, 1);
+    assert.equal(qtc2.changes, 1);
+    const rows = q.getQsos().filter((r) => r.call === 'RU1A');
+    assert.equal(rows.length, 3);
+    assert.deepEqual(rows.map((r) => r.ext_id).sort(), ['qtc-1', 'qtc-2', 'qtc-parent']);
+  });
+
   it('filters by band', () => {
     const rows = q.getQsos({ band: '40' });
     assert.equal(rows.length, 1);
