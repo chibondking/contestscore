@@ -17,21 +17,36 @@ describe('enrichGeo (shared by the analyzer and the realtime pipeline)', () => {
     assert.deepEqual(q, { call: 'DL1XYZ', continent: 'XX', zone: '99', countryprefix: 'ZZ' });
   });
 
-  it('override: forces the named fields from the country file over a stale packet value', () => {
-    // not1mm's contactinfo packet hardcodes continent=NA countryprefix=K on
-    // every QSO; the realtime pipeline passes override to correct it.
+  it('override: forces only the named fields from the country file over a stale packet value', () => {
+    // Demonstrates the mechanism is per-field selective: continent gets
+    // corrected, zone (not in this call's override list) is left as sent.
     const q = { call: 'DL1XYZ', continent: 'NA', zone: '5', countryprefix: 'K' };
-    enrichGeo(q, { override: ['continent', 'countryprefix'] });
+    enrichGeo(q, { override: ['continent'] });
+    assert.equal(q.continent, 'EU');
+    assert.equal(q.zone, '5');
+    assert.equal(q.countryprefix, 'K');
+  });
+
+  it('override: the realtime pipeline\'s actual call corrects continent + countryprefix + zone', () => {
+    // not1mm's contactinfo packet hardcodes continent=NA countryprefix=K on
+    // every QSO; separately, a key-name typo in its ADD-path sender means
+    // its zone field never gets touched either and stays frozen at its own
+    // class-level default ("5") for every QSO -- confirmed against
+    // not1mm's source. This is the exact override list src/udp/index.js
+    // passes.
+    const q = { call: 'DL1XYZ', continent: 'NA', zone: '5', countryprefix: 'K' };
+    enrichGeo(q, { override: ['continent', 'countryprefix', 'zone'] });
     assert.equal(q.continent, 'EU');
     assert.equal(q.countryprefix, 'DL');
-    assert.equal(q.zone, '5'); // not in the override list -> left as sent
+    assert.equal(q.zone, '14');
   });
 
   it('override: keeps the packet value when the lookup produces nothing', () => {
-    const q = { call: '12345', continent: 'NA', countryprefix: 'K' };
-    enrichGeo(q, { override: ['continent', 'countryprefix'] });
+    const q = { call: '12345', continent: 'NA', countryprefix: 'K', zone: '5' };
+    enrichGeo(q, { override: ['continent', 'countryprefix', 'zone'] });
     assert.equal(q.continent, 'NA');
     assert.equal(q.countryprefix, 'K');
+    assert.equal(q.zone, '5');
   });
 
   it('treats a zone of "0" as blank', () => {

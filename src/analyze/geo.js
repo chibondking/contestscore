@@ -44,14 +44,16 @@ function resolveCall(call) {
 //
 // `override`: field names ('continent' / 'countryprefix' / 'zone') to take
 // from the country file even when the packet already carries a value. The
-// realtime pipeline passes ['continent', 'countryprefix'] because some
-// loggers send a hardcoded default on every QSO -- not1mm's contactinfo
-// (ADD) packet always says continent="NA" countryprefix="K" -- and a stale
-// constant is worse than the cty.csv answer keyed off the actual call. An
-// override never blanks a real value: it only applies when the lookup
-// itself produced something. Zone is left fill-only even in the pipeline --
-// a logger's zone reflects the operator's entered exchange, which beats a
-// prefix guess for a portable/rover.
+// realtime pipeline overrides all three because some loggers send a
+// hardcoded default on every QSO rather than the actual worked station's
+// data -- not1mm's contactinfo (ADD) packet always says continent="NA"
+// countryprefix="K", and (a separate bug: a key-name typo in its sender)
+// zone="5" -- and a stale constant is worse than the cty.csv answer keyed
+// off the actual call. An override never blanks a real value: it only
+// applies when the lookup itself produced something. The analyzer (an
+// uploaded Cabrillo/ADIF) stays plain fill-only for all three -- a zone
+// that made it into a saved log came from a real exchange, not a logger
+// default, and is worth trusting over a prefix guess for a portable/rover.
 function enrichGeo(qso, { override = [] } = {}) {
   if (!qso || !qso.call) return qso;
   const ov = new Set(override);

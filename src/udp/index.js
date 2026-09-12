@@ -37,13 +37,18 @@ function startListeners(io) {
   });
 
   emitter.on('contact:new', (data) => {
-    // Fill continent / CQ zone / DXCC prefix from the country file. zone is
-    // fill-only; continent + countryprefix are forced from the callsign
-    // because not1mm's contactinfo packet hardcodes continent="NA"
-    // countryprefix="K" on every QSO, which otherwise dumps the whole log
-    // into the NA bucket on the dashboard. Same helper the log analyzer
-    // uses (analyzer keeps the plain fill-only behaviour).
-    enrichGeo(data, { override: ['continent', 'countryprefix'] });
+    // Fill continent / CQ zone / DXCC prefix from the country file, forcing
+    // all three from the callsign rather than trusting whatever the packet
+    // carries. not1mm's contactinfo packet hardcodes continent="NA"
+    // countryprefix="K" on every QSO; separately, a key-name typo in its
+    // ADD-path sender (contact_info["zn"] instead of ["zone"]) means the
+    // zone field it actually sends never gets touched either and stays
+    // frozen at its own class-level default ("5") for every QSO --
+    // confirmed against not1mm's source, reported upstream. Same helper the
+    // log analyzer uses (analyzer keeps the plain fill-only behaviour --
+    // an uploaded Cabrillo/ADIF's zone, when present, came from a real
+    // exchange, not a logger default).
+    enrichGeo(data, { override: ['continent', 'countryprefix', 'zone'] });
     // Emit the row as stored, not the parsed packet: the DB fills `logged_at`
     // (our UTC ingest time) and `id`, and the parsed packet carries neither.
     // The dashboard's per-operator peak-rate buckets key off `logged_at`, so
