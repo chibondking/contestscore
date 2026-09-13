@@ -29,6 +29,7 @@
 <body x-data="dashboard()" x-init="init()">
 
   <header class="header" data-page="dashboard">
+    <span class="contest-name" x-show="score.contest" x-text="score.contest"></span>
     <span class="grid-locator" x-show="score.grid6" x-text="score.grid6"></span>
     <!-- Space weather (SFI / A / K). Populated from GET /api/solar +
          solar:update; hidden until the first reading lands (or entirely if

@@ -204,6 +204,20 @@ body {
   outline-offset: 2px;
 }
 
+/* Plain label, not a translucent pill like .grid-locator/.solar-chip below
+   -- those are ancillary status readouts, but the contest name is closer to
+   identity (which event is this scoreboard even for), so it reads more like
+   a subtitle next to the "ContestPulse" h1 than another status chip. Comes
+   from score.contest -- the header field N1MM's own <dynamicresults>
+   broadcast carries (src/db/queries.js's insertScoreBreakdown) -- so it's
+   whatever N1MM was configured with, not something contestscore invents. */
+.contest-name {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-weight: bold;
+  color: var(--text);
+}
+
 .grid-locator {
   color: var(--run); /* reuses the dashboard's existing amber/orange token */
   background: rgba(210, 153, 34, 0.15); /* --run at low alpha -- a translucent chip, not a solid badge */
