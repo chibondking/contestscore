@@ -695,9 +695,18 @@ function stats() {
     // needs this panel to catch. Once detected, the operator picker narrows
     // *which* dupes are shown (only ones that operator took part in) rather
     // than re-running the detection scoped.
+    //
+    // QTC rows (isQtc() below) are excluded from grouping entirely, not just
+    // from the count: a WAE QTC is a relayed traffic report about an
+    // *earlier* QSO, not a new contact, and it always shares that QSO's
+    // call/band/mode -- often several QTCs to the very same station in a
+    // row (see the ext_id/natural-key comment in schema.sql). Left in, this
+    // panel flagged every one of those stations as a "dupe" even though
+    // there's exactly one real QSO with them.
     get dupes() {
       const groups = new Map(); // key -> qsos[]
       for (const q of this.qsos) {
+        if (isQtc(q)) continue;
         const k = `${(q.call || '').toUpperCase()}|${q.band || ''}|${modeGroup(q.mode)}`;
         if (!groups.has(k)) groups.set(k, []);
         groups.get(k).push(q);
@@ -720,6 +729,15 @@ function stats() {
 // ---------------------------------------------------------------------------
 // Pure helpers (module scope -- not on the Alpine object)
 // ---------------------------------------------------------------------------
+
+// Same field/logic as dashboard.js's isQtc() -- kept as a separate copy
+// rather than a shared import since neither file uses modules (see the
+// top-of-file comment on why). N1MM marks a QTC via exchange1 = "SQTC"
+// (sent) or "RQTC" (received); most contests never populate exchange1 as
+// anything but blank or a real exchange value, so this stays a no-op there.
+function isQtc(q) {
+  return /QTC/i.test(q.exchange1 || '');
+}
 
 const MODE_GROUP_ORDER = ['CW', 'PH', 'DG'];
 
