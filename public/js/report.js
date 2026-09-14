@@ -13,6 +13,8 @@ function renderReport(data) {
   const meta = data.meta || {};
   const qsos = data.qsos || [];
   const tiles = summaryTiles(qsos, meta);
+  const realCount = qsos.filter((q) => !isQtc(q)).length;
+  const qtcCount = qsos.length - realCount;
 
   const title = esc([meta.contest || meta.contest_key || 'Contest log',
     meta.station_call].filter(Boolean).join(' — '));
@@ -46,7 +48,7 @@ function renderReport(data) {
 
 <h1>${title}</h1>
 <div class="sub">
-  ${esc(meta.filename || '')} &middot; ${qsos.length} QSOs${meta.excluded_count ? ` (+${meta.excluded_count} removed)` : ''}
+  ${esc(meta.filename || '')} &middot; ${realCount} QSOs${qtcCount ? ` + ${qtcCount} QTCs` : ''}${meta.excluded_count ? ` (+${meta.excluded_count} removed)` : ''}
   &middot; ${esc((meta.format || '').toUpperCase())}${meta.contest_key ? ` &middot; ${esc(meta.contest_key)}${meta.exchange_parsed ? ' exchange parsed' : ''}` : ''}
   &middot; generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')}Z
 </div>
@@ -77,6 +79,8 @@ function renderReportText(data) {
   const meta = data.meta || {};
   const qsos = data.qsos || [];
   const out = [];
+  const realCount = qsos.filter((q) => !isQtc(q)).length;
+  const qtcCount = qsos.length - realCount;
 
   const title = [meta.contest || meta.contest_key || 'Contest log', meta.station_call]
     .filter(Boolean).join(' — ');
@@ -85,7 +89,7 @@ function renderReportText(data) {
 
   const sub = [
     meta.filename || null,
-    `${qsos.length} QSOs${meta.excluded_count ? ` (+${meta.excluded_count} removed)` : ''}`,
+    `${realCount} QSOs${qtcCount ? ` + ${qtcCount} QTCs` : ''}${meta.excluded_count ? ` (+${meta.excluded_count} removed)` : ''}`,
     (meta.format || '').toUpperCase() || null,
     meta.contest_key ? `${meta.contest_key}${meta.exchange_parsed ? ' exchange parsed' : ''}` : null,
     `generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')}Z`,
@@ -137,23 +141,26 @@ function renderReportText(data) {
 // --- aggregation (shared by both renderers) --------------------------------
 
 function summaryTiles(qsos, meta) {
-  const times = qsos.map(qTime).filter((t) => !Number.isNaN(t)).sort((a, b) => a - b);
-  const points = qsos.reduce((s, q) => s + (Number(q.points) || 0), 0);
-  const mults = qsos.reduce((s, q) => s + mc(q), 0);
+  const real = qsos.filter((q) => !isQtc(q));
+  const qtcCount = qsos.length - real.length;
+  const times = sortedTimes(real);
+  const points = qsos.reduce((s, q) => s + (Number(q.points) || 0), 0); // QTCs score too
+  const mults = real.reduce((s, q) => s + mc(q), 0);
   const span = times.length > 1 ? times[times.length - 1] - times[0] : 0;
   const hrs = span / 3600000;
-  const distinct = (fn) => new Set(qsos.map(fn).filter(Boolean)).size;
+  const distinct = (fn) => new Set(real.map(fn).filter(Boolean)).size;
 
   return [
-    ['QSOs', qsos.length.toLocaleString()],
+    ['QSOs', real.length.toLocaleString()],
+    qtcCount > 0 && ['QTCs', qtcCount.toLocaleString()],
     meta.has_points && ['Points', points.toLocaleString()],
     meta.has_mults && ['Mults', mults.toLocaleString()],
-    meta.has_points && ['Pts / QSO', qsos.length ? (points / qsos.length).toFixed(2) : '0'],
+    meta.has_points && ['Pts / QSO', real.length ? (points / real.length).toFixed(2) : '0'],
     ['DXCC', String(distinct((q) => q.countryprefix))],
     ['CQ zones', String(distinct((q) => (q.zone && q.zone !== '0' ? q.zone : '')))],
     ['Bands', String(distinct((q) => q.band))],
     ['Hours active', String(new Set(times.map((t) => Math.floor(t / 3600000))).size)],
-    ['Avg rate', hrs > 0 ? `${Math.round(qsos.length / hrs)}/h` : '—'],
+    ['Avg rate', hrs > 0 ? `${Math.round(real.length / hrs)}/h` : '—'],
     ['Best 60 min', String(bestWindow(times, 3600000).count)],
   ].filter(Boolean);
 }
@@ -162,19 +169,22 @@ function summaryTiles(qsos, meta) {
 // summaryTiles' Best-60 tile since that lives in Rate Records). Text export
 // only; the HTML report keeps summaryTiles.
 function glanceRows(qsos, meta) {
-  const times = sortedTimes(qsos);
-  const points = qsos.reduce((s, q) => s + (Number(q.points) || 0), 0);
-  const mults = qsos.reduce((s, q) => s + mc(q), 0);
+  const real = qsos.filter((q) => !isQtc(q));
+  const qtcCount = qsos.length - real.length;
+  const times = sortedTimes(real);
+  const points = qsos.reduce((s, q) => s + (Number(q.points) || 0), 0); // QTCs score too
+  const mults = real.reduce((s, q) => s + mc(q), 0);
   const elapsedMs = times.length > 1 ? times[times.length - 1] - times[0] : 0;
   const elapsedHrs = elapsedMs / 3600000;
-  const distinct = (fn) => new Set(qsos.map(fn).filter(Boolean)).size;
+  const distinct = (fn) => new Set(real.map(fn).filter(Boolean)).size;
 
   return [
-    ['QSOs', qsos.length.toLocaleString()],
+    ['QSOs', real.length.toLocaleString()],
+    qtcCount > 0 && ['QTCs', qtcCount.toLocaleString()],
     meta.has_points && ['Points', points.toLocaleString()],
     meta.has_mults && ['Mults', mults.toLocaleString()],
-    meta.has_points && ['Pts / QSO', qsos.length ? (points / qsos.length).toFixed(2) : '0'],
-    ['Avg rate', elapsedHrs > 0 ? `${Math.round(qsos.length / elapsedHrs)}/h` : '—'],
+    meta.has_points && ['Pts / QSO', real.length ? (points / real.length).toFixed(2) : '0'],
+    ['Avg rate', elapsedHrs > 0 ? `${Math.round(real.length / elapsedHrs)}/h` : '—'],
     ['DXCC', String(distinct((q) => q.countryprefix))],
     ['CQ zones', String(distinct((q) => (q.zone && q.zone !== '0' ? q.zone : '')))],
     ['Bands', String(distinct((q) => q.band))],
@@ -186,7 +196,7 @@ function glanceRows(qsos, meta) {
 // "Rate Records" -- best sliding windows, first/last, longest gap. Mirrors
 // stats.js's rateRecords getter. Empty when there aren't two timestamps.
 function rateRecordRows(qsos) {
-  const times = sortedTimes(qsos);
+  const times = sortedTimes(qsos.filter((q) => !isQtc(q)));
   if (times.length < 2) return [];
 
   const b60 = bestWindow(times, 60 * 60000);
@@ -213,8 +223,16 @@ function rateRecordRows(qsos) {
   ];
 }
 
+// QTCs (isQtc()) get their own column, not a share of the mode-group counts
+// or Total-as-contacts: they're relayed traffic about an already-worked
+// station, not additional stations worked on that band. Points still sums
+// every row on the band, QTCs included -- WAE genuinely scores that traffic.
 function bandModeData(qsos, meta) {
-  const groups = [...new Set(qsos.map((q) => modeGroup(q.mode)))]
+  const real = qsos.filter((q) => !isQtc(q));
+  const qtcRows = qsos.filter(isQtc);
+  const hasQtc = qtcRows.length > 0;
+
+  const groups = [...new Set(real.map((q) => modeGroup(q.mode)))]
     .sort((a, b) => ['CW', 'PH', 'DG', '—'].indexOf(a) - ['CW', 'PH', 'DG', '—'].indexOf(b));
   const bands = [...new Set(qsos.map((q) => q.band).filter(Boolean))]
     .sort((a, b) => bandSortKey(a) - bandSortKey(b));
@@ -223,33 +241,50 @@ function bandModeData(qsos, meta) {
   const bandTot = new Map();
   const grpTot = new Map();
   const bandPts = new Map();
+  const bandQtc = new Map();
   let grand = 0;
   let grandPts = 0;
-  for (const q of qsos) {
+  let grandQtc = 0;
+  for (const q of real) {
     const b = q.band || '—';
     const g = modeGroup(q.mode);
     cell.set(`${b}|${g}`, (cell.get(`${b}|${g}`) || 0) + 1);
     bandTot.set(b, (bandTot.get(b) || 0) + 1);
     grpTot.set(g, (grpTot.get(g) || 0) + 1);
-    bandPts.set(b, (bandPts.get(b) || 0) + (Number(q.points) || 0));
     grand += 1;
+  }
+  for (const q of qsos) {
+    const b = q.band || '—';
+    bandPts.set(b, (bandPts.get(b) || 0) + (Number(q.points) || 0));
     grandPts += Number(q.points) || 0;
   }
+  for (const q of qtcRows) {
+    const b = q.band || '—';
+    bandQtc.set(b, (bandQtc.get(b) || 0) + 1);
+    grandQtc += 1;
+  }
 
-  const head = ['Band', ...groups, 'Total', ...(meta.has_points ? ['Points'] : [])];
+  const head = ['Band', ...groups, ...(hasQtc ? ['QTC'] : []), 'Total', ...(meta.has_points ? ['Points'] : [])];
   const rows = bands.map((b) => {
     const cells = groups.map((g) => cell.get(`${b}|${g}`) || 0);
-    return [bandLabel(b), ...cells, bandTot.get(b) || 0, ...(meta.has_points ? [bandPts.get(b) || 0] : [])];
+    const qtcCell = hasQtc ? [bandQtc.get(b) || 0] : [];
+    const total = (bandTot.get(b) || 0) + (bandQtc.get(b) || 0);
+    return [bandLabel(b), ...cells, ...qtcCell, total, ...(meta.has_points ? [bandPts.get(b) || 0] : [])];
   });
-  const totalRow = ['Total', ...groups.map((g) => grpTot.get(g) || 0), grand,
+  const totalRow = ['Total', ...groups.map((g) => grpTot.get(g) || 0),
+    ...(hasQtc ? [grandQtc] : []), grand + grandQtc,
     ...(meta.has_points ? [grandPts] : [])];
 
   return { head, rows, totalRow };
 }
 
+// QTCs excluded (isQtc()): a burst of them to one already-worked station in
+// a handful of seconds would otherwise read as a pile of new contacts,
+// producing a fake hourly spike / rate record that isn't real contact rate.
 function hourlyData(qsos) {
+  const real = qsos.filter((q) => !isQtc(q));
   const by = new Map();
-  for (const q of qsos) {
+  for (const q of real) {
     const t = qTime(q);
     if (Number.isNaN(t)) continue;
     const h = Math.floor(t / 3600000);
@@ -270,12 +305,17 @@ function hourlyData(qsos) {
       : `${pad(d.getUTCHours())}:00z`;
     rows.push([label, n, cum]);
   }
-  return { head: ['Hour (UTC)', 'Q', 'Cum'], rows, totalRow: ['Total', qsos.length, ''] };
+  return { head: ['Hour (UTC)', 'Q', 'Cum'], rows, totalRow: ['Total', real.length, ''] };
 }
 
+// QTCs excluded: not a new DXCC entity worked, just traffic to one already
+// on the log -- left in, a station you exchanged several QTCs with (but
+// only worked once) inflated that entity's "Q" count as if you'd worked it
+// repeatedly.
 function dxccData(qsos) {
+  const real = qsos.filter((q) => !isQtc(q));
   const by = new Map();
-  for (const q of qsos) {
+  for (const q of real) {
     const p = q.countryprefix;
     if (!p) continue;
     const e = by.get(p) || { q: 0, bands: new Set() };
@@ -292,9 +332,12 @@ function dxccData(qsos) {
   return { worked: by.size, head: [`DXCC (${by.size} worked)`, 'Q', 'Bands'], rows, totalRow: null };
 }
 
+// QTCs excluded: same reasoning as dxccData above -- a WAE QTC repeats the
+// parent QSO's section/exchange, not a new one.
 function sectionsData(qsos) {
+  const real = qsos.filter((q) => !isQtc(q));
   const by = new Map();
-  for (const q of qsos) {
+  for (const q of real) {
     const s = (q.section || '').trim();
     if (s) by.set(s, (by.get(s) || 0) + 1);
   }
@@ -397,6 +440,22 @@ function wrapPairs(parts, width = 76) {
 
 function mc(q) {
   return (q.is_mult1 ? 1 : 0) + (q.is_mult2 ? 1 : 0) + (q.is_mult3 ? 1 : 0);
+}
+
+// WAE (and a couple of other DARC-rules contests): a logged row can be a
+// QTC -- a relayed traffic report about an earlier QSO, not a new contact --
+// sharing that QSO's call/band/mode, often several in a row to the same
+// station. Same field/regex as dashboard.js's and stats.js's isQtc(): N1MM
+// marks it via exchange1 = "SQTC" (sent) or "RQTC" (received). Every
+// aggregation below that counts "how many stations/contacts" (QSO totals,
+// band/mode/DXCC/section tables, hourly rate, rate records) filters these
+// out -- left in, a burst of QTCs to one already-worked station reads as a
+// pile of new contacts (inflated DXCC/section "worked" counts, fake rate
+// records from a few seconds of rapid-fire QTC lines). Points stays summed
+// over every row, QTCs included: WAE genuinely scores QTC traffic, so that
+// total is real -- only the *count* of distinct contacts must exclude them.
+function isQtc(q) {
+  return /QTC/i.test(q.exchange1 || '');
 }
 
 function qTime(q) {

@@ -151,3 +151,58 @@ describe('renderReportText', () => {
     assert.match(bare, /QSOs by band & mode/); // this one always renders
   });
 });
+
+// WAE: a QTC is a relayed traffic report about an earlier QSO, not a new
+// contact -- N1MM marks it via exchange1 = "SQTC"/"RQTC", sharing the
+// parent QSO's call/band/mode (real capture: several QTCs in a row, same
+// station, seconds apart). None of these should count as an extra QSO,
+// DXCC/section "worked", or inflate a rate record -- but their points
+// still belong in the total, since WAE genuinely scores that traffic.
+describe('QTC handling (WAE)', () => {
+  const qsos = [
+    qso({ call: 'RU1A', band: '21', mode: 'USB', countryprefix: 'UA', zone: '17', section: 'UA', points: 1, n1mm_timestamp: '2025-09-13 16:20:00' }),
+    qso({ call: 'RU1A', band: '21', mode: 'USB', countryprefix: 'UA', zone: '17', section: 'UA', points: 1, exchange1: 'SQTC', n1mm_timestamp: '2025-09-13 16:20:05' }),
+    qso({ call: 'RU1A', band: '21', mode: 'USB', countryprefix: 'UA', zone: '17', section: 'UA', points: 1, exchange1: 'SQTC', n1mm_timestamp: '2025-09-13 16:20:10' }),
+    qso({ call: 'RU1A', band: '21', mode: 'USB', countryprefix: 'UA', zone: '17', section: 'UA', points: 1, exchange1: 'SQTC', n1mm_timestamp: '2025-09-13 16:20:15' }),
+    qso({ call: 'PA6Y', band: '14', mode: 'USB', countryprefix: 'PA', zone: '14', section: 'PA', points: 1, n1mm_timestamp: '2025-09-13 17:00:00' }),
+    qso({ call: 'PA6Y', band: '14', mode: 'USB', countryprefix: 'PA', zone: '14', section: 'PA', points: 1, exchange1: 'RQTC', n1mm_timestamp: '2025-09-13 17:00:05' }),
+  ];
+  const meta = { station_call: 'WT2P', has_points: true };
+
+  it('excludes QTCs from the QSO count, but sums their points into the total', () => {
+    const txt = renderReportText({ meta, qsos });
+    assert.match(txt, /QSOs \.+ 2\n/); // 2 real QSOs -- RU1A and PA6Y
+    assert.match(txt, /QTCs \.+ 4\n/); // 3 SQTC + 1 RQTC
+    assert.match(txt, /Points \.+ 6\n/); // every row's points, QTCs included
+  });
+
+  it('shows the QTC count in the report sub-header, separate from QSOs', () => {
+    const txt = renderReportText({ meta, qsos });
+    assert.match(txt, /2 QSOs \+ 4 QTCs/);
+    const html = renderReport({ meta, qsos });
+    assert.match(html, /2 QSOs \+ 4 QTCs/);
+  });
+
+  it('gives the band/mode table its own QTC column instead of inflating Total-as-contacts', () => {
+    const txt = renderReportText({ meta, qsos });
+    assert.match(txt, /Band +PH +QTC +Total +Points\n/);
+    assert.match(txt, /15m +1 +3 +4 +4\n/); // RU1A: 1 real QSO + 3 QTCs, 4 points
+    assert.match(txt, /20m +1 +1 +2 +2\n/); // PA6Y: 1 real QSO + 1 QTC, 2 points
+    assert.match(txt, /Total +2 +4 +6 +6\n/);
+  });
+
+  it('does not count QTCs toward DXCC/section "worked" totals', () => {
+    const txt = renderReportText({ meta, qsos });
+    assert.match(txt, /Top DXCC entities\nDXCC \(2 worked\)/);
+    assert.match(txt, /Sections \/ exchanges worked — 2\nPA 1 +UA 1/);
+  });
+
+  it('does not let a QTC burst inflate the hourly/rate-record counts', () => {
+    const txt = renderReportText({ meta, qsos });
+    // Without the exclusion 16z would read "4 Q" (1 QSO + 3 QTCs seconds
+    // apart) and Best 10 min would report a fake 4-in-10-minutes record.
+    assert.match(txt, /16:00z +1 +1\n/);
+    assert.match(txt, /17:00z +1 +2\n/);
+    assert.match(txt, /Best 10 min \.+ 1 Q/);
+  });
+});
