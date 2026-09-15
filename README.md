@@ -19,6 +19,17 @@ original Node-RED dashboard is still not a goal (no DX-cluster/RBN spot map,
 no streaming overlay). See `CLAUDE.md` for the full reasoning and the
 current N1MM wire-format notes.
 
+## Screenshots
+
+Dashboard, Charts, and Stats, rendered with synthetic test data (`scripts/
+sendTestPacket.js`), not a real contest:
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+![Charts](docs/screenshots/charts.png)
+
+![Stats](docs/screenshots/stats.png)
+
 ## Requirements
 
 - Node.js 18+
