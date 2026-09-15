@@ -1,6 +1,6 @@
 {
   "name": "contestscore",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Real-time ham radio contesting dashboard",
   "main": "src/server.js",
   "scripts": {
