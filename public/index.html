@@ -67,8 +67,16 @@
     <div class="top-row">
 
       <section class="card card--large" id="score">
-        <h2>Score</h2>
-        <div class="score-row">
+        <h2>
+          Score
+          <!-- N1MM's Score broadcast is a periodic snapshot, not fired per
+               QSO -- it can fall behind the live QSO log during a rush (or
+               stop landing for a stretch). Flag the gap instead of quietly
+               showing a total that's already out of date; clears itself the
+               moment a new broadcast's qsos count catches back up. -->
+          <span class="bridge-badge bridge-badge--stale score-stale-badge" x-show="scoreStale()" title="The score snapshot hasn't caught up to the live QSO log yet">catching up</span>
+        </h2>
+        <div class="score-row" :class="{ 'score-row--stale': scoreStale() }">
           <div class="metric">
             <span class="metric__value" x-text="score.qsos ?? '—'"></span>
             <span class="metric__label">QSOs</span>

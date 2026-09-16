@@ -358,7 +358,17 @@ body {
   letter-spacing: 0.12em;
   color: var(--muted);
   margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
+
+.score-stale-badge { letter-spacing: 0.08em; }
+
+/* Dim the numbers themselves while scoreStale() is true, not just the
+   badge -- a viewer glancing at the big digits from across the room should
+   see *something* off even without reading the small-print label. */
+.score-row--stale .metric__value { opacity: 0.45; }
 
 /* Score */
 .score-row { display: flex; gap: 2rem; }

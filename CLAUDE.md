@@ -459,6 +459,18 @@ and logged by safely() in src/udp/index.js, invisible to any viewer. See
 Score broadcasts. The server accepts whatever arrives; the contest operator
 is responsible for configuring N1MM correctly.
 
+**Score snapshot can lag the live QSO log**: `score.qsos` comes from N1MM's
+own periodic `dynamicresults` broadcast (observed ~10s cadence), not an
+event fired per QSO, while the dashboard's QSO list grows in real time off
+`contact:new`. A rate fast enough, or a Score broadcast that just doesn't
+land for a stretch, can leave `score.qsos` visibly behind the live count.
+The dashboard flags this itself (`scoreStale()` in `dashboard.js`,
+comparing `score.qsos` to the live QSO count) rather than silently showing
+a stale total as current -- it self-clears once a broadcast catches back
+up. Worth checking first if a viewer ever reports "the score looks wrong":
+this is expected eventual-consistency behavior, not necessarily a dropped
+packet.
+
 **Multi-op radio identity**: `radio_state` is keyed by
 `(station_name, radio_nr)`, not `radio_nr` alone. N1MM's RadioNr is only
 unique within one PC's own config -- in a multi-op with separate physical

@@ -157,6 +157,19 @@ function dashboard() {
       return new Date(this.now).toISOString().slice(11, 19) + 'Z';
     },
 
+    // score.qsos comes from N1MM's own periodic dynamicresults broadcast --
+    // a snapshot, not an event fired per QSO -- while this.qsos already
+    // grows in real time off contact:new. A quiet contest keeps the two in
+    // sync every ~10s, but a sudden rush of logged QSOs (or N1MM just not
+    // sending a Score broadcast for a while) can leave score.qsos behind
+    // this.qsos's own live count for a stretch. Flagging that gap beats
+    // silently showing a confidently wrong total; it self-clears the moment
+    // a new broadcast catches score.qsos back up (or past -- N1MM's own QSO
+    // count can legitimately exceed ours, e.g. it counting a QTC we don't).
+    scoreStale() {
+      return this.score.qsos != null && this.qsos.length > this.score.qsos;
+    },
+
     formatDeployTime(iso) {
       return iso ? new Date(iso).toLocaleString() : '';
     },
