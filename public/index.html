@@ -29,6 +29,9 @@
 <body x-data="dashboard()" x-init="init()">
 
   <header class="header" data-page="dashboard">
+    <!-- Contesting runs on UTC, not local time -- the operator's own wall
+         clock is the wrong reference for exchange timestamps/log review. -->
+    <span class="utc-clock" x-text="utcClock()" title="UTC"></span>
     <span class="contest-name" x-show="score.contest" x-text="score.contest"></span>
     <span class="grid-locator" x-show="score.grid6" x-text="score.grid6"></span>
     <!-- Space weather (SFI / A / K). Populated from GET /api/solar +

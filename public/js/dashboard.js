@@ -151,6 +151,12 @@ function dashboard() {
       return Math.max(0, Math.round((this.now - this.lastUpdateAt) / 1000));
     },
 
+    // Contesting runs on UTC, not local time -- reuses the same `now` tick
+    // that already drives secondsSinceUpdate(), so no extra timer.
+    utcClock() {
+      return new Date(this.now).toISOString().slice(11, 19) + 'Z';
+    },
+
     formatDeployTime(iso) {
       return iso ? new Date(iso).toLocaleString() : '';
     },

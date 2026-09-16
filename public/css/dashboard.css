@@ -218,6 +218,19 @@ body {
   color: var(--text);
 }
 
+/* Contesting runs on UTC -- large and monospace (tabular-nums so the
+   digits don't jitter side to side as they tick) so it reads at a glance
+   from across the room, same "TV readable" bar as the rest of the
+   dashboard (see CLAUDE.md). */
+.utc-clock {
+  flex: 0 0 auto;
+  font-family: 'Courier New', Courier, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--accent);
+}
+
 .grid-locator {
   color: var(--run); /* reuses the dashboard's existing amber/orange token */
   background: rgba(210, 153, 34, 0.15); /* --run at low alpha -- a translucent chip, not a solid badge */
