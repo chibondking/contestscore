@@ -13,7 +13,7 @@ function renderReport(data) {
   const meta = data.meta || {};
   const qsos = data.qsos || [];
   const tiles = summaryTiles(qsos, meta);
-  const realCount = qsos.filter((q) => !isQtc(q)).length;
+  const realCount = dedupeQsos(qsos.filter((q) => !isQtc(q))).length;
   const qtcCount = qsos.length - realCount;
 
   const title = esc([meta.contest || meta.contest_key || 'Contest log',
@@ -79,7 +79,7 @@ function renderReportText(data) {
   const meta = data.meta || {};
   const qsos = data.qsos || [];
   const out = [];
-  const realCount = qsos.filter((q) => !isQtc(q)).length;
+  const realCount = dedupeQsos(qsos.filter((q) => !isQtc(q))).length;
   const qtcCount = qsos.length - realCount;
 
   const title = [meta.contest || meta.contest_key || 'Contest log', meta.station_call]
@@ -141,7 +141,7 @@ function renderReportText(data) {
 // --- aggregation (shared by both renderers) --------------------------------
 
 function summaryTiles(qsos, meta) {
-  const real = qsos.filter((q) => !isQtc(q));
+  const real = dedupeQsos(qsos.filter((q) => !isQtc(q)));
   const qtcCount = qsos.length - real.length;
   const times = sortedTimes(real);
   const points = qsos.reduce((s, q) => s + (Number(q.points) || 0), 0); // QTCs score too
@@ -169,7 +169,7 @@ function summaryTiles(qsos, meta) {
 // summaryTiles' Best-60 tile since that lives in Rate Records). Text export
 // only; the HTML report keeps summaryTiles.
 function glanceRows(qsos, meta) {
-  const real = qsos.filter((q) => !isQtc(q));
+  const real = dedupeQsos(qsos.filter((q) => !isQtc(q)));
   const qtcCount = qsos.length - real.length;
   const times = sortedTimes(real);
   const points = qsos.reduce((s, q) => s + (Number(q.points) || 0), 0); // QTCs score too
@@ -196,7 +196,7 @@ function glanceRows(qsos, meta) {
 // "Rate Records" -- best sliding windows, first/last, longest gap. Mirrors
 // stats.js's rateRecords getter. Empty when there aren't two timestamps.
 function rateRecordRows(qsos) {
-  const times = sortedTimes(qsos.filter((q) => !isQtc(q)));
+  const times = sortedTimes(dedupeQsos(qsos.filter((q) => !isQtc(q))));
   if (times.length < 2) return [];
 
   const b60 = bestWindow(times, 60 * 60000);
@@ -228,7 +228,7 @@ function rateRecordRows(qsos) {
 // station, not additional stations worked on that band. Points still sums
 // every row on the band, QTCs included -- WAE genuinely scores that traffic.
 function bandModeData(qsos, meta) {
-  const real = qsos.filter((q) => !isQtc(q));
+  const real = dedupeQsos(qsos.filter((q) => !isQtc(q)));
   const qtcRows = qsos.filter(isQtc);
   const hasQtc = qtcRows.length > 0;
 
@@ -282,7 +282,7 @@ function bandModeData(qsos, meta) {
 // a handful of seconds would otherwise read as a pile of new contacts,
 // producing a fake hourly spike / rate record that isn't real contact rate.
 function hourlyData(qsos) {
-  const real = qsos.filter((q) => !isQtc(q));
+  const real = dedupeQsos(qsos.filter((q) => !isQtc(q)));
   const by = new Map();
   for (const q of real) {
     const t = qTime(q);
@@ -313,7 +313,7 @@ function hourlyData(qsos) {
 // only worked once) inflated that entity's "Q" count as if you'd worked it
 // repeatedly.
 function dxccData(qsos) {
-  const real = qsos.filter((q) => !isQtc(q));
+  const real = dedupeQsos(qsos.filter((q) => !isQtc(q)));
   const by = new Map();
   for (const q of real) {
     const p = q.countryprefix;
@@ -335,7 +335,7 @@ function dxccData(qsos) {
 // QTCs excluded: same reasoning as dxccData above -- a WAE QTC repeats the
 // parent QSO's section/exchange, not a new one.
 function sectionsData(qsos) {
-  const real = qsos.filter((q) => !isQtc(q));
+  const real = dedupeQsos(qsos.filter((q) => !isQtc(q)));
   const by = new Map();
   for (const q of real) {
     const s = (q.section || '').trim();
@@ -458,6 +458,34 @@ function isQtc(q) {
   return /QTC/i.test(q.exchange1 || '');
 }
 
+// Among non-QTC rows, keep only the earliest (qTime()) QSO per (call, band,
+// mode group). A genuine dupe -- the same station worked again on the same
+// band/mode -- is a real logged row (never dropped from qsos itself, this
+// only filters what a summary counts), but N1MM's own running QSO tally
+// excludes it, and so does a 3830 report's per-band Q column: fixes the
+// same live discrepancy as stats.js's dedupeForScoring() (same identity,
+// same "keep earliest" rule -- confirmed live, scoreboard.wt2p.us, CW-OPS
+// 2026-09-16: the earlier of a dupe pair carried points/is_mult1, the
+// later one scored 0). Callers pass in rows already filtered to !isQtc(q)
+// -- a QTC is traffic about an earlier QSO, not a repeat working of it,
+// and grouping it in here would wrongly treat it as a dupe of its own
+// parent QSO (the exact bug this project already fixed once for the
+// Duplicate QSOs panel -- see stats.js's dupes() comment). A row with no
+// parseable timestamp can't be compared to its group, so it passes
+// through rather than risk dropping a real QSO over a missing clock.
+function dedupeQsos(rows) {
+  const bestByGroup = new Map(); // key -> { q, t }
+  const passthrough = [];
+  for (const q of rows) {
+    const t = qTime(q);
+    if (Number.isNaN(t)) { passthrough.push(q); continue; }
+    const k = `${(q.call || '').toUpperCase()}|${q.band || ''}|${modeGroup(q.mode)}`;
+    const existing = bestByGroup.get(k);
+    if (!existing || t < existing.t) bestByGroup.set(k, { q, t });
+  }
+  return [...passthrough, ...[...bestByGroup.values()].map((e) => e.q)];
+}
+
 function qTime(q) {
   const raw = q.n1mm_timestamp || q.logged_at;
   if (!raw) return NaN;
@@ -526,5 +554,5 @@ function bandLabel(band) {
 function pad(n) { return String(n).padStart(2, '0'); }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { renderReport, renderReportText };
+  module.exports = { renderReport, renderReportText, dedupeQsos };
 }

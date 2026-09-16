@@ -59,12 +59,26 @@ function stats() {
       return [...new Set(this.qsos.map((q) => q.operator || '—'))].sort();
     },
 
+    // this.qsos, deduped for scoring -- see dedupeForScoring()'s own comment.
+    // Every card on this page that counts "how many QSOs" (the top band x
+    // mode table, the headline tiles, rate records, and every card in
+    // matrixCards/chipCards) reads through this or scopedQsos below, so
+    // fixing it here fixes all of them in one place. Only two things
+    // deliberately still read this.qsos raw: dupes() below (it exists
+    // specifically to *find* the dupes this getter drops) and operators()
+    // (listing which operators appear is unaffected by which of a dupe
+    // pair survives).
+    get qsosForScoring() {
+      return dedupeForScoring(this.qsos);
+    },
+
     // Every section below the top table honours the operator dropdown;
     // 'ALL' is the whole station.
     get scopedQsos() {
+      const qs = this.qsosForScoring;
       return this.selectedOp === 'ALL'
-        ? this.qsos
-        : this.qsos.filter((q) => (q.operator || '—') === this.selectedOp);
+        ? qs
+        : qs.filter((q) => (q.operator || '—') === this.selectedOp);
     },
 
     // Which breakdowns the current data can actually support. Live contest
@@ -93,20 +107,24 @@ function stats() {
 
     get tables() {
       if (!this.hasData) return [];
+      // qsosForScoring, not this.qsos raw -- this is the table you'd
+      // transcribe onto a 3830 report, and it must match the QSO count
+      // you'd actually claim (see qsosForScoring's own comment).
+      const qs = this.qsosForScoring;
       // No per-QSO operator (bare Cabrillo): a single pooled table, no
       // per-operator split and no "All Operators" vs "—" duplication.
-      if (!this.caps.operator) return [this.buildTable('All QSOs', this.qsos)];
+      if (!this.caps.operator) return [this.buildTable('All QSOs', qs)];
       const out = [];
       const ops = this.operators;
       if (this.selectedOp === 'ALL') {
-        if (ops.length > 1) out.push(this.buildTable('All Operators', this.qsos));
+        if (ops.length > 1) out.push(this.buildTable('All Operators', qs));
         for (const op of ops) {
-          out.push(this.buildTable(op, this.qsos.filter((q) => (q.operator || '—') === op)));
+          out.push(this.buildTable(op, qs.filter((q) => (q.operator || '—') === op)));
         }
       } else {
         out.push(this.buildTable(
           this.selectedOp,
-          this.qsos.filter((q) => (q.operator || '—') === this.selectedOp),
+          qs.filter((q) => (q.operator || '—') === this.selectedOp),
         ));
       }
       return out;
@@ -305,7 +323,7 @@ function stats() {
       ];
 
       const rows = ops.map((op) => {
-        const r = this.qsos.filter((q) => (q.operator || '—') === op);
+        const r = this.qsosForScoring.filter((q) => (q.operator || '—') === op);
         const times = sortedTimes(r);
         const pts = sum(r, (q) => Number(q.points) || 0);
         const runN = sum(r, (q) => (q.is_run_qso ? 1 : 0));
@@ -739,6 +757,38 @@ function isQtc(q) {
   return /QTC/i.test(q.exchange1 || '');
 }
 
+// One QSO per (call, band, mode group) -- the same identity dupes() above
+// groups on, including its QTC exemption (a QTC shares its parent QSO's
+// call/band/mode and must never be treated as a repeat working of it --
+// see isQtc()'s comment and dupes()'s own comment on why). Keeps whichever
+// one has the earliest qsoTime() in each group and drops the rest, matching
+// how N1MM's own dupe-check credits the first working of a station and
+// excludes any repeat on the same band/mode from dynamicresults' own
+// running qso count -- confirmed live (scoreboard.wt2p.us, CW-OPS
+// 2026-09-16): of a genuine dupe pair, the earlier row carried points and
+// is_mult1, the later one scored 0. Every count on this page (the band x
+// mode table you'd transcribe onto a 3830 report, the headline tiles, rate
+// records, every matrixCards/chipCards card) needs to match that N1MM
+// figure, not the raw row count -- a real log legitimately keeps every
+// row including dupes (that's what qsos/this.qsos is for), so this filters
+// on the way *out* to a summary rather than at the source.
+// A row with no parseable timestamp can't be compared to anything in its
+// group, so it passes through unfiltered rather than risk dropping a real
+// QSO over a missing clock.
+function dedupeForScoring(qs) {
+  const bestByGroup = new Map(); // key -> { q, t }
+  const passthrough = [];
+  for (const q of qs) {
+    if (isQtc(q)) { passthrough.push(q); continue; }
+    const t = qsoTime(q);
+    if (Number.isNaN(t)) { passthrough.push(q); continue; }
+    const k = `${(q.call || '').toUpperCase()}|${q.band || ''}|${modeGroup(q.mode)}`;
+    const existing = bestByGroup.get(k);
+    if (!existing || t < existing.t) bestByGroup.set(k, { q, t });
+  }
+  return [...passthrough, ...[...bestByGroup.values()].map((e) => e.q)];
+}
+
 const MODE_GROUP_ORDER = ['CW', 'PH', 'DG'];
 
 // Collapse N1MM's raw mode strings into the three buckets a contest score
@@ -854,4 +904,12 @@ function bandLabel(band) {
 function bandSortKey(band) {
   const n = parseFloat(band);
   return Number.isNaN(n) ? Infinity : n;
+}
+
+// Same guard as manual.js/report.js: this file is loaded as a plain
+// (non-module) script in the browser, but exporting the pure helpers this
+// way lets Node's test runner exercise them directly, with no jsdom/DOM
+// stand-in needed -- see stats.test.js.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { isQtc, modeGroup, dedupeForScoring, presentModeGroups };
 }

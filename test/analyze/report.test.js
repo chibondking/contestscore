@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { renderReport, renderReportText } = require('../../public/js/report');
+const { renderReport, renderReportText, dedupeQsos } = require('../../public/js/report');
 
 function qso(o) {
   return {
@@ -204,5 +204,57 @@ describe('QTC handling (WAE)', () => {
     assert.match(txt, /16:00z +1 +1\n/);
     assert.match(txt, /17:00z +1 +2\n/);
     assert.match(txt, /Best 10 min \.+ 1 Q/);
+  });
+});
+
+describe('dedupeQsos', () => {
+  it('drops a genuine dupe (same call/band/mode worked twice), keeping the earlier QSO', () => {
+    const first = qso({ n1mm_timestamp: '2025-05-24 12:00:00', points: 1, is_mult1: 1 });
+    const second = qso({ n1mm_timestamp: '2025-05-24 12:10:00', points: 0, is_mult1: 0 }); // the dupe
+    const out = dedupeQsos([first, second]);
+    assert.equal(out.length, 1);
+    assert.equal(out[0], first);
+  });
+
+  it('does not touch a re-work on a different band or mode', () => {
+    const a = qso({ band: '14' });
+    const b = qso({ band: '7' });
+    assert.deepEqual(dedupeQsos([a, b]), [a, b]);
+  });
+
+  it('keeps a row with no parseable timestamp rather than risk dropping a real QSO', () => {
+    const noTime = qso({ n1mm_timestamp: '', logged_at: '' });
+    const anotherNoTime = qso({ n1mm_timestamp: '', logged_at: '' });
+    assert.equal(dedupeQsos([noTime, anotherNoTime]).length, 2);
+  });
+});
+
+// A genuine dupe (not a QTC -- see the isQtc block above, which already
+// covers that case) reported live: 64 rows logged, 2 of them a repeat
+// working of the same station on the same band/mode, N1MM's own score
+// correctly counting 62. Before dedupeQsos, every "how many QSOs/contacts"
+// figure in the report (headline, band/mode table, DXCC/section tallies,
+// rate records) counted the raw 64, which wouldn't match what you'd
+// actually claim on a 3830 report.
+describe('genuine dupe handling (non-QTC)', () => {
+  const qsos = [
+    qso({ call: 'N6NT', band: '7', mode: 'CW', countryprefix: 'K', zone: '4', section: 'OH', points: 1, is_mult1: 1, n1mm_timestamp: '2025-05-24 19:47:12' }),
+    qso({ call: 'N6NT', band: '7', mode: 'CW', countryprefix: 'K', zone: '4', section: 'OH', points: 0, is_mult1: 0, n1mm_timestamp: '2025-05-24 19:56:34' }), // dupe
+    qso({ call: 'NM2A', band: '7', mode: 'CW', countryprefix: 'K', zone: '4', section: 'OH', points: 1, is_mult1: 1, n1mm_timestamp: '2025-05-24 19:28:29' }),
+    qso({ call: 'NM2A', band: '7', mode: 'CW', countryprefix: 'K', zone: '4', section: 'OH', points: 0, is_mult1: 0, n1mm_timestamp: '2025-05-24 19:37:25' }), // dupe
+  ];
+  const meta = { station_call: 'WT2P', has_points: true, has_mults: true };
+
+  it('excludes dupes from the QSO count in the report sub-header', () => {
+    const txt = renderReportText({ meta, qsos });
+    assert.match(txt, /2 QSOs/); // 4 logged rows, 2 real QSOs
+    const html = renderReport({ meta, qsos });
+    assert.match(html, />2<\/b><span>QSOs/);
+  });
+
+  it('does not count a dupe toward the band/mode table\'s Q column', () => {
+    const txt = renderReportText({ meta, qsos });
+    assert.match(txt, /40m +2 +2/); // 2 real QSOs on 40m CW, not 4
+    assert.match(txt, /Total +2 +2/);
   });
 });
