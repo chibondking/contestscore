@@ -464,12 +464,19 @@ own periodic `dynamicresults` broadcast (observed ~10s cadence), not an
 event fired per QSO, while the dashboard's QSO list grows in real time off
 `contact:new`. A rate fast enough, or a Score broadcast that just doesn't
 land for a stretch, can leave `score.qsos` visibly behind the live count.
-The dashboard flags this itself (`scoreStale()` in `dashboard.js`,
-comparing `score.qsos` to the live QSO count) rather than silently showing
-a stale total as current -- it self-clears once a broadcast catches back
-up. Worth checking first if a viewer ever reports "the score looks wrong":
-this is expected eventual-consistency behavior, not necessarily a dropped
-packet.
+The dashboard flags this itself (`scoreStale()` in `dashboard.js`) rather
+than silently showing a stale total as current -- it self-clears once a
+broadcast catches back up. Worth checking first if a viewer ever reports
+"the score looks wrong": this is expected eventual-consistency behavior,
+not necessarily a dropped packet. **Not** a raw QSO-count comparison
+(`qsos.length > score.qsos`) -- a genuine dupe (the same station worked
+twice, its own real `contactinfo` packet and `ext_id` each time) legitimately
+adds a row to the live log that N1MM's own running qso tally excludes,
+which pinned that comparison "stale" forever the first time it shipped
+(caught live on scoreboard.wt2p.us during CW-OPS 2026-09-16). Compares
+timestamps instead: whether a QSO landed after the score's own
+`captured_at`, and whether enough time has passed since then that a fresh
+snapshot should have caught up by now.
 
 **Multi-op radio identity**: `radio_state` is keyed by
 `(station_name, radio_nr)`, not `radio_nr` alone. N1MM's RadioNr is only

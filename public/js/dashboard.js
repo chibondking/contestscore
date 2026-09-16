@@ -159,15 +159,26 @@ function dashboard() {
 
     // score.qsos comes from N1MM's own periodic dynamicresults broadcast --
     // a snapshot, not an event fired per QSO -- while this.qsos already
-    // grows in real time off contact:new. A quiet contest keeps the two in
-    // sync every ~10s, but a sudden rush of logged QSOs (or N1MM just not
-    // sending a Score broadcast for a while) can leave score.qsos behind
-    // this.qsos's own live count for a stretch. Flagging that gap beats
-    // silently showing a confidently wrong total; it self-clears the moment
-    // a new broadcast catches score.qsos back up (or past -- N1MM's own QSO
-    // count can legitimately exceed ours, e.g. it counting a QTC we don't).
+    // grows in real time off contact:new. NOT a raw count comparison
+    // (qsos.length > score.qsos): a genuine dupe -- the same station worked
+    // twice, its own real contactinfo packet each time, own ext_id each
+    // time -- legitimately lands two rows in the live log while N1MM's own
+    // running qso tally in dynamicresults excludes dupes from the count, so
+    // a count-based check would flag "stale" forever the moment any dupe is
+    // logged even once caught up (confirmed live on scoreboard.wt2p.us,
+    // CW-OPS 2026-09-16: 2 genuine dupes pinned qsos.length 2 over
+    // score.qsos permanently). Compare timestamps instead: a QSO landed
+    // after the score's own captured_at, and enough time has passed since
+    // then (comfortably past the observed ~10s broadcast cadence) that a
+    // fresh snapshot should have caught up by now.
     scoreStale() {
-      return this.score.qsos != null && this.qsos.length > this.score.qsos;
+      if (!this.score.captured_at || this.qsos.length === 0) return false;
+      const capturedAt = new Date(this.score.captured_at).getTime();
+      // qsos[0] is the most recent QSO -- getQsos() orders DESC and
+      // contact:new prepends (see socket.on('contact:new') above).
+      const lastQsoAt = new Date(this.qsos[0].logged_at.replace(' ', 'T') + 'Z').getTime();
+      const STALE_GRACE_MS = 30000;
+      return lastQsoAt > capturedAt && (this.now - capturedAt) > STALE_GRACE_MS;
     },
 
     formatDeployTime(iso) {
