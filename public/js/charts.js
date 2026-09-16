@@ -87,7 +87,7 @@ function charts() {
         if (this.logId) {
           const r = await fetch(`/api/analyze/${encodeURIComponent(this.logId)}`);
           const body = r.ok ? await r.json() : null;
-          this.qsos = body ? (body.qsos || []) : [];
+          this.qsos = body ? dedupeForCharting(body.qsos || []) : [];
           this.logMeta = body ? body.meta : null;
           // An uploaded log has no score-broadcast history; the Score Over
           // Time card falls back to its own "no score data yet" empty state.
@@ -98,7 +98,7 @@ function charts() {
           fetch('/api/qsos').then((r) => r.json()),
           fetch('/api/score/history').then((r) => r.json()),
         ]);
-        this.qsos = qsos;
+        this.qsos = dedupeForCharting(qsos);
         this.scoreHistory = scoreHistory;
       } catch (err) {
         console.error('Failed to load chart data:', err);
@@ -549,6 +549,49 @@ function qLoggedTime(q) {
   return Number.isNaN(t) ? NaN : t;
 }
 
+// Same field/regex as stats.js's/report.js's isQtc(): N1MM marks a WAE QTC
+// via exchange1 = "SQTC"/"RQTC". A QTC always shares its parent QSO's
+// call/band/mode, so it must be exempted from dedupeForCharting()'s
+// grouping below -- left in, a real QSO plus its own QTCs would collapse
+// down to one row, silently dropping real (if non-contact) traffic.
+function isQtc(q) {
+  return /QTC/i.test(q.exchange1 || '');
+}
+
+// One QSO per (call, band, mode group) -- same identity and same "keep
+// earliest, QTCs exempt from grouping" rule as stats.js's
+// dedupeForScoring() / report.js's dedupeQsos(); see either's comment for
+// the full reasoning and the live incident this fixes (scoreboard.wt2p.us,
+// CW-OPS 2026-09-16: 64 rows logged, 62 real QSOs, 2 genuine dupes -- N6NT
+// and NM2A each worked twice, confirmed by N1MM's own broadcast: the
+// earlier of each pair carried points/is_mult1, the later one scored 0).
+// charts.js had no QTC or dupe awareness at all before this -- every chart
+// here (cumulative QSOs, rate, operator totals, every extraCharts spec)
+// counted the raw qsos array, so either would silently read as more real
+// contacts than were actually made. Applied once in fetchData() rather
+// than in each of the dozen-plus chart builders below, so every consumer
+// of this.qsos benefits without having to remember to call it.
+//
+// Unlike report.js, a QTC row is *not* dropped here, only exempted from
+// being matched as a dupe of its parent QSO -- charts.js has no separate
+// "QTC" series/column the way report.js's band/mode table does, so a QTC
+// still reads as its own row on, say, a "QSOs by Band" chart. That's a
+// smaller, pre-existing gap (this file never had QTC handling before);
+// fixing the confirmed dupe-inflation bug is the point of this pass.
+function dedupeForCharting(qsos) {
+  const bestByGroup = new Map(); // key -> { q, t }
+  const passthrough = [];
+  for (const q of qsos) {
+    if (isQtc(q)) { passthrough.push(q); continue; }
+    const t = qLoggedTime(q);
+    if (Number.isNaN(t)) { passthrough.push(q); continue; }
+    const k = `${(q.call || '').toUpperCase()}|${q.band || ''}|${modeGroup(q.mode)}`;
+    const existing = bestByGroup.get(k);
+    if (!existing || t < existing.t) bestByGroup.set(k, { q, t });
+  }
+  return [...passthrough, ...[...bestByGroup.values()].map((e) => e.q)];
+}
+
 function multCount(q) {
   return (q.is_mult1 ? 1 : 0) + (q.is_mult2 ? 1 : 0) + (q.is_mult3 ? 1 : 0);
 }
@@ -914,3 +957,10 @@ const EXTRA_CHART_SPECS = [
     build: (q) => buildRateHistogram(q),
   },
 ];
+
+// Same guard as manual.js/report.js/stats.js: this file is loaded as a
+// plain (non-module) script in the browser, but exporting the pure
+// helpers this way lets Node's test runner exercise them directly.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { isQtc, modeGroup, dedupeForCharting };
+}
