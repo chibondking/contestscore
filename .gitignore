@@ -2,6 +2,10 @@ node_modules/
 data/
 .env
 *.db
+# `go build ./...` with no -o writes a binary named after the module here --
+# CI's own builds (contestpulse-build.yml) always pass -o build/<name>, so
+# this only ever catches a local ad-hoc build.
+contestpulse/contestpulse
 # Written by deploy/contestscore-deploy.sh at deploy time -- environment-
 # specific, regenerated on every deploy, never committed.
 deploy-info.json

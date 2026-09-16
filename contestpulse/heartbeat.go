@@ -44,15 +44,19 @@ func newHeartbeat(stationID, targetURL, apiToken string, interval time.Duration)
 // send posts one heartbeat. Split out from run() for the same testability
 // reason as relay.forward(). Retries once on a transport error (no response
 // came back), after dropping idle connections -- same rationale as
-// relay.forward.
+// relay.forward. Also wrapped in watchDo (httpclient.go), same reasoning as
+// relay.forward -- a heartbeat that appears to just stop, rather than
+// erroring, should leave a trace here too.
 func (h *heartbeat) send() error {
-	err := h.sendOnce()
-	var ue *url.Error
-	if errors.As(err, &ue) {
-		h.client.CloseIdleConnections()
-		err = h.sendOnce()
-	}
-	return err
+	return watchDo("heartbeat", func() error {
+		err := h.sendOnce()
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			h.client.CloseIdleConnections()
+			err = h.sendOnce()
+		}
+		return err
+	})
 }
 
 func (h *heartbeat) sendOnce() error {

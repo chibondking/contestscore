@@ -123,6 +123,20 @@ a one-shot retry on a fresh connection after any transport error) it heals
 itself; a build from before that change needs the manual restart. Grab the
 current binary from the `contestpulse-latest` release.
 
+**One relay (usually score, since it's the quietest -- an RTC broadcast
+every ~10s vs. contact's per-QSO traffic) goes silent for minutes with no
+error logged anywhere, then resumes on its own?** Not fully diagnosed --
+happened once (2026-09-16, scoreboard.wt2p.us during CW-OPS) and had
+already resolved by the time it was investigated, with radio/contact/the
+heartbeat all unaffected the whole time. Since 2026-09, ContestPulse logs a
+`[<label> :<port>] still waiting on a request after 15s` line (and a
+`finally returned after ...` line once it does) if a relay's forward or the
+heartbeat's send ever runs unexpectedly long -- if it recurs, that log line
+is the first thing to check; its absence would point upstream, at N1MM
+itself not broadcasting (or broadcasting on a port ContestPulse isn't
+listening on -- same class of port mismatch as the SmartSDR CAT case
+above), rather than at ContestPulse.
+
 ## Alternative: raw UDP over Tailscale/ZeroTier
 
 If you'd rather not run an extra process, the UDP listeners already bind to

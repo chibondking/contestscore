@@ -57,14 +57,21 @@ func newRelay(label string, port int, targetURL, apiToken string) *relay {
 // single half-open keep-alive socket heals itself instead of wedging every
 // subsequent post. An actual HTTP response, even a 4xx/5xx, is not retried:
 // the pipe works, the server just said no.
+//
+// Wrapped in watchDo (httpclient.go) so a call that runs unexpectedly long
+// -- past what the client's own timeout budget should ever allow -- leaves
+// a log line here instead of just silently not returning; see watchDo's
+// own comment for the incident that motivated this.
 func (r *relay) forward(packet []byte) error {
-	err := r.postOnce(packet)
-	var ue *url.Error
-	if errors.As(err, &ue) {
-		r.client.CloseIdleConnections()
-		err = r.postOnce(packet)
-	}
-	return err
+	return watchDo(fmt.Sprintf("%s :%d", r.label, r.port), func() error {
+		err := r.postOnce(packet)
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			r.client.CloseIdleConnections()
+			err = r.postOnce(packet)
+		}
+		return err
+	})
 }
 
 func (r *relay) postOnce(packet []byte) error {
