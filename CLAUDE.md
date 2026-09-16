@@ -250,7 +250,10 @@ real captured packet or the docs above.
 ### RadioInfo (:12060) — root `<RadioInfo>`
 Fields we care about: `StationName`, `RadioNr`, `Freq`, `TXFreq`, `Mode`,
 `OpCall`, `IsRunning`, `IsTransmitting`, `FocusEntry`, `Antenna`, `Rotors`,
-`FocusRadioNr`, `ActiveRadioNr`. This is the one packet type whose casing and
+`FocusRadioNr`, `ActiveRadioNr`, `FunctionKeyCaption` (the label of the
+F-key that started the current transmission, e.g. "F1: CQ" -- the dashboard
+only shows it while `IsTransmitting` is true, since N1MM doesn't clear the
+field back out between transmissions). This is the one packet type whose casing and
 field names matched our original assumptions -- the *values* didn't,
 though: `Freq`/`TXFreq` (and ContactInfo's `rxfreq`/`txfreq`, same issue) are
 in **tens of Hz, not Hz**. Confirmed against N1MM's own documented example

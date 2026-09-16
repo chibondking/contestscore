@@ -28,6 +28,10 @@ async function parseRadio(buf) {
     rotator:         r.Rotors || r.Rotator || '',
     focus_radio:     r.FocusRadioNr != null ? Number(r.FocusRadioNr) : null,
     active_radio:    r.ActiveRadioNr != null ? Number(r.ActiveRadioNr) : null,
+    // The label of the function key that was pressed to start this
+    // transmission (N1MM's own wording) -- e.g. "F1: CQ". Confirmed against
+    // n1mmwp.hamdocs.com's RadioInfo example, not previously documented here.
+    function_key_caption: r.FunctionKeyCaption || '',
   };
 }
 

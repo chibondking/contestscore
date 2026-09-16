@@ -114,24 +114,25 @@ function prepare() {
     INSERT INTO radio_state
       (radio_nr, station_name, freq, tx_freq, mode, op_call, is_running,
        is_transmitting, focus_entry, antenna, rotator, focus_radio,
-       active_radio, updated_at)
+       active_radio, function_key_caption, updated_at)
     VALUES
       (@radio_nr, @station_name, @freq, @tx_freq, @mode, @op_call, @is_running,
        @is_transmitting, @focus_entry, @antenna, @rotator, @focus_radio,
-       @active_radio, datetime('now'))
+       @active_radio, @function_key_caption, datetime('now'))
     ON CONFLICT(station_name, radio_nr) DO UPDATE SET
-      freq            = excluded.freq,
-      tx_freq         = excluded.tx_freq,
-      mode            = excluded.mode,
-      op_call         = excluded.op_call,
-      is_running      = excluded.is_running,
-      is_transmitting = excluded.is_transmitting,
-      focus_entry     = excluded.focus_entry,
-      antenna         = excluded.antenna,
-      rotator         = excluded.rotator,
-      focus_radio     = excluded.focus_radio,
-      active_radio    = excluded.active_radio,
-      updated_at      = excluded.updated_at
+      freq                  = excluded.freq,
+      tx_freq               = excluded.tx_freq,
+      mode                  = excluded.mode,
+      op_call               = excluded.op_call,
+      is_running            = excluded.is_running,
+      is_transmitting       = excluded.is_transmitting,
+      focus_entry           = excluded.focus_entry,
+      antenna               = excluded.antenna,
+      rotator               = excluded.rotator,
+      focus_radio           = excluded.focus_radio,
+      active_radio          = excluded.active_radio,
+      function_key_caption  = excluded.function_key_caption,
+      updated_at            = excluded.updated_at
   `);
 
   const _getRadios = db.prepare('SELECT * FROM radio_state ORDER BY station_name, radio_nr');
@@ -352,6 +353,7 @@ function upsertRadio(radio) {
     station_name: '',
     is_transmitting: null,
     active_radio: null,
+    function_key_caption: '',
     ...radio,
   });
 }

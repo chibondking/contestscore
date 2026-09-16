@@ -97,6 +97,10 @@ CREATE TABLE IF NOT EXISTS radio_state (
   rotator         TEXT,
   focus_radio     INTEGER,
   active_radio    INTEGER,
+  -- N1MM's FunctionKeyCaption: the label of the function key that started
+  -- the current transmission (e.g. "F1: CQ"). See
+  -- migrations/004_radio_state_function_key_caption.sql for existing DBs.
+  function_key_caption TEXT DEFAULT '',
   updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (station_name, radio_nr)
 );

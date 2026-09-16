@@ -439,6 +439,20 @@ body {
 .radio-op   { flex: 1 1 auto; min-width: 3.5rem; }
 .radio-run  { color: var(--run); font-size: 0.75rem; font-weight: bold; }
 
+/* The F-key message currently keying the transmitter (e.g. "F1: CQ") --
+   red like .tx-dot--tx since it only ever shows while actually
+   transmitting. max-width + ellipsis for the same reason as .radio-nr: a
+   long macro caption shouldn't force the row onto its own line by itself. */
+.radio-msg {
+  color: var(--red);
+  font-style: italic;
+  font-size: 0.85rem;
+  max-width: 12rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* TX/RX indicator -- red while the radio is actually keying the
    transmitter (N1MM's IsTransmitting, independent of IsRunning: a S&P
    radio transmits too, briefly, calling a station), green otherwise.

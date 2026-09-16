@@ -122,6 +122,13 @@
             <span class="tx-dot" :class="r.is_transmitting ? 'tx-dot--tx' : 'tx-dot--rx'" :title="r.is_transmitting ? 'Transmitting' : 'Receiving'"></span>
             <span class="radio-op" x-text="r.op_call || '—'"></span>
             <span class="radio-run" x-show="r.is_running">RUN</span>
+            <!-- N1MM's FunctionKeyCaption: the label of the F-key that
+                 started the current transmission (e.g. "F1: CQ"). Only
+                 meaningful while actually keying -- N1MM doesn't clear it
+                 back out between transmissions, so showing it once
+                 is_transmitting goes false would display a stale message
+                 as if it were still going out. -->
+            <span class="radio-msg" x-show="r.is_transmitting && r.function_key_caption" x-text="r.function_key_caption"></span>
           </div>
         </template>
         <p x-show="radios.length === 0" class="empty">No radio data yet</p>

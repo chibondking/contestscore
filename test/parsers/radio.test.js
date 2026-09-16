@@ -21,6 +21,7 @@ const base = `<?xml version="1.0" encoding="utf-8"?>
   <Rotors>90</Rotors>
   <FocusRadioNr>1</FocusRadioNr>
   <ActiveRadioNr>1</ActiveRadioNr>
+  <FunctionKeyCaption>F1: CQ</FunctionKeyCaption>
 </RadioInfo>`;
 
 describe('parseRadio', () => {
@@ -35,6 +36,7 @@ describe('parseRadio', () => {
     assert.equal(r.focus_entry, 1);
     assert.equal(r.focus_radio, 1);
     assert.equal(r.active_radio, 1);
+    assert.equal(r.function_key_caption, 'F1: CQ');
   });
 
   it('parses N1MM True/False booleans correctly', async () => {
@@ -64,6 +66,7 @@ describe('parseRadio', () => {
     assert.equal(r.is_running, 0);
     assert.equal(r.focus_radio, null);
     assert.equal(r.active_radio, null);
+    assert.equal(r.function_key_caption, '');
   });
 
   it('handles a missing/empty Freq without producing NaN', async () => {
