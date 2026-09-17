@@ -253,6 +253,7 @@ function stats() {
         this.multBandsCard,
         this.continentCard,
         this.dxccCard,
+        this.multiBandCallsCard,
         this.pointsDistCard,
         this.callLenCard,
       ].filter(Boolean);
@@ -591,6 +592,55 @@ function stats() {
       };
     },
 
+    // Which calls were worked on the most distinct bands (160-10 and
+    // beyond) -- a "worked all bands" leaderboard. Only calls worked on
+    // more than one band are interesting for this ranking; a station
+    // worked on a single band tells you nothing about band-to-band
+    // multiplier hunting.
+    get multiBandCallsCard() {
+      const qs = this.scopedQsos;
+      const by = new Map(); // call -> { bands:Set<label>, q }
+      for (const q of qs) {
+        const call = (q.call || '').toUpperCase();
+        if (!call) continue;
+        const e = by.get(call) || { bands: new Set(), q: 0 };
+        if (q.band) e.bands.add(bandLabel(q.band));
+        e.q += 1;
+        by.set(call, e);
+      }
+
+      const rows = [...by.entries()]
+        .filter(([, e]) => e.bands.size > 1)
+        .sort((a, b) => b[1].bands.size - a[1].bands.size || b[1].q - a[1].q)
+        .slice(0, 25)
+        .map(([call, e]) => ({
+          key: call,
+          call,
+          bands: e.bands.size,
+          bandList: sortBandLabels([...e.bands]).join(', '),
+          q: e.q,
+        }));
+
+      if (rows.length === 0) return null;
+
+      const maxBands = rows[0].bands;
+      for (const r of rows) r._bar = maxBands ? Math.round((r.bands / maxBands) * 100) : 0;
+
+      return {
+        title: 'Callsigns Worked on the Most Bands',
+        note: 'Calls worked on more than one band, most bands first.',
+        columns: [
+          { key: 'call', label: 'Call' },
+          { key: 'bands', label: 'Bands', num: true },
+          { key: 'bandList', label: 'Which Bands' },
+          { key: 'q', label: 'Q', num: true },
+        ],
+        rows,
+        barKey: 'bands',
+        totalRow: null,
+      };
+    },
+
     get pointsDistCard() {
       if (!this.caps.points) return null; // no per-QSO points in this source
       const qs = this.scopedQsos;
@@ -904,6 +954,25 @@ function bandLabel(band) {
 function bandSortKey(band) {
   const n = parseFloat(band);
   return Number.isNaN(n) ? Infinity : n;
+}
+
+// bandLabel() output ("160m", "20m", ...) is no longer a parseable
+// frequency, so a list of labels (e.g. multiBandCallsCard's bandList) needs
+// its own low-to-high ordering rather than bandSortKey's parseFloat.
+const BAND_LABEL_ORDER = [
+  '160m', '80m', '60m', '40m', '30m', '20m', '17m', '15m', '12m', '10m',
+  '6m', '4m', '2m', '1.25m', '70cm', '33cm', '23cm',
+];
+
+function sortBandLabels(labels) {
+  return [...labels].sort((a, b) => {
+    const ia = BAND_LABEL_ORDER.indexOf(a);
+    const ib = BAND_LABEL_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
 }
 
 // Same guard as manual.js/report.js: this file is loaded as a plain
