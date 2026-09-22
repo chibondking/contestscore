@@ -231,6 +231,37 @@ describe('GET /api/solar', () => {
   });
 });
 
+// This test harness never calls startListeners() (see the `before()` hook
+// above), so getLookupService() is null here -- these only exercise the
+// "no live service" fallback and the token gate. The actual pause/resume
+// queue behavior is covered by test/lookup/index.test.js against a real
+// service instance.
+describe('GET/POST /api/lookup/*', () => {
+  it('status is a quiet "off" with no live lookup service', async () => {
+    const body = await (await fetch(`${baseUrl}/api/lookup/status`)).json();
+    assert.deepEqual(body, { provider: 'none', enabled: false, paused: false });
+  });
+
+  it('pause/resume are a no-op 200 with no live service, and no token required', async () => {
+    const pause = await fetch(`${baseUrl}/api/lookup/pause`, { method: 'POST' });
+    assert.equal(pause.status, 200);
+    const resume = await fetch(`${baseUrl}/api/lookup/resume`, { method: 'POST' });
+    assert.equal(resume.status, 200);
+  });
+
+  it('requires the bearer token when CONTESTSCORE_API_TOKEN is set', async () => {
+    process.env.CONTESTSCORE_API_TOKEN = 'secret123';
+    const noAuth = await fetch(`${baseUrl}/api/lookup/pause`, { method: 'POST' });
+    assert.equal(noAuth.status, 401);
+
+    const withAuth = await fetch(`${baseUrl}/api/lookup/pause`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer secret123' },
+    });
+    assert.equal(withAuth.status, 200);
+  });
+});
+
 describe('GET /api/solar/history', () => {
   it('400s without both from and to', async () => {
     const r = await fetch(`${baseUrl}/api/solar/history?from=2026-01-01 00:00:00`);

@@ -12,6 +12,15 @@ const config = require('../../config/default.json');
 
 const emitter = new EventEmitter();
 
+// Set once startListeners() creates the lookup service, so a route handler
+// (src/routes/api.js's pause/resume/status endpoints) called at request
+// time -- long after server boot -- can reach the live instance. null in
+// any environment that never calls startListeners() (e.g. the route-only
+// test harness in test/routes/api.test.js), which the routes treat as
+// "no lookup service running", not an error.
+let lookupService = null;
+function getLookupService() { return lookupService; }
+
 // Per CLAUDE.md: parser/packet errors must never crash the server. A DB
 // write can also fail (e.g. a genuine natural-key collision from two
 // distinct QSOs) — log and carry on rather than take the process down.
@@ -23,6 +32,7 @@ function startListeners(io) {
   // Live callsign lookup (HamQTH). No-op unless LOOKUP_PROVIDER + creds are
   // set. Never used by the offline analyzer.
   const lookup = createLookupService({ emitter });
+  lookupService = lookup;
 
   emitter.on('radio:update', (data) => {
     safely('radio:update', () => upsertRadio(data));
@@ -107,4 +117,4 @@ function startListeners(io) {
   ];
 }
 
-module.exports = { startListeners, emitter };
+module.exports = { startListeners, emitter, getLookupService };

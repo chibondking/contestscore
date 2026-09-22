@@ -9,6 +9,7 @@ const {
 const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
 const { resolveLookupConfig, stripSuffix } = require('../lookup');
+const { getLookupService } = require('../udp');
 const { resolveSolarConfig, latestSolar } = require('../solar');
 const { freqToBand } = require('../parsers/util');
 
@@ -36,6 +37,50 @@ router.get('/features', (req, res) => {
 // sunspots) for the header. `{ updated: null }` until the first fetch lands.
 router.get('/solar', (req, res) => {
   res.json(latestSolar());
+});
+
+// Same optional-bearer-token posture as DELETE /api/db: required whenever
+// CONTESTSCORE_API_TOKEN is set, a no-op on a LAN-only install with no
+// token configured. Unlike DB reset, this is fully reversible (resume()
+// undoes it instantly), so no X-Confirm header is needed on top.
+function checkToken(req, res) {
+  const requiredToken = process.env.CONTESTSCORE_API_TOKEN;
+  if (!requiredToken) return true;
+  const auth = req.headers['authorization'] || '';
+  if (auth === `Bearer ${requiredToken}`) return true;
+  res.status(401).json({ error: 'Missing or invalid bearer token' });
+  return false;
+}
+
+// GET /api/lookup/status -- live callsign-lookup state, including whether
+// it's currently paused. Distinct from /api/features' lookup block (config-
+// only, read even when the UDP listeners -- and so the lookup service
+// itself -- were never started, e.g. under test): this reflects the actual
+// running queue, or a quiet { enabled: false } if there isn't one.
+router.get('/lookup/status', (req, res) => {
+  const svc = getLookupService();
+  res.json(svc ? svc.getStatus() : { provider: 'none', enabled: false, paused: false });
+});
+
+// POST /api/lookup/pause -- immediate kill switch for HamQTH lookups,
+// reachable from the admin console mid-contest without a restart (e.g. a
+// busy multi-op deciding the lookup traffic itself needs to stop). Drops
+// whatever's already queued, not just future calls -- see lookup/index.js
+// pause()'s own comment. A no-op (still 200) when there's no live service
+// to pause, same as if it were already stopped.
+router.post('/lookup/pause', (req, res) => {
+  if (!checkToken(req, res)) return;
+  const svc = getLookupService();
+  if (svc) svc.pause();
+  res.json(svc ? svc.getStatus() : { provider: 'none', enabled: false, paused: false });
+});
+
+// POST /api/lookup/resume -- undoes /api/lookup/pause.
+router.post('/lookup/resume', (req, res) => {
+  if (!checkToken(req, res)) return;
+  const svc = getLookupService();
+  if (svc) svc.resume();
+  res.json(svc ? svc.getStatus() : { provider: 'none', enabled: false, paused: false });
 });
 
 // GET /api/solar/history?from=&to=  -- readings between two datetime('now')-

@@ -615,6 +615,20 @@ blocks, and every failure path logs and continues.
 Results are cached in `callsign_cache` to avoid re-querying during a
 contest; the cache is cleared on `DELETE /api/db`.
 
+**Runtime pause/resume** (`public/admin.html` "Callsign Lookup" card):
+`svc.pause()`/`svc.resume()` on the service returned by `createLookupService`
+(exposed to routes via `getLookupService()` in `src/udp/index.js`) are a
+mid-contest kill switch, separate from whether a provider was configured
+at all. `GET /api/lookup/status`, `POST /api/lookup/pause` / `.../resume`
+(same optional bearer-token gate as `DELETE /api/db`, but no `X-Confirm` --
+this is instantly reversible) sit in `src/routes/api.js`. Pausing doesn't
+just stop new `enqueue()` calls; it drops whatever's already queued too
+(clearing their `pending` entries as well, so they aren't stuck
+"already queued" forever) -- an immediate stop for a multi-op that decides
+the lookup traffic itself needs to go away, not a slow drain. Already-
+cached results (and the busts panel built from them) are unaffected either
+way; only *new* lookups stop.
+
 **Possible Busts panel** (`public/index.html` `#busts`): a dashboard card
 listing logged QSOs whose call HamQTH didn't recognise -- a likely miscopy.
 Server side it's just `GET /api/busts` joining `qsos` against the

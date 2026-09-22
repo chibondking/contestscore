@@ -79,13 +79,20 @@ function createLookupService({ emitter, env, config, deps = {} } = {}) {
   let runPromise = null;
   let backoffMs = 0;
   let backoffUntil = 0;
+  // Runtime kill switch, toggled from the admin console mid-contest (e.g. a
+  // multi-op pushing enough QSO rate that HamQTH traffic itself becomes a
+  // concern) -- separate from `enabled`, which only reflects whether a
+  // provider was configured at startup. Paused rejects new enqueues *and*
+  // drops whatever's already queued, rather than just letting the backlog
+  // drain on its own: the whole point is an immediate stop, not a slow one.
+  let paused = false;
 
   function isCached(call) {
     try { return Boolean(getCached(call)); } catch { return false; }
   }
 
   function enqueue(rawCall) {
-    if (!enabled) return;
+    if (!enabled || paused) return;
     const call = stripSuffix(rawCall);
     if (call.length < 3 || pending.has(call) || isCached(call)) return;
     pending.add(call);
@@ -130,10 +137,29 @@ function createLookupService({ emitter, env, config, deps = {} } = {}) {
     }
   }
 
+  // Stops new lookups immediately and clears the pending queue -- an
+  // already-in-flight request (the one `run()` is currently awaiting) is
+  // left to finish on its own rather than aborted; the next one won't
+  // start. Also frees every queued call's `pending` entry, since nothing
+  // will run() far enough to hit that call's own `finally` otherwise --
+  // left uncleared, resume() would find those calls permanently stuck
+  // "already queued" and silently refuse to ever re-enqueue them.
+  function pause() {
+    paused = true;
+    for (const call of queue) pending.delete(call);
+    queue.length = 0;
+  }
+
+  function resume() {
+    paused = false;
+  }
+
   return {
     enqueue,
     prime,
-    getStatus: () => ({ provider: enabled ? cfg.provider : 'none', enabled }),
+    pause,
+    resume,
+    getStatus: () => ({ provider: enabled ? cfg.provider : 'none', enabled, paused: enabled && paused }),
     idle: () => runPromise || Promise.resolve(),
   };
 }

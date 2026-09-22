@@ -10,6 +10,11 @@ function admin() {
     messageIsError: false,
     counts: {},
 
+    lookupStatus: { provider: 'none', enabled: false, paused: false },
+    lookupBusy: false,
+    lookupMessage: '',
+    lookupMessageIsError: false,
+
     init() {
       try {
         this.token = localStorage.getItem('contestpulse_admin_token') || '';
@@ -17,6 +22,7 @@ function admin() {
         // private browsing / storage disabled -- just start with an empty field
       }
       this.fetchCounts();
+      this.fetchLookupStatus();
     },
 
     saveToken() {
@@ -68,5 +74,42 @@ function admin() {
         this.resetting = false;
       }
     },
+
+    async fetchLookupStatus() {
+      try {
+        this.lookupStatus = await fetch('/api/lookup/status').then((r) => r.json());
+      } catch (err) {
+        console.error('Failed to load lookup status:', err);
+      }
+    },
+
+    async setLookupPaused(paused) {
+      if (!this.token || this.lookupBusy) return;
+      this.lookupBusy = true;
+      this.lookupMessage = '';
+      try {
+        const res = await fetch(`/api/lookup/${paused ? 'pause' : 'resume'}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.token}` },
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) {
+          this.lookupStatus = body;
+          this.lookupMessage = paused ? 'Lookups paused.' : 'Lookups resumed.';
+          this.lookupMessageIsError = false;
+        } else {
+          this.lookupMessage = `${paused ? 'Pause' : 'Resume'} failed: ${body.error || res.status}`;
+          this.lookupMessageIsError = true;
+        }
+      } catch (err) {
+        this.lookupMessage = `${paused ? 'Pause' : 'Resume'} failed: ${err.message}`;
+        this.lookupMessageIsError = true;
+      } finally {
+        this.lookupBusy = false;
+      }
+    },
+
+    pauseLookup()  { this.setLookupPaused(true); },
+    resumeLookup() { this.setLookupPaused(false); },
   };
 }

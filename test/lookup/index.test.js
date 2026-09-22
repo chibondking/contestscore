@@ -79,7 +79,7 @@ describe('createLookupService', () => {
     svc.enqueue('W1AW');
     await svc.idle();
     assert.equal(hits.length, 0);
-    assert.deepEqual(svc.getStatus(), { provider: 'none', enabled: false });
+    assert.deepEqual(svc.getStatus(), { provider: 'none', enabled: false, paused: false });
   });
 
   it('looks up a new call and emits lookup:result with source + found', async () => {
@@ -167,6 +167,67 @@ describe('createLookupService', () => {
     svc.enqueue('GOOD');
     await svc.idle();
     assert.deepEqual(hits, ['GOOD']);
+  });
+
+  it('pause() stops new enqueues and getStatus() reflects it', async () => {
+    const emitter = new EventEmitter();
+    const client = fakeClient({ W1AW: { found: true } });
+    const svc = createLookupService({
+      emitter,
+      env: { LOOKUP_PROVIDER: 'hamqth', HAMQTH_USERNAME: 'u', HAMQTH_PASSWORD: 'p' },
+      deps: { ...NOOP_DEPS, client },
+    });
+
+    svc.pause();
+    assert.deepEqual(svc.getStatus(), { provider: 'hamqth', enabled: true, paused: true });
+
+    svc.enqueue('W1AW');
+    await svc.idle();
+    assert.deepEqual(client.seen, [], 'a paused service must not perform new lookups');
+  });
+
+  it('pause() drops whatever is already queued, not just future enqueues', async () => {
+    const emitter = new EventEmitter();
+    const client = fakeClient({ AA1A: { found: true }, BB2B: { found: true } });
+    // A non-empty betweenMs delay so pause() has a chance to run while
+    // BB2B is still sitting in the queue rather than already in flight --
+    // NOOP_DEPS' betweenMs: 0 would let the whole queue drain synchronously
+    // before this test's own code gets a turn.
+    const svc = createLookupService({
+      emitter,
+      env: { LOOKUP_PROVIDER: 'hamqth', HAMQTH_USERNAME: 'u', HAMQTH_PASSWORD: 'p' },
+      deps: { ...NOOP_DEPS, client, betweenMs: 20, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) },
+    });
+
+    svc.enqueue('AA1A');
+    svc.enqueue('BB2B');
+    await new Promise((r) => setTimeout(r, 5)); // let AA1A start; BB2B stays queued
+    svc.pause();
+    await svc.idle();
+
+    assert.deepEqual(client.seen, ['AA1A'], 'BB2B should have been dropped by pause(), never looked up');
+  });
+
+  it('resume() lets a call dropped mid-queue by pause() be looked up again', async () => {
+    const emitter = new EventEmitter();
+    const client = fakeClient({ AA1A: { found: true }, BB2B: { found: true } });
+    const svc = createLookupService({
+      emitter,
+      env: { LOOKUP_PROVIDER: 'hamqth', HAMQTH_USERNAME: 'u', HAMQTH_PASSWORD: 'p' },
+      deps: { ...NOOP_DEPS, client, betweenMs: 20, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) },
+    });
+
+    svc.enqueue('AA1A');
+    svc.enqueue('BB2B');
+    await new Promise((r) => setTimeout(r, 5)); // AA1A starts; BB2B still queued (see the drop test above)
+    svc.pause();
+    await svc.idle();
+    assert.deepEqual(client.seen, ['AA1A'], 'sanity check: BB2B was dropped, not looked up');
+
+    svc.resume();
+    svc.enqueue('BB2B'); // must not be stuck "already pending" from the dropped attempt above
+    await svc.idle();
+    assert.deepEqual(client.seen, ['AA1A', 'BB2B']);
   });
 
   it('prime() back-fills uncached calls from the existing QSO table', async () => {

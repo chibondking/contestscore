@@ -72,6 +72,54 @@
       <p x-show="message" :style="'margin-top:1rem; color:' + (messageIsError ? 'var(--red)' : 'var(--green)')" x-text="message"></p>
     </section>
 
+    <section class="card card--wide" id="lookup">
+      <h2>Callsign Lookup (Busts)</h2>
+      <p class="empty" style="margin-bottom:1rem">
+        Every logged QSO's callsign is checked against HamQTH to flag
+        likely miscopies on the Possible Busts panel. If that lookup
+        traffic itself becomes a concern mid-contest -- a busy multi-op, an
+        upstream slowdown -- pause it here: new lookups stop immediately
+        and whatever's already queued is dropped, not just left to drain.
+        QSO logging and the rest of the dashboard are unaffected either
+        way. Resuming is instant and safe any time.
+      </p>
+
+      <div class="score-row" style="margin-bottom:1rem">
+        <div class="metric">
+          <span class="metric__value" x-text="!lookupStatus.enabled ? 'Off' : (lookupStatus.paused ? 'Paused' : 'Running')"></span>
+          <span class="metric__label" x-text="'Status · ' + (lookupStatus.provider || 'none')"></span>
+        </div>
+      </div>
+
+      <p class="empty" x-show="!lookupStatus.enabled">Lookup is not configured on this server -- nothing to pause.</p>
+
+      <template x-if="lookupStatus.enabled">
+        <div>
+          <button
+            x-show="!lookupStatus.paused"
+            @click="pauseLookup()"
+            :disabled="!token || lookupBusy"
+            style="padding:0.6em 1.2em; border-radius:4px; border:none; font-family:inherit; font-weight:bold; cursor:pointer;"
+            :style="(!token || lookupBusy) ? 'background:var(--border); color:var(--muted); cursor:not-allowed;' : 'background:var(--red); color:#fff;'"
+          >
+            <span x-text="lookupBusy ? 'Pausing…' : 'Pause Lookups'"></span>
+          </button>
+          <button
+            x-show="lookupStatus.paused"
+            @click="resumeLookup()"
+            :disabled="!token || lookupBusy"
+            style="padding:0.6em 1.2em; border-radius:4px; border:none; font-family:inherit; font-weight:bold; cursor:pointer;"
+            :style="(!token || lookupBusy) ? 'background:var(--border); color:var(--muted); cursor:not-allowed;' : 'background:var(--green); color:#000;'"
+          >
+            <span x-text="lookupBusy ? 'Resuming…' : 'Resume Lookups'"></span>
+          </button>
+        </div>
+      </template>
+
+      <p x-show="!token && lookupStatus.enabled" class="empty" style="margin-top:0.5rem">Paste the admin token above to enable this.</p>
+      <p x-show="lookupMessage" :style="'margin-top:1rem; color:' + (lookupMessageIsError ? 'var(--red)' : 'var(--green)')" x-text="lookupMessage"></p>
+    </section>
+
   </main>
 
   <footer class="footer"></footer>
