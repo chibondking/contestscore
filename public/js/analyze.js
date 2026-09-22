@@ -154,6 +154,36 @@ function analyze() {
       if (a && b) window.location.href = `/compare?a=${a}&b=${b}`;
     },
 
+    // Pick-from-the-saved-list path for the compare boxes, so nobody has to
+    // hand-copy an id off the table -- newId() draws from mixed-case
+    // base64 (l/1, I/l, O/0 all appear), and a mistyped id just silently
+    // 404s on the compare page with no hint that's what happened. Clicking
+    // a row fills the first empty slot, then rotates (A<-B, new->B); a
+    // second click on an already-selected row clears its slot.
+    addToCompare(s) {
+      if (this.cmpA === s.id) { this.cmpA = ''; return; }
+      if (this.cmpB === s.id) { this.cmpB = ''; return; }
+      if (!this.cmpA) { this.cmpA = s.id; return; }
+      if (!this.cmpB) { this.cmpB = s.id; return; }
+      this.cmpA = this.cmpB;
+      this.cmpB = s.id;
+    },
+
+    clearCompare() {
+      this.cmpA = '';
+      this.cmpB = '';
+    },
+
+    // Label a compare-box id against the saved list, whether it got there
+    // by clicking a row or by pasting an id/URL -- catches a typo's
+    // "unknown id" before the click through to /compare, not after.
+    labelFor(id) {
+      const bare = this.idFrom(id);
+      const s = this.savedLogs.find((x) => x.id === bare);
+      if (!bare) return '';
+      return s ? `${s.contest || '—'} · ${s.station_call || '—'}` : 'unrecognized id — not in your saved list';
+    },
+
     pickFile(ev) {
       const list = ev.target.files || (ev.dataTransfer && ev.dataTransfer.files) || [];
       const f = list[0];
