@@ -44,6 +44,8 @@
  *                      snapshot's score history.
  *   --no-score         Don't emit score packets.
  *   --no-radio         Don't emit RadioInfo packets.
+ *   --no-fkey          Skip the per-QSO F-key/PTT pulse (still sends the
+ *                      sparse band/mode/op RadioInfo unless --no-radio too).
  *   --quiet            One line per ~10 QSOs instead of every QSO.
  */
 
@@ -94,6 +96,7 @@ const CFG = {
   scoreFormula: opt('score-formula', 'auto'),
   emitScore: !flag('no-score'),
   emitRadio: !flag('no-radio'),
+  emitFkey: !flag('no-fkey'),
   quiet: flag('quiet'),
 };
 
@@ -208,6 +211,15 @@ function contactPacket(q) {
 }
 
 function radioPacket(r) {
+  // FunctionKeyCaption is the label of the F-key that started the current
+  // transmission (see CLAUDE.md's RadioInfo note) -- N1MM never clears it
+  // back out between transmissions, it just sits there stale until the
+  // next TX. Only meaningful while emitFkeyPulse() below is driving
+  // IsTransmitting; the sparse band/mode/op-change packets elsewhere in
+  // this file pass none and it's simply omitted.
+  const caption = r.function_key_caption
+    ? `\n  <FunctionKeyCaption>${esc(r.function_key_caption)}</FunctionKeyCaption>`
+    : '';
   return `<?xml version="1.0" encoding="utf-8"?>
 <RadioInfo>
   <StationName>${esc(r.station_name)}</StationName>
@@ -217,12 +229,43 @@ function radioPacket(r) {
   <Mode>${esc(r.mode)}</Mode>
   <OpCall>${esc(r.op_call)}</OpCall>
   <IsRunning>${boolX(r.is_running)}</IsRunning>
-  <IsTransmitting>${boolX(r.is_transmitting)}</IsTransmitting>
+  <IsTransmitting>${boolX(r.is_transmitting)}</IsTransmitting>${caption}
   <FocusEntry>1</FocusEntry>
   <Antenna>1</Antenna>
   <FocusRadioNr>${r.radio_nr}</FocusRadioNr>
   <ActiveRadioNr>${r.radio_nr}</ActiveRadioNr>
 </RadioInfo>`;
+}
+
+// A run QSO plausibly started with a CQ; a S&P QSO plausibly started by
+// tail-ending a pileup. Either way it ends with an exchange and a TU --
+// this is a simulation of *a* plausible F-key sequence, not a claim about
+// what any specific operator's own macro labels say (that's per-station
+// N1MM config and this script has no way to know it).
+const RUN_OPEN = ['F1: CQ', 'F1: CQ NH8S', 'F1: CQ Contest'];
+const SP_OPEN = ['F2: My Call', 'F2: NH8S'];
+const CLOSE = ['F4: TU', 'F4: TU 599', 'F3: 59(9)'];
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+
+// One simulated F-key press/PTT cycle around a single QSO: TX on with a
+// plausible caption, a short pause standing in for the over-the-air
+// exchange, TX off. Scaled by `speed` (like every other wait in this
+// file) so it stays proportional at high --speed instead of tacking a
+// fixed delay onto every QSO regardless of how compressed the replay is.
+async function emitFkeyPulse(q, speed) {
+  const rn = q.radio_nr == null ? 1 : q.radio_nr;
+  const station = { station_name: q.station_name || q.netbios_name || q.mycall, radio_nr: rn, freq: q.rx_freq, mode: q.mode, op_call: q.operator };
+  const openCaption = pick(q.is_run_qso ? RUN_OPEN : SP_OPEN);
+  const closeCaption = pick(CLOSE);
+  const pulseMs = Math.max(20, Math.round(180 / speed));
+
+  await send(radioPacket({ ...station, is_running: q.is_run_qso ? 1 : 0, is_transmitting: 1, function_key_caption: openCaption }), CFG.radioPort);
+  await sleep(pulseMs);
+  await send(radioPacket({ ...station, is_running: q.is_run_qso ? 1 : 0, is_transmitting: 1, function_key_caption: closeCaption }), CFG.radioPort);
+  // Back to listening -- caption field stays on the wire (real N1MM
+  // behavior) even though it's no longer meaningful once IsTransmitting
+  // is false; the dashboard only reads it while transmitting anyway.
+  await send(radioPacket({ ...station, is_running: q.is_run_qso ? 1 : 0, is_transmitting: 0, function_key_caption: closeCaption }), CFG.radioPort);
 }
 
 function scorePacket(agg, headerRow) {
@@ -309,7 +352,8 @@ async function replayOnce() {
 
   console.log(`\n▶ ${path.basename(snapPath)}  ·  ${qsos.length} QSOs  ·  `
     + `real span ${fmtDur(spanMs)}  →  replay ~${fmtDur(plannedMs)} `
-    + `(${CFG.interval != null ? `flat ${CFG.interval}ms` : `${speed.toFixed(0)}× speed`})  ·  score = ${FORMULA}\n`);
+    + `(${CFG.interval != null ? `flat ${CFG.interval}ms` : `${speed.toFixed(0)}× speed`})  ·  score = ${FORMULA} `
+    + `·  F-keys: ${CFG.emitRadio && CFG.emitFkey ? 'on' : 'off'}\n`);
 
   for (let i = 0; i < qsos.length && !stopped; i++) {
     await sleep(waitBefore(i));
@@ -334,6 +378,11 @@ async function replayOnce() {
         }), CFG.radioPort);
       }
     }
+
+    // Per-QSO simulated F-key/PTT cycle -- TX on with a plausible caption,
+    // a brief pause, TX off -- then the QSO lands in the log, same order a
+    // real operator works in (key down, work the station, log it).
+    if (CFG.emitRadio && CFG.emitFkey) await emitFkeyPulse(q, speed);
 
     await send(contactPacket(q), CFG.contactPort);
 
