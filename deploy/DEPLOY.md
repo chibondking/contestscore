@@ -125,17 +125,42 @@ current binary from the `contestpulse-latest` release.
 
 **One relay (usually score, since it's the quietest -- an RTC broadcast
 every ~10s vs. contact's per-QSO traffic) goes silent for minutes with no
-error logged anywhere, then resumes on its own?** Not fully diagnosed --
-happened once (2026-09-16, scoreboard.wt2p.us during CW-OPS) and had
-already resolved by the time it was investigated, with radio/contact/the
-heartbeat all unaffected the whole time. Since 2026-09, ContestPulse logs a
-`[<label> :<port>] still waiting on a request after 15s` line (and a
-`finally returned after ...` line once it does) if a relay's forward or the
-heartbeat's send ever runs unexpectedly long -- if it recurs, that log line
-is the first thing to check; its absence would point upstream, at N1MM
-itself not broadcasting (or broadcasting on a port ContestPulse isn't
-listening on -- same class of port mismatch as the SmartSDR CAT case
-above), rather than at ContestPulse.
+error logged anywhere?** Happened at least twice (2026-09-16 and again
+around 2026-09-21/22, both on scoreboard.wt2p.us), and needed a manual
+restart of the whole ContestPulse process to clear both times -- with
+radio/contact/the heartbeat unaffected the whole time, so it's specific to
+one relay's own forwarding getting stuck, not the process or the network
+dying outright. The exact trigger was never pinned down either time (by
+the time it's noticed, the gap has usually already closed on its own), so
+rather than keep chasing a root cause that won't reproduce under
+observation, ContestPulse now defends against the whole *class* of
+failure instead of that one theory:
+
+- reading a relay's UDP socket and forwarding what it reads are two
+  separate goroutines (`relay.run()` / `relay.forwarder()`,
+  `contestpulse/relay.go`), connected by a small bounded queue. A stuck
+  forward can no longer also mean a stuck reader -- before this, the two
+  happened in one synchronous loop, so a wedged forward silently stopped
+  that port from reading any further N1MM traffic too, which is
+  indistinguishable from the process being dead for that data.
+- `watchDo` (`contestpulse/httpclient.go`) now hard-abandons a forward or
+  heartbeat send that hasn't returned within 30s, even though
+  `net/http`'s own `Client.Timeout` (5s, with one retry) is *documented*
+  to already bound the whole round trip and should make this impossible.
+  If it happens anyway, the relay's forwarder goroutine gives up and moves
+  on to the next queued packet instead of waiting forever.
+
+ContestPulse still logs a `[<label> :<port>] still waiting on a request
+after 15s` line (and `finally returned after ...` / `abandoning after 30s`
+once it resolves one way or the other) if a send runs unexpectedly long --
+that log line is still the first thing to check if a relay looks stalled.
+Its absence would point upstream, at N1MM itself not broadcasting (or
+broadcasting on a port ContestPulse isn't listening on -- same class of
+port mismatch as the SmartSDR CAT case above), rather than at
+ContestPulse. The practical difference now is that neither case should
+need a manual restart to recover -- a real stuck send self-heals within
+30s, and N1MM resuming its own broadcasts is picked up the next time it
+sends one, either way.
 
 ## Alternative: raw UDP over Tailscale/ZeroTier
 

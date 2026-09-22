@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -116,6 +117,121 @@ func TestForwardDoesNotRetryOnHTTPError(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&hits); got != 1 {
 		t.Fatalf("server hits: got %d, want 1 (a 401 must not be retried)", got)
+	}
+}
+
+// enqueue() is the core of the fix for a relay that stops making progress
+// and needs a manual restart: once the queue between the reader and the
+// forwarder is full, a new packet must displace the oldest one, never
+// block. White-box on the channel directly -- deterministic, no timing.
+func TestEnqueueDropsOldestPacketWhenQueueIsFull(t *testing.T) {
+	r := newRelay("score", 0, "http://unused.invalid", "secret")
+	for i := 0; i < forwardQueueDepth; i++ {
+		r.packets <- []byte{byte(i)}
+	}
+
+	r.enqueue([]byte{99})
+
+	var got [][]byte
+	for len(r.packets) > 0 {
+		got = append(got, <-r.packets)
+	}
+	if len(got) != forwardQueueDepth {
+		t.Fatalf("queue length after enqueue: got %d, want %d (still full, not grown)", len(got), forwardQueueDepth)
+	}
+	if got[0][0] != 1 {
+		t.Fatalf("expected packet 0 (the oldest) to have been dropped; front of queue is now %v", got[0])
+	}
+	if got[len(got)-1][0] != 99 {
+		t.Fatalf("expected the newest packet to be at the back of the queue, got %v", got[len(got)-1])
+	}
+}
+
+// The real-world regression this whole change targets: a forward that's
+// stuck (a slow or non-responding server) must not stop run()'s ReadFrom
+// loop from picking up the next UDP packet. Before decoupling the two, this
+// is exactly what made the score relay look dead until ContestPulse was
+// restarted by hand -- one stuck send blocked the read loop for that port
+// entirely, whether or not the reason it was stuck ever got confirmed.
+func TestRunKeepsReadingWhileAForwardIsStuck(t *testing.T) {
+	release := make(chan struct{})
+	var mu sync.Mutex
+	var bodies [][]byte
+	first := true
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, _ := io.ReadAll(req.Body)
+		mu.Lock()
+		isFirst := first
+		first = false
+		mu.Unlock()
+		if isFirst {
+			<-release // held open until the test says the "stuck" request may finish
+		}
+		mu.Lock()
+		bodies = append(bodies, body)
+		mu.Unlock()
+		w.WriteHeader(202)
+	}))
+	defer srv.Close()
+
+	probe, err := net.ListenUDP("udp4", &net.UDPAddr{Port: 0, IP: net.IPv4zero})
+	if err != nil {
+		t.Fatalf("failed to find a free UDP port: %v", err)
+	}
+	port := probe.LocalAddr().(*net.UDPAddr).Port
+	probe.Close()
+
+	r := newRelay("score", port, srv.URL, "secret123")
+	go r.run()
+	defer r.stop()
+	time.Sleep(50 * time.Millisecond)
+
+	conn, err := net.Dial("udp4", "127.0.0.1:"+strconv.Itoa(port))
+	if err != nil {
+		t.Fatalf("failed to dial relay's UDP port: %v", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.Write([]byte("first")); err != nil {
+		t.Fatalf("failed to send first packet: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond) // let the relay pick it up and start (and block on) forwarding it
+	if _, err := conn.Write([]byte("second")); err != nil {
+		t.Fatalf("failed to send second packet: %v", err)
+	}
+
+	// Before the fix, run()'s ReadFrom wouldn't be called again until the
+	// first forward returned -- "second" would never even be read off the
+	// socket, let alone queued. It landing in r.packets proves the read
+	// loop kept going despite the stuck forward.
+	deadline := time.Now().Add(time.Second)
+	for len(r.packets) == 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if len(r.packets) == 0 {
+		t.Fatal("expected the second packet to have been read and queued while the first forward was still stuck")
+	}
+
+	close(release)
+
+	deadline = time.Now().Add(time.Second)
+	for {
+		mu.Lock()
+		n := len(bodies)
+		mu.Unlock()
+		if n >= 2 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(bodies) != 2 {
+		t.Fatalf("expected both packets to eventually be forwarded, got %d: %v", len(bodies), bodies)
+	}
+	if string(bodies[0]) != "first" || string(bodies[1]) != "second" {
+		t.Fatalf("expected forward order to be preserved (first, second), got: %v", bodies)
 	}
 }
 

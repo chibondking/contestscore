@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -63,27 +64,54 @@ func newIngestClient() *http.Client {
 // first incident hard to diagnose after the fact.
 var watchdogThreshold = 15 * time.Second
 
+// hardAbandonAfter is the point past which watchDo stops waiting on fn at
+// all and returns an error to the caller anyway, even though fn is still
+// running. net/http's Client.Timeout is documented to bound a request's
+// entire round trip, so in theory this should never fire -- but the score
+// relay has now gone silent and needed a manual restart to recover on more
+// than one occasion (2026-09-16, and again around 2026-09-21/22), and the
+// exact mechanism was never pinned down either time (by the time it's
+// noticed, the gap has usually already closed). Rather than keep chasing
+// a root cause that isn't reproducing under observation, this closes off
+// the whole *class* of failure at the one place that actually matters:
+// without a hard ceiling here, any fn call that never returns -- for
+// whatever reason -- wedges its caller forever. Paired with relay.go's
+// queued forwarder goroutine, that caller is no longer the UDP read loop
+// itself, but it would otherwise still be true that ContestPulse quietly
+// stops making progress on that relay and nothing short of a human
+// noticing and restarting the process recovers it. fn's own goroutine is
+// abandoned here, not killed -- Go has no way to force that -- so it will
+// eventually finish (or leak, in the pathological case) with its result
+// simply discarded; that's a strictly better failure mode than the one
+// it replaces. A var, not a const, so a test can shrink it instead of
+// taking 30+ real seconds.
+var hardAbandonAfter = 30 * time.Second
+
 // watchDo runs fn (a relay's forward or a heartbeat's send), logging once
 // if it's still running past watchdogThreshold and again when it finally
-// returns. The "still running" line is the point -- a call that never
-// returns at all would never produce an after-the-fact log on its own, so
-// this has to fire from a separate goroutine while fn is still in flight.
+// returns -- or, if it never returns within hardAbandonAfter, giving up on
+// it and returning an error so the caller isn't wedged indefinitely. The
+// "still running" line is the point -- a call that never returns at all
+// would never produce an after-the-fact log on its own, so this has to
+// fire from a separate goroutine while fn is still in flight.
 func watchDo(label string, fn func() error) error {
 	start := time.Now()
-	done := make(chan struct{})
-	go func() {
-		select {
-		case <-done:
-		case <-time.After(watchdogThreshold):
-			log.Printf("[%s] still waiting on a request after %s -- may be stuck past the client's own timeout budget", label, watchdogThreshold)
-		}
-	}()
+	done := make(chan error, 1) // buffered: an abandoned fn's late send must not block forever
+	go func() { done <- fn() }()
 
-	err := fn()
-	close(done)
-
-	if elapsed := time.Since(start); elapsed > watchdogThreshold {
-		log.Printf("[%s] request finally returned after %s (err=%v)", label, elapsed.Round(time.Second), err)
+	select {
+	case err := <-done:
+		return err // the common case: fn finished before the watchdog ever had to speak up
+	case <-time.After(watchdogThreshold):
+		log.Printf("[%s] still waiting on a request after %s -- may be stuck past the client's own timeout budget", label, watchdogThreshold)
 	}
-	return err
+
+	select {
+	case err := <-done:
+		log.Printf("[%s] request finally returned after %s (err=%v)", label, time.Since(start).Round(time.Second), err)
+		return err
+	case <-time.After(hardAbandonAfter - watchdogThreshold):
+		log.Printf("[%s] abandoning after %s with no response -- moving on so this relay doesn't stay wedged; the underlying call may still complete in the background", label, hardAbandonAfter)
+		return fmt.Errorf("%s: abandoned after %s with no response", label, hardAbandonAfter)
+	}
 }

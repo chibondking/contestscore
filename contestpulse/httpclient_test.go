@@ -55,6 +55,45 @@ func TestWatchDoLogsWhenACallOutlastsTheThreshold(t *testing.T) {
 	}
 }
 
+// If fn never returns at all, watchDo must not wait on it forever -- past
+// hardAbandonAfter it gives up and returns an error, so whatever called it
+// (relay.forwarder()'s loop, in production) can move on instead of staying
+// wedged. This is the actual fix for the "had to restart the app by hand"
+// failure mode: even in the worst case where net/http's own Client.Timeout
+// somehow doesn't bound a call, watchDo now does.
+func TestWatchDoAbandonsACallThatNeverReturns(t *testing.T) {
+	origThreshold, origAbandon := watchdogThreshold, hardAbandonAfter
+	watchdogThreshold = 10 * time.Millisecond
+	hardAbandonAfter = 40 * time.Millisecond
+	defer func() { watchdogThreshold, hardAbandonAfter = origThreshold, origAbandon }()
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	block := make(chan struct{}) // deliberately never closed -- fn hangs forever
+	done := make(chan error, 1)
+	go func() {
+		done <- watchDo("test", func() error {
+			<-block
+			return nil
+		})
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected an error from an abandoned call, got nil")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("watchDo did not abandon a call that never returns -- it's still blocked")
+	}
+
+	if !strings.Contains(buf.String(), "abandoning after") {
+		t.Fatalf("expected an \"abandoning after\" log line, got:\n%s", buf.String())
+	}
+}
+
 // A call that returns comfortably inside the threshold should produce
 // neither log line -- the normal, quiet case.
 func TestWatchDoStaysQuietWhenACallFinishesInTime(t *testing.T) {
