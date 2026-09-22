@@ -4,6 +4,7 @@ const {
   getRadios,
   getLatestScore, getScoreHistory,
   getNotFoundCalls,
+  getSolarInRange,
 } = require('../db/queries');
 const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
@@ -35,6 +36,20 @@ router.get('/features', (req, res) => {
 // sunspots) for the header. `{ updated: null }` until the first fetch lands.
 router.get('/solar', (req, res) => {
   res.json(latestSolar());
+});
+
+// GET /api/solar/history?from=&to=  -- readings between two datetime('now')-
+// shaped UTC strings ("YYYY-MM-DD HH:MM:SS"). Powers the analyzer compare
+// page's "conditions during this session" chart for a from-live analysis
+// only -- an uploaded log from an arbitrary past date has no captured solar
+// (see docs/ANALYZER.md "Not done"). Public, same posture as reading a
+// saved analysis: it's ambient station telemetry, not a write.
+router.get('/solar/history', (req, res) => {
+  const { from, to } = req.query;
+  if (!from || !to) {
+    return res.status(400).json({ error: 'from and to are required (UTC "YYYY-MM-DD HH:MM:SS")' });
+  }
+  res.json(getSolarInRange(from, to));
 });
 
 // GET /api/qsos  optional ?band=&mode=&operator=

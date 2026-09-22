@@ -260,6 +260,16 @@ function prepare() {
     pruneSolarByAge: db.prepare(
       "DELETE FROM solar_snapshots WHERE fetched_at < datetime('now', @modifier)"
     ),
+    // Readings spanning a from-live analysis's own session -- the analyzer
+    // compare page's "conditions during this session" chart. Only ever
+    // meaningful for a live-sourced analysis; an uploaded log from an
+    // arbitrary past date has no captured solar (see docs/ANALYZER.md
+    // "Not done"). fetched_at and the @from/@to bounds are both
+    // datetime('now')-shaped UTC strings, so a plain BETWEEN sorts right.
+    getSolarInRange: db.prepare(
+      'SELECT sfi, a_index, k_index, sunspots, fetched_at FROM solar_snapshots '
+      + 'WHERE fetched_at BETWEEN @from AND @to ORDER BY fetched_at'
+    ),
 
     insertAnalyzedLog: _insertAnalyzedLog,
     getAnalyzedLog: _getAnalyzedLog,
@@ -419,6 +429,11 @@ function getLatestSolar() { return prepare().getLatestSolar.get() || null; }
 function pruneSolarSnapshots({ ttlDays = 365 } = {}) {
   if (ttlDays > 0) prepare().pruneSolarByAge.run({ modifier: `-${ttlDays} days` });
 }
+// Readings between two datetime('now')-shaped UTC strings -- the analyzer
+// compare page's "conditions during this session" chart, for a from-live
+// analysis's own span. See the prepared statement's comment for why a
+// plain BETWEEN is safe here.
+function getSolarInRange(from, to) { return prepare().getSolarInRange.all({ from, to }); }
 
 // --- Analyzer -------------------------------------------------------------
 
@@ -465,7 +480,7 @@ module.exports = {
   insertScoreBreakdown, getLatestScore, getScoreHistory, getScoreBreakdown,
   getSetting, setSetting,
   getCachedCallsign, cacheCallsign, getNotFoundCalls,
-  insertSolarSnapshot, getLatestSolar, pruneSolarSnapshots,
+  insertSolarSnapshot, getLatestSolar, pruneSolarSnapshots, getSolarInRange,
   insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,
   pruneAnalyzedLogs,
   resetStatements,

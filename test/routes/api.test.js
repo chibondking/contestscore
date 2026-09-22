@@ -230,3 +230,26 @@ describe('GET /api/solar', () => {
     assert.equal(body.sfi, 140);
   });
 });
+
+describe('GET /api/solar/history', () => {
+  it('400s without both from and to', async () => {
+    const r = await fetch(`${baseUrl}/api/solar/history?from=2026-01-01 00:00:00`);
+    assert.equal(r.status, 400);
+  });
+
+  it('returns readings within the range, ordered by time', async () => {
+    insertSolarSnapshot({ sfi: 100, a: 4, k: 1, sunspots: 50 });
+    const body = await (await fetch(
+      `${baseUrl}/api/solar/history?from=${encodeURIComponent('2000-01-01 00:00:00')}&to=${encodeURIComponent('2100-01-01 00:00:00')}`,
+    )).json();
+    assert.ok(Array.isArray(body));
+    assert.ok(body.some((r) => r.sfi === 100));
+  });
+
+  it('excludes readings outside the range', async () => {
+    const body = await (await fetch(
+      `${baseUrl}/api/solar/history?from=${encodeURIComponent('1990-01-01 00:00:00')}&to=${encodeURIComponent('1990-01-02 00:00:00')}`,
+    )).json();
+    assert.deepEqual(body, []);
+  });
+});

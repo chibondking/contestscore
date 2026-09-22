@@ -16,6 +16,10 @@
   </script>
   <title>ContestPulse Compare</title>
   <link rel="stylesheet" href="/css/dashboard.css">
+  <!-- Plain (non-deferred), same reasoning as charts.html: Chart must exist
+       as a global before Alpine's deferred script starts evaluating the
+       x-effect expressions below that call into it. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
 <body x-data="compare()" x-init="init()">
@@ -94,6 +98,96 @@
           </table>
         </div>
       </section>
+    </template>
+
+    <template x-if="ready">
+      <section class="card card--wide">
+        <h2>QSO Rate Over Time</h2>
+        <p class="empty" style="margin-bottom:.5rem">
+          Aligned to each log's own first QSO — A and B rarely share a
+          calendar date, so elapsed time is what actually overlays them.
+        </p>
+        <div class="chart-box chart-box--trend">
+          <canvas id="cmpRateChart" x-effect="renderRateChart()"></canvas>
+        </div>
+      </section>
+    </template>
+
+    <template x-if="ready">
+      <section class="card card--wide">
+        <h2>Cumulative QSOs</h2>
+        <div class="chart-box chart-box--trend">
+          <canvas id="cmpCumChart" x-effect="renderCumulativeChart()"></canvas>
+        </div>
+      </section>
+    </template>
+
+    <template x-if="ready">
+      <div class="grid grid--nested">
+        <section class="card">
+          <h2>QSOs by Band</h2>
+          <div class="chart-box chart-box--trend">
+            <canvas id="cmpBandChart" x-effect="renderBandChart()"></canvas>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>QSOs by Mode</h2>
+          <div class="chart-box chart-box--trend">
+            <canvas id="cmpModeChart" x-effect="renderModeChart()"></canvas>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>QSOs by Continent</h2>
+          <div class="chart-box chart-box--trend">
+            <canvas id="cmpContChart" x-effect="renderContinentChart()"></canvas>
+          </div>
+        </section>
+
+        <template x-if="hasRunFlag">
+          <section class="card">
+            <h2>Run vs. Search &amp; Pounce</h2>
+            <div class="chart-box chart-box--trend">
+              <canvas id="cmpRunSpChart" x-effect="renderRunSpChart()"></canvas>
+            </div>
+          </section>
+        </template>
+      </div>
+    </template>
+
+    <template x-if="solarReady">
+      <div class="grid grid--nested">
+        <section class="card card--wide">
+          <h2 style="margin-bottom:.25rem">Space Weather During Each Session</h2>
+          <p class="empty" style="margin-bottom:1rem">
+            SFI / K-index readings captured while this station was live —
+            only available for a "snapshot the live contest" analysis, since
+            an uploaded log from an arbitrary past date has no captured
+            solar data.
+          </p>
+        </section>
+
+        <template x-if="a.meta.format === 'live'">
+          <section class="card">
+            <h2>A — Conditions</h2>
+            <div class="chart-box chart-box--trend">
+              <canvas id="cmpSolarAChart" x-effect="renderSolarChart('a')"></canvas>
+            </div>
+            <p class="empty" x-show="!solarA.length">No solar readings captured during this session.</p>
+          </section>
+        </template>
+
+        <template x-if="b.meta.format === 'live'">
+          <section class="card">
+            <h2>B — Conditions</h2>
+            <div class="chart-box chart-box--trend">
+              <canvas id="cmpSolarBChart" x-effect="renderSolarChart('b')"></canvas>
+            </div>
+            <p class="empty" x-show="!solarB.length">No solar readings captured during this session.</p>
+          </section>
+        </template>
+      </div>
     </template>
 
   </main>

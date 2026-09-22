@@ -54,8 +54,16 @@ as `DELETE /api/db`); **viewing** a saved analysis is public.
   **Copy summary (email)**, **Download report**, and a "Compare with…" box.
 - **`/compare?a=<id>&b=<id>`** (`public/compare.js`) — two saved analyses
   side by side: a headline table (QSOs, points, mults, pts/Q, DXCC, zones,
-  bands, hours, avg rate, best-60, each with a B−A delta) and a per-band
-  QSO table with deltas. Public — you only need the two ids.
+  bands, hours, avg rate, best-60, each with a B−A delta), a per-band QSO
+  table with deltas, and Chart.js breakdowns — QSO rate and cumulative
+  QSOs (both aligned to each log's own first QSO on an elapsed-time axis,
+  since A and B are almost never from the same calendar date), grouped
+  bars for band/mode/continent share, Run vs. S&P (when either log carries
+  `has_run_flag`), and — for a **from-live** analysis only — the SFI/
+  K-index readings captured during that session (`GET /api/solar/history`).
+  Public — you only need the two ids. The saved-analyses table on
+  `/analyze` has a "+ compare" button per row so you never have to hand-
+  copy an id (they're mixed-case base64 -- easy to mistype).
 - `chrome.js` lights up the **Analyze** nav link (not Stats / Charts)
   whenever the URL carries `?log=<id>`, so a result view reads as part of
   the analyzer.
@@ -203,11 +211,15 @@ The pure suites run under Deno on a machine without Node
 - **No callsign lookup.** `src/lookup/` (HamQTH) is a live-dashboard
   feature; the analyzer never calls it, so a saved analysis stays
   reproducible offline. Geo enrichment here is the bundled `cty.csv` only.
-- **No rate-vs-solar chart (yet).** `solar_snapshots` accumulates SFI / A /
-  K readings during a contest (`src/solar/`). A planned feature will attach
-  the rows whose `fetched_at` falls in a **from-live** analysis's time span
-  to the stored analysis and chart QSO rate against them. Only from-live --
-  an uploaded log from an arbitrary past date has no captured solar.
+- **Rate-vs-solar is a conditions chart, not yet overlaid on rate.**
+  `/compare` now charts SFI/K-index for the span of a from-live analysis
+  (`GET /api/solar/history?from=&to=`, added alongside this), but as its
+  own dual-axis chart next to the rate chart rather than one combined
+  rate-vs-K plot -- the two use different x-axes (rate is elapsed-time-
+  since-start so two different-dated logs overlay; solar is each log's own
+  wall-clock span) and merging them would need resampling one onto the
+  other's axis. Only from-live -- an uploaded log from an arbitrary past
+  date has no captured solar.
 - ADIF removed-QSO detection is limited to `APP_N1MM_ISCLAIMEDQSO`.
 - No in-browser "quick look" (parse without saving) — the parsers are pure
   enough for it, it's just not wired up.
