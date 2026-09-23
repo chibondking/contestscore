@@ -9,9 +9,10 @@ const {
 const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
 const { resolveLookupConfig, stripSuffix } = require('../lookup');
-const { getLookupService } = require('../udp');
+const { getLookupService, getUdpListeners } = require('../udp');
 const { resolveSolarConfig, latestSolar } = require('../solar');
 const { freqToBand } = require('../parsers/util');
+const { getDb } = require('../db');
 
 const router = Router();
 
@@ -20,6 +21,63 @@ const router = Router();
 // changes on a real deploy, never on its own).
 router.get('/version', (req, res) => {
   res.json(getVersionInfo());
+});
+
+// GET /api/health -- liveness + diagnostics for an external monitor (the
+// ops dashboard). `status` is strictly about whether contestscore itself
+// is functioning -- DB reachable, the three UDP sockets actually bound --
+// not about whether a contest happens to be producing data right now,
+// which this server has no way to know and isn't this server's fault
+// either way. The bridge/lookup/solar blocks are informational diagnostics
+// alongside that, for a monitor that wants the fuller picture, not inputs
+// to `status`.
+router.get('/health', (req, res) => {
+  const checks = { db: { ok: false }, udp_listeners: { radio: null, contact: null, score: null } };
+
+  try {
+    getDb().prepare('SELECT 1').get();
+    checks.db.ok = true;
+  } catch (err) {
+    checks.db.ok = false;
+    checks.db.error = err.message;
+  }
+
+  const listeners = getUdpListeners();
+  if (listeners) {
+    checks.udp_listeners = {
+      radio: !!listeners.radio.bound,
+      contact: !!listeners.contact.bound,
+      score: !!listeners.score.bound,
+    };
+  }
+
+  const listenersOk = !listeners
+    || (checks.udp_listeners.radio && checks.udp_listeners.contact && checks.udp_listeners.score);
+  const status = checks.db.ok && listenersOk ? 'ok' : 'degraded';
+
+  const solar = latestSolar();
+  // solar.updated is a datetime('now')-shaped UTC string with no zone
+  // marker ("YYYY-MM-DD HH:MM:SS") -- new Date() on that would parse it as
+  // *local* time in Node, same gotcha handled the same way throughout
+  // compare.js/report.js (see e.g. qTime()).
+  const solarStaleMs = solar && solar.updated
+    ? Date.now() - new Date(solar.updated.replace(' ', 'T') + 'Z').getTime()
+    : null;
+  const lk = getLookupService();
+
+  res.status(status === 'ok' ? 200 : 503).json({
+    status,
+    checks,
+    bridges: getStatuses(),
+    lookup: lk ? lk.getStatus() : { provider: 'none', enabled: false, paused: false },
+    solar: {
+      updated: solar ? solar.updated : null,
+      // resolveSolarConfig().refreshMinutes isn't exposed per-instance here;
+      // 3x the documented 120-min default poll interval is a reasonable
+      // "something's actually wrong, not just between polls" threshold.
+      stale: solarStaleMs != null && solarStaleMs > 3 * 120 * 60000,
+    },
+  });
 });
 
 // GET /api/features -- runtime feature switches the dashboard needs to know

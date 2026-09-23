@@ -390,6 +390,16 @@ Environment variables override config file. See `.env.example`.
 
 ## REST API
 
+- `GET /api/health` -- for an external monitor (the ops dashboard), not the
+  frontend. `{ status: "ok"|"degraded", checks: { db, udp_listeners },
+  bridges, lookup, solar }`, 200 on ok / 503 on degraded. `status` is
+  strictly about contestscore's own liveness -- SQLite reachable, the three
+  UDP sockets actually bound (each listener's own `.bound` flag, set only
+  once `dgram`'s async `bind()` callback fires -- see `src/udp/*Listener.js`)
+  -- never about whether a contest happens to be producing data right now,
+  which isn't this server's fault either way. `bridges`/`lookup`/`solar` are
+  informational diagnostics alongside that (same shapes as their own GET
+  routes below), not inputs to `status`.
 - `GET /api/qsos` -- all QSOs, optional `?band=&mode=&operator=`
 - `GET /api/features` -- optional-feature switches the dashboard reads before
   showing/hiding panels: `{ lookup: { provider, enabled }, solar: { enabled } }`.

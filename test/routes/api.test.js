@@ -117,6 +117,25 @@ describe('GET /api/version', () => {
   });
 });
 
+describe('GET /api/health', () => {
+  it('is public, 200, status ok when the DB is reachable and no UDP listeners are tracked', async () => {
+    // This test harness never calls startListeners() (see the before()
+    // hook above), so getUdpListeners() is null here -- exactly the
+    // "not applicable" case the route treats as not failing the check.
+    // The real UDP-bind behavior is exercised by udp/*Listener.js's own
+    // socket, not re-tested here.
+    const res = await fetch(`${baseUrl}/api/health`);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.status, 'ok');
+    assert.equal(body.checks.db.ok, true);
+    assert.deepEqual(body.checks.udp_listeners, { radio: null, contact: null, score: null });
+    assert.ok(Array.isArray(body.bridges));
+    assert.ok('lookup' in body);
+    assert.ok('solar' in body);
+  });
+});
+
 describe('GET /api/features', () => {
   afterEach(() => {
     delete process.env.LOOKUP_PROVIDER;

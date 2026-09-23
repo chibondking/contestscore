@@ -55,6 +55,8 @@ async function handleContactBuffer(buf, emitter, source) {
 
 function createContactListener(port, emitter) {
   const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+  // See radioListener.js's identical comment -- GET /api/health reads this.
+  sock.bound = false;
 
   // Dispatches by the packet's own root element rather than assuming
   // everything on this port is contact-family traffic -- see dispatch.js's
@@ -73,6 +75,7 @@ function createContactListener(port, emitter) {
 
   sock.bind(port, () => {
     sock.setBroadcast(true);
+    sock.bound = true;
     console.log(`Contact listener bound to UDP :${port}`);
   });
 

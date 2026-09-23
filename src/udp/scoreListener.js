@@ -19,6 +19,8 @@ async function handleScoreBuffer(buf, emitter, source) {
 
 function createScoreListener(port, emitter) {
   const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+  // See radioListener.js's identical comment -- GET /api/health reads this.
+  sock.bound = false;
 
   // Dispatches by the packet's own root element rather than assuming
   // everything on this port is Score traffic -- see dispatch.js's header
@@ -37,6 +39,7 @@ function createScoreListener(port, emitter) {
 
   sock.bind(port, () => {
     sock.setBroadcast(true);
+    sock.bound = true;
     console.log(`Score listener bound to UDP :${port}`);
   });
 

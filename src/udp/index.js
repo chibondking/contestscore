@@ -21,6 +21,14 @@ const emitter = new EventEmitter();
 let lookupService = null;
 function getLookupService() { return lookupService; }
 
+// Set once startListeners() creates the three UDP sockets -- GET /api/health
+// reads each one's own .bound flag (see radioListener.js et al.) to report
+// whether the listener actually bound, not just that this process attempted
+// to start it. null in the same "never called startListeners()" case as
+// lookupService above.
+let udpListeners = null;
+function getUdpListeners() { return udpListeners; }
+
 // Per CLAUDE.md: parser/packet errors must never crash the server. A DB
 // write can also fail (e.g. a genuine natural-key collision from two
 // distinct QSOs) — log and carry on rather than take the process down.
@@ -110,11 +118,13 @@ function startListeners(io) {
 
   // Returned so callers (tests, graceful shutdown) can close the sockets —
   // an open dgram socket otherwise keeps the process/test-runner alive.
-  return [
+  const listeners = [
     createRadioListener(radioPort, emitter),
     createContactListener(contactPort, emitter),
     createScoreListener(scorePort, emitter),
   ];
+  udpListeners = { radio: listeners[0], contact: listeners[1], score: listeners[2] };
+  return listeners;
 }
 
-module.exports = { startListeners, emitter, getLookupService };
+module.exports = { startListeners, emitter, getLookupService, getUdpListeners };

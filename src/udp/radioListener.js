@@ -18,6 +18,11 @@ async function handleRadioBuffer(buf, emitter, source) {
 
 function createRadioListener(port, emitter) {
   const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+  // Set true only once bind() actually succeeds -- GET /api/health reads
+  // this to report whether the socket is really listening, not just that
+  // createRadioListener() was called (bind is async; a failure fires the
+  // 'error' handler below instead of the bind callback).
+  sock.bound = false;
 
   // Dispatches by the packet's own root element, not just "this arrived on
   // the radio port so it must be RadioInfo" -- a live capture showed a
@@ -37,6 +42,7 @@ function createRadioListener(port, emitter) {
 
   sock.bind(port, () => {
     sock.setBroadcast(true);
+    sock.bound = true;
     console.log(`Radio listener bound to UDP :${port}`);
   });
 
