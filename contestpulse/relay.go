@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
 )
 
 // forwardQueueDepth bounds how many not-yet-forwarded packets a relay will
@@ -20,6 +21,20 @@ import (
 // blocking, which is the entire point of decoupling the two in the first
 // place.
 const forwardQueueDepth = 16
+
+// udpReadBufferSize is big enough for any UDP datagram (max payload is
+// 65,507 bytes), so a read can never come up short. That matters more on
+// Windows than it looks: there, a datagram bigger than the buffer isn't
+// silently truncated the way it is on Linux -- ReadFrom returns
+// WSAEMSGSIZE as an error. With the old 8 KB buffer, one oversized Score
+// packet (the largest thing N1MM sends, and it grows with every band/mode
+// in the breakdown) was enough to trip that.
+const udpReadBufferSize = 65536
+
+// readErrorBackoff paces readLoop's retries after a read error that isn't
+// the socket being closed, so a persistent one can't spin the CPU. A var,
+// not a const, so a test can shrink it.
+var readErrorBackoff = 100 * time.Millisecond
 
 // relay listens on one local UDP port for N1MM broadcast traffic and
 // forwards every datagram, byte for byte, to a contestscore ingest endpoint
@@ -153,11 +168,32 @@ func (r *relay) run() {
 	go r.forwarder()
 
 	log.Printf("[%s :%d] relaying to %s", r.label, r.port, r.targetURL)
-	buf := make([]byte, 8192)
+	r.readLoop(conn)
+	conn.Close()
+	close(r.packets) // lets forwarder() drain the rest and exit
+}
+
+// readLoop reads datagrams off conn and queues them for forwarder() until
+// conn is closed. Split out from run() so a test can drive it with a fake
+// PacketConn that returns errors on demand.
+//
+// Only a closed socket ends the loop. Any other read error is logged and
+// the loop keeps reading: this used to break out on *every* error, which
+// silently killed the relay for good -- no log line, and the heartbeat
+// kept the dashboard showing the station as online the whole time. On
+// Windows a single oversized datagram (see udpReadBufferSize) was enough
+// to do it, and nothing short of restarting the process brought it back.
+func (r *relay) readLoop(conn net.PacketConn) {
+	buf := make([]byte, udpReadBufferSize)
 	for {
 		n, _, err := conn.ReadFrom(buf)
+		if errors.Is(err, net.ErrClosed) {
+			return // socket closed via stop()
+		}
 		if err != nil {
-			break // socket closed via stop(), or a real error -- either way, stop
+			log.Printf("[%s :%d] read error (continuing): %v", r.label, r.port, err)
+			time.Sleep(readErrorBackoff)
+			continue
 		}
 		packet := make([]byte, n) // copy before the next read reuses buf
 		copy(packet, buf[:n])
@@ -176,8 +212,6 @@ func (r *relay) run() {
 
 		r.enqueue(packet)
 	}
-	conn.Close()
-	close(r.packets) // lets forwarder() drain the rest and exit
 }
 
 // enqueue hands a packet to forwarder() without ever blocking the reader

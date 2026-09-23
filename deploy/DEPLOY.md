@@ -162,6 +162,24 @@ need a manual restart to recover -- a real stuck send self-heals within
 30s, and N1MM resuming its own broadcasts is picked up the next time it
 sends one, either way.
 
+**Still went silent on Windows with a build from before v1.1.5?** Two more
+ways a relay could stop for good with nothing logged, both Windows-specific
+and both fixed in v1.1.5 (run `contestpulse-windows-amd64.exe -version` to
+check which build you have; the startup log line shows it too):
+
+- A UDP datagram bigger than the relay's 8 KB read buffer made the read
+  fail outright on Windows (`WSAEMSGSIZE`; Linux just truncates), and any
+  read error ended that relay's read loop without a word. Score packets
+  are the largest thing N1MM sends. The buffer now holds any UDP datagram,
+  and a read error is logged (`read error (continuing)`) instead of
+  killing the relay.
+- QuickEdit mode: one click inside the console window starts a selection,
+  and Windows blocks console output until it's cleared. The first relay
+  to log anything then freezes mid-write -- for the score relay, a single
+  failed send was enough. ContestPulse now turns QuickEdit off for its own
+  console at startup. On an older build, untick it by hand (title bar ->
+  Properties -> QuickEdit Mode), or press Esc to release a stuck window.
+
 ## Alternative: raw UDP over Tailscale/ZeroTier
 
 If you'd rather not run an extra process, the UDP listeners already bind to

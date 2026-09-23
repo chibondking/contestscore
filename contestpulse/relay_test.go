@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -428,3 +429,106 @@ func TestRunDoesNotLogContactPacketsWhenLogPacketsIsFalse(t *testing.T) {
 	}
 }
 
+// fakePacketConn serves ReadFrom results from a script, then reports the
+// socket closed. Only ReadFrom is used by readLoop; the embedded interface
+// satisfies the rest of net.PacketConn.
+type fakePacketConn struct {
+	net.PacketConn
+	reads []fakeRead
+}
+
+type fakeRead struct {
+	data []byte
+	err  error
+}
+
+func (f *fakePacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	if len(f.reads) == 0 {
+		return 0, nil, net.ErrClosed
+	}
+	next := f.reads[0]
+	f.reads = f.reads[1:]
+	if next.err != nil {
+		return 0, nil, next.err
+	}
+	return copy(b, next.data), nil, nil
+}
+
+// Regression test: a read error that isn't the socket closing (on Windows,
+// WSAEMSGSIZE from an oversized datagram) used to break readLoop out for
+// good, silently killing the relay. It should log and keep reading.
+func TestReadLoopKeepsReadingAfterANonCloseError(t *testing.T) {
+	oldBackoff := readErrorBackoff
+	readErrorBackoff = time.Millisecond
+	defer func() { readErrorBackoff = oldBackoff }()
+
+	var logBuf bytes.Buffer
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(os.Stderr)
+
+	r := newRelay("score", 12062, "http://unused", "secret123")
+	r.readLoop(&fakePacketConn{reads: []fakeRead{
+		{err: errors.New("wsarecvfrom: A message sent on a datagram socket was larger than the internal message buffer")},
+		{data: []byte("<dynamicresults/>")},
+	}})
+
+	select {
+	case got := <-r.packets:
+		if string(got) != "<dynamicresults/>" {
+			t.Fatalf("queued packet: got %q", got)
+		}
+	default:
+		t.Fatal("readLoop stopped at the read error instead of reading the next packet")
+	}
+	if !strings.Contains(logBuf.String(), "read error (continuing)") {
+		t.Fatalf("expected the read error to be logged, got log: %q", logBuf.String())
+	}
+}
+
+// A datagram bigger than the old 8 KB read buffer should be relayed whole.
+// On Linux the old buffer silently truncated it; on Windows the read failed
+// outright (see the test above).
+func TestRunRelaysOversizedUDPPacketIntact(t *testing.T) {
+	received := make(chan []byte, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, _ := io.ReadAll(req.Body)
+		received <- body
+		w.WriteHeader(202)
+	}))
+	defer srv.Close()
+
+	probe, err := net.ListenUDP("udp4", &net.UDPAddr{Port: 0, IP: net.IPv4zero})
+	if err != nil {
+		t.Fatalf("failed to find a free UDP port: %v", err)
+	}
+	port := probe.LocalAddr().(*net.UDPAddr).Port
+	probe.Close()
+
+	r := newRelay("score", port, srv.URL, "secret123")
+	go r.run()
+	defer r.stop()
+	time.Sleep(50 * time.Millisecond)
+
+	conn, err := net.Dial("udp4", "127.0.0.1:"+strconv.Itoa(port))
+	if err != nil {
+		t.Fatalf("failed to dial relay's UDP port: %v", err)
+	}
+	defer conn.Close()
+
+	packet := []byte("<dynamicresults>" + strings.Repeat(`<qso band="20" mode="CW" qsos="1" points="1" mults="1"/>`, 250) + "</dynamicresults>")
+	if len(packet) <= 8192 {
+		t.Fatalf("test packet is only %d bytes; needs to exceed the old 8 KB buffer", len(packet))
+	}
+	if _, err := conn.Write(packet); err != nil {
+		t.Fatalf("failed to send UDP packet: %v", err)
+	}
+
+	select {
+	case body := <-received:
+		if !bytes.Equal(body, packet) {
+			t.Fatalf("relayed body: got %d bytes, want %d", len(body), len(packet))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the relay to forward the packet")
+	}
+}

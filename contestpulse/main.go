@@ -24,7 +24,20 @@ import (
 	"time"
 )
 
+// version is stamped at build time by CI (-ldflags "-X main.version=...",
+// see .github/workflows/contestpulse-build.yml) with the contestscore
+// version from package.json plus the commit, so a running binary can be
+// matched to a release. A local `go build` reports "dev".
+var version = "dev"
+
 func main() {
+	if len(os.Args) == 2 && (os.Args[1] == "-version" || os.Args[1] == "--version") {
+		fmt.Println("contestpulse", version)
+		return
+	}
+
+	disableQuickEdit()
+
 	configPath, err := parseFlags(os.Args[1:])
 	if err != nil {
 		fmt.Println(err)
@@ -51,8 +64,8 @@ func main() {
 		time.Duration(cfg.HeartbeatIntervalSeconds*float64(time.Second)),
 	)
 
-	log.Printf("ContestPulse starting: station=%q server=%s (radio :%d, contact :%d, score :%d, heartbeat every %.0fs)",
-		cfg.StationID, cfg.ServerURL, cfg.RadioPort, cfg.ContactPort, cfg.ScorePort, cfg.HeartbeatIntervalSeconds)
+	log.Printf("ContestPulse %s starting: station=%q server=%s (radio :%d, contact :%d, score :%d, heartbeat every %.0fs)",
+		version, cfg.StationID, cfg.ServerURL, cfg.RadioPort, cfg.ContactPort, cfg.ScorePort, cfg.HeartbeatIntervalSeconds)
 	for _, r := range relays {
 		go r.run()
 	}
