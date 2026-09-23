@@ -60,7 +60,8 @@ as `DELETE /api/db`); **viewing** a saved analysis is public.
   since A and B are almost never from the same calendar date), grouped
   bars for band/mode/continent share, Run vs. S&P (when either log carries
   `has_run_flag`), and — for a **from-live** analysis only — the SFI/
-  K-index readings captured during that session (`GET /api/solar/history`).
+  K-index readings covering that session, saved into the snapshot itself
+  (older snapshots fall back to `GET /api/solar/history`).
   Public — you only need the two ids. The saved-analyses table on
   `/analyze` has a "+ compare" button per row so you never have to hand-
   copy an id (they're mixed-case base64 -- easy to mistype).
@@ -136,7 +137,7 @@ contest_key, exchange_parsed
 station_call, operators, claimed_score, qso_count
 has_points, has_mults, has_operator, has_run_flag
 raw_bytes
-parsed_json      TEXT NOT NULL     -- {"qsos":[…],"excluded":[…]}  (a bare array is still accepted on read)
+parsed_json      TEXT NOT NULL     -- {"qsos":[…],"excluded":[…],"solar":[…]}  (solar: from-live only; a bare array is still accepted on read)
 created_at
 ```
 
@@ -220,6 +221,16 @@ The pure suites run under Deno on a machine without Node
   wall-clock span) and merging them would need resampling one onto the
   other's axis. Only from-live -- an uploaded log from an arbitrary past
   date has no captured solar.
+
+  A from-live snapshot copies its readings into `parsed_json.solar` when
+  it's taken (`sessionSolar()` in `src/routes/analyze.js`), so the
+  comparison doesn't depend on `solar_snapshots` still holding them later
+  (that table is pruned by age and lives in the same DB file). The set is
+  the reading already in effect at the first QSO (the newest one up to 6h
+  before it) plus every reading during the session -- the poller only runs
+  every 2h, so a session judged by in-session readings alone often had
+  none. `GET /api/solar/history` applies the same rule, for snapshots
+  saved before the readings were copied in.
 - ADIF removed-QSO detection is limited to `APP_N1MM_ISCLAIMEDQSO`.
 - No in-browser "quick look" (parse without saving) — the parsers are pure
   enough for it, it's just not wired up.

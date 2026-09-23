@@ -477,8 +477,11 @@ function buildGroupedBar(labels, aData, bData) {
 // (see docs/ANALYZER.md "Not done" -- this is that feature). Only ever
 // fetched for a format === 'live' log; an uploaded log from an arbitrary
 // past date has no captured solar, so fetchSolarFor() short-circuits.
+// A snapshot saved with its own readings (log.solar) uses those; an older
+// one falls back to looking its session up in solar_snapshots.
 async function fetchSolarFor(log) {
   if (!log || log.meta.format !== 'live') return [];
+  if (Array.isArray(log.solar)) return log.solar;
   const times = (log.qsos || []).map(qTime).filter((t) => !Number.isNaN(t));
   if (times.length < 2) return [];
   const toSqlUtc = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');

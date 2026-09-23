@@ -296,6 +296,22 @@ describe('GET /api/solar/history', () => {
     assert.ok(body.some((r) => r.sfi === 100));
   });
 
+  it('leads with the reading already in effect at `from`, but not a stale one', async () => {
+    insertSolarSnapshot({ sfi: 70, a: 30, k: 5, sunspots: 10, fetched_at: '2025-03-01 00:00:00' });
+    insertSolarSnapshot({ sfi: 150, a: 3, k: 1, sunspots: 160, fetched_at: '2025-03-02 11:00:00' });
+    insertSolarSnapshot({ sfi: 152, a: 4, k: 1, sunspots: 161, fetched_at: '2025-03-02 13:00:00' });
+    const body = await (await fetch(
+      `${baseUrl}/api/solar/history?from=${encodeURIComponent('2025-03-02 12:00:00')}&to=${encodeURIComponent('2025-03-02 14:00:00')}`,
+    )).json();
+    assert.deepEqual(body.map((r) => r.sfi), [150, 152]);
+
+    // Nothing within 6h before `from`: the day-old reading isn't "in effect".
+    const stale = await (await fetch(
+      `${baseUrl}/api/solar/history?from=${encodeURIComponent('2025-03-01 12:00:00')}&to=${encodeURIComponent('2025-03-01 13:00:00')}`,
+    )).json();
+    assert.deepEqual(stale, []);
+  });
+
   it('excludes readings outside the range', async () => {
     const body = await (await fetch(
       `${baseUrl}/api/solar/history?from=${encodeURIComponent('1990-01-01 00:00:00')}&to=${encodeURIComponent('1990-01-02 00:00:00')}`,

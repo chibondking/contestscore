@@ -2,7 +2,7 @@ const { Router } = require('express');
 const express = require('express');
 const {
   insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,
-  pruneAnalyzedLogs, getQsos, getLatestScore,
+  pruneAnalyzedLogs, getQsos, getLatestScore, getSolarForSession,
 } = require('../db/queries');
 const { analyzeLog, analyzeLiveQsos, newId } = require('../analyze');
 
@@ -74,7 +74,13 @@ function persist(result, rawBytes) {
     has_operator: result.meta.has_operator,
     has_run_flag: result.meta.has_run_flag,
     raw_bytes: rawBytes || 0,
-    parsed_json: JSON.stringify({ qsos: result.qsos, excluded: result.excluded || [] }),
+    parsed_json: JSON.stringify({
+      qsos: result.qsos,
+      excluded: result.excluded || [],
+      // from-live only; see sessionSolar(). Absent on uploads and on live
+      // snapshots saved before this was captured.
+      ...(result.solar ? { solar: result.solar } : {}),
+    }),
   });
   try {
     pruneAnalyzedLogs({ keep: KEEP, ttlDays: TTL_DAYS });
@@ -93,8 +99,32 @@ router.post('/from-live', requireToken, (req, res) => {
   }
   const score = getLatestScore();
   const result = analyzeLiveQsos(rows, { claimedScore: score ? score.score_total : null });
+  result.solar = sessionSolar(result.qsos);
   res.status(201).json(persist(result, 0));
 });
+
+const SQL_UTC = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
+// The space-weather readings covering a live session, copied into the saved
+// analysis itself. solar_snapshots is pruned by age (SOLAR_RETENTION_DAYS)
+// and lives in the same DB file a rebuild would lose, so relying on a
+// lookup at view time means an older snapshot eventually shows no
+// conditions to compare against. Each QSO's time is N1MM's own UTC
+// timestamp (or the server's logged_at), both "YYYY-MM-DD HH:MM:SS", so
+// they sort as strings.
+function sessionSolar(qsos) {
+  const times = qsos
+    .map((q) => q.n1mm_timestamp || q.logged_at)
+    .filter((t) => SQL_UTC.test(t || ''))
+    .sort();
+  if (!times.length) return [];
+  try {
+    return getSolarForSession(times[0], times[times.length - 1]);
+  } catch (err) {
+    console.warn('analyzer: solar capture failed', err.message);
+    return []; // never block a snapshot over its solar data
+  }
+}
 
 // GET /api/analyze  -- list saved analyses (auth: it's a private index).
 router.get('/', requireToken, (req, res) => {
@@ -119,9 +149,12 @@ router.get('/:id', (req, res) => {
   // accept both shapes.
   const qsos = Array.isArray(parsed) ? parsed : (parsed.qsos || []);
   const excluded = Array.isArray(parsed) ? [] : (parsed.excluded || []);
+  const solar = Array.isArray(parsed) ? undefined : parsed.solar;
 
   res.json({
     excluded,
+    // Only present on a from-live snapshot that captured it; see sessionSolar().
+    ...(solar ? { solar } : {}),
     meta: {
       id: row.id,
       filename: row.filename,

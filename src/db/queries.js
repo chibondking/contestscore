@@ -253,8 +253,9 @@ function prepare() {
 
     // Space weather (src/solar/). Append-only; NOT part of clearAll.
     insertSolarSnapshot: db.prepare(`
-      INSERT INTO solar_snapshots (sfi, a_index, k_index, sunspots, xray, geomag, source_updated)
-      VALUES (@sfi, @a_index, @k_index, @sunspots, @xray, @geomag, @source_updated)
+      INSERT INTO solar_snapshots (sfi, a_index, k_index, sunspots, xray, geomag, source_updated, fetched_at)
+      VALUES (@sfi, @a_index, @k_index, @sunspots, @xray, @geomag, @source_updated,
+              COALESCE(@fetched_at, datetime('now')))
     `),
     getLatestSolar: db.prepare('SELECT * FROM solar_snapshots ORDER BY id DESC LIMIT 1'),
     pruneSolarByAge: db.prepare(
@@ -269,6 +270,15 @@ function prepare() {
     getSolarInRange: db.prepare(
       'SELECT sfi, a_index, k_index, sunspots, fetched_at FROM solar_snapshots '
       + 'WHERE fetched_at BETWEEN @from AND @to ORDER BY fetched_at'
+    ),
+    // The reading already in effect when a session started: the newest one
+    // taken before @from, as long as it's no older than @maxAge before it
+    // (a reading from days earlier, say after an outage, says nothing about
+    // conditions during the session).
+    getSolarBefore: db.prepare(
+      'SELECT sfi, a_index, k_index, sunspots, fetched_at FROM solar_snapshots '
+      + "WHERE fetched_at < @from AND fetched_at >= datetime(@from, @maxAge) "
+      + 'ORDER BY fetched_at DESC LIMIT 1'
     ),
 
     insertAnalyzedLog: _insertAnalyzedLog,
@@ -423,6 +433,7 @@ function insertSolarSnapshot(r = {}) {
     xray: r.xray ?? null,
     geomag: r.geomag ?? null,
     source_updated: r.source_updated ?? null,
+    fetched_at: r.fetched_at ?? null, // tests only; the poller always stamps "now"
   });
 }
 function getLatestSolar() { return prepare().getLatestSolar.get() || null; }
@@ -434,6 +445,22 @@ function pruneSolarSnapshots({ ttlDays = 365 } = {}) {
 // analysis's own span. See the prepared statement's comment for why a
 // plain BETWEEN is safe here.
 function getSolarInRange(from, to) { return prepare().getSolarInRange.all({ from, to }); }
+
+// How far before a session's first QSO a reading may be and still count as
+// the conditions it started in. hamqsl.com updates every ~3h and the poller
+// runs every 2h (src/solar/), so one missed poll still lands inside this.
+const SOLAR_LEAD_IN_HOURS = 6;
+
+// Readings covering a session from `from` to `to`: the one in effect when it
+// started (see getSolarBefore) followed by every reading taken during it.
+// Without that first reading, a session shorter than the poll interval --
+// or one that just fell between two polls -- gets no solar data at all.
+function getSolarForSession(from, to) {
+  const q = prepare();
+  const before = q.getSolarBefore.get({ from, maxAge: `-${SOLAR_LEAD_IN_HOURS} hours` });
+  const during = q.getSolarInRange.all({ from, to });
+  return before ? [before, ...during] : during;
+}
 
 // --- Analyzer -------------------------------------------------------------
 
@@ -480,7 +507,7 @@ module.exports = {
   insertScoreBreakdown, getLatestScore, getScoreHistory, getScoreBreakdown,
   getSetting, setSetting,
   getCachedCallsign, cacheCallsign, getNotFoundCalls,
-  insertSolarSnapshot, getLatestSolar, pruneSolarSnapshots, getSolarInRange,
+  insertSolarSnapshot, getLatestSolar, pruneSolarSnapshots, getSolarInRange, getSolarForSession,
   insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,
   pruneAnalyzedLogs,
   resetStatements,

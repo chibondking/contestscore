@@ -4,7 +4,7 @@ const {
   getRadios,
   getLatestScore, getScoreHistory,
   getNotFoundCalls,
-  getSolarInRange,
+  getSolarForSession,
 } = require('../db/queries');
 const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
@@ -142,8 +142,10 @@ router.post('/lookup/resume', (req, res) => {
 });
 
 // GET /api/solar/history?from=&to=  -- readings between two datetime('now')-
-// shaped UTC strings ("YYYY-MM-DD HH:MM:SS"). Powers the analyzer compare
-// page's "conditions during this session" chart for a from-live analysis
+// shaped UTC strings ("YYYY-MM-DD HH:MM:SS"), led by the reading already in
+// effect at `from` (see getSolarForSession). Powers the analyzer compare
+// page's "conditions during this session" chart, for a from-live analysis
+// saved before snapshots carried their own solar readings. Live-sourced
 // only -- an uploaded log from an arbitrary past date has no captured solar
 // (see docs/ANALYZER.md "Not done"). Public, same posture as reading a
 // saved analysis: it's ambient station telemetry, not a write.
@@ -152,7 +154,7 @@ router.get('/solar/history', (req, res) => {
   if (!from || !to) {
     return res.status(400).json({ error: 'from and to are required (UTC "YYYY-MM-DD HH:MM:SS")' });
   }
-  res.json(getSolarInRange(from, to));
+  res.json(getSolarForSession(from, to));
 });
 
 // GET /api/qsos  optional ?band=&mode=&operator=

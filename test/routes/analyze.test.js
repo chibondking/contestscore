@@ -5,7 +5,9 @@ const http = require('node:http');
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { initDb, closeDb } = require('../../src/db/index');
-const { resetStatements, upsertQso, insertScoreBreakdown } = require('../../src/db/queries');
+const {
+  resetStatements, upsertQso, insertScoreBreakdown, insertSolarSnapshot,
+} = require('../../src/db/queries');
 
 let server;
 let baseUrl;
@@ -161,6 +163,27 @@ describe('POST /api/analyze/from-live', () => {
     assert.equal(fetched.qsos.length, 2);
     assert.equal(fetched.qsos[0].points, 3);
     assert.equal(fetched.qsos[1].continent, 'EU');
+  });
+
+  it('saves the solar readings covering the session into the snapshot', async () => {
+    // The session above runs 12:00-12:05 on 2026-09-06 -- shorter than the
+    // 2h poll interval, so no reading lands inside it. The one in effect at
+    // the start (10:30) must still be captured; readings well before (too
+    // old to count) or after the session must not.
+    insertSolarSnapshot({ sfi: 90, a: 20, k: 4, sunspots: 40, fetched_at: '2026-09-05 12:00:00' });
+    insertSolarSnapshot({ sfi: 131, a: 6, k: 2, sunspots: 120, fetched_at: '2026-09-06 10:30:00' });
+    insertSolarSnapshot({ sfi: 99, a: 9, k: 3, sunspots: 70, fetched_at: '2026-09-06 14:00:00' });
+
+    process.env.CONTESTSCORE_API_TOKEN = 'sekret';
+    const res = await fetch(`${baseUrl}/api/analyze/from-live`, {
+      method: 'POST', headers: { Authorization: 'Bearer sekret' },
+    });
+    assert.equal(res.status, 201);
+    const { id } = await res.json();
+    delete process.env.CONTESTSCORE_API_TOKEN;
+
+    const fetched = await fetch(`${baseUrl}/api/analyze/${id}`).then((r) => r.json());
+    assert.deepEqual(fetched.solar.map((r) => [r.sfi, r.fetched_at]), [[131, '2026-09-06 10:30:00']]);
   });
 });
 
