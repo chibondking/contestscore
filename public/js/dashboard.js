@@ -309,8 +309,13 @@ function dashboard() {
     // specific (e.g. state/section vs. zone vs. DXCC), so any of them
     // lights the flag rather than this guessing at a meaning. N1MM decides
     // it when the QSO is logged, so a later edit that changes the status
-    // arrives as a contactreplace and updates the row in place.
+    // arrives as a contactreplace and updates the row in place. The logger
+    // is the authority: an unflagged QSO is simply not a mult here, no
+    // second-guessing from callsign, contest name or anything else.
+    // One exception on our side: a WAE QTC is relayed traffic, not a contact,
+    // so it never carries the flag whatever the packet says.
     isMult(q) {
+      if (this.isQtc(q)) return false;
       return !!(q.is_mult1 || q.is_mult2 || q.is_mult3);
     },
 
