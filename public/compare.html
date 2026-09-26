@@ -171,8 +171,11 @@
         <template x-if="a.meta.format === 'live'">
           <section class="card">
             <h2>A — Conditions</h2>
-            <div class="chart-box chart-box--trend">
-              <canvas id="cmpSolarAChart" x-effect="renderSolarChart('a')"></canvas>
+            <div x-show="solarA.length" x-effect="renderSolarChart('a')">
+              <h3 class="chart-subhead">Solar flux (SFI)</h3>
+              <div class="chart-box chart-box--solar"><canvas id="cmpSolarASfi"></canvas></div>
+              <h3 class="chart-subhead">K-index <span class="chart-subhead__note">0–9, higher = more disturbed</span></h3>
+              <div class="chart-box chart-box--solar"><canvas id="cmpSolarAK"></canvas></div>
             </div>
             <p class="empty" x-show="!solarA.length">No solar readings captured during this session.</p>
           </section>
@@ -181,8 +184,11 @@
         <template x-if="b.meta.format === 'live'">
           <section class="card">
             <h2>B — Conditions</h2>
-            <div class="chart-box chart-box--trend">
-              <canvas id="cmpSolarBChart" x-effect="renderSolarChart('b')"></canvas>
+            <div x-show="solarB.length" x-effect="renderSolarChart('b')">
+              <h3 class="chart-subhead">Solar flux (SFI)</h3>
+              <div class="chart-box chart-box--solar"><canvas id="cmpSolarBSfi"></canvas></div>
+              <h3 class="chart-subhead">K-index <span class="chart-subhead__note">0–9, higher = more disturbed</span></h3>
+              <div class="chart-box chart-box--solar"><canvas id="cmpSolarBK"></canvas></div>
             </div>
             <p class="empty" x-show="!solarB.length">No solar readings captured during this session.</p>
           </section>

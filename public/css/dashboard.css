@@ -561,6 +561,9 @@ body {
 .chart-box { position: relative; width: 100%; }
 .chart-box--trend { height: 280px; }
 .chart-box--pie { height: 260px; }
+.chart-box--solar { height: 150px; }   /* compare page: SFI / K-index bars */
+.chart-subhead { font-size: .85rem; font-weight: 600; margin: .5rem 0 .25rem; }
+.chart-subhead__note { font-weight: 400; color: var(--muted, #8b949e); font-size: .75rem; }
 
 /* A full-width row of cards nested inside the main .grid (the Charts page's
    "more charts" block and the Detailed per-operator block). */

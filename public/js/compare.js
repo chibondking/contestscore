@@ -16,8 +16,10 @@ function compare() {
   let modeChart = null;
   let contChart = null;
   let runspChart = null;
-  let solarAChart = null;
-  let solarBChart = null;
+  // Two single-axis bar charts per session (SFI, K-index) -- never one
+  // dual-axis chart: two independently auto-scaled y-axes put a flat SFI
+  // and a flat K at the same height, drawn on top of each other.
+  const solarCharts = { aSfi: null, aK: null, bSfi: null, bK: null };
 
   return {
     aId: '', bId: '',
@@ -160,9 +162,14 @@ function compare() {
 
     renderSolarChart(which) {
       const rows = which === 'a' ? this.solarA : this.solarB;
-      const cfg = buildSolarChart(rows);
-      if (which === 'a') solarAChart = upsertChart(solarAChart, 'cmpSolarAChart', cfg);
-      else solarBChart = upsertChart(solarBChart, 'cmpSolarBChart', cfg);
+      const log = which === 'a' ? this.a : this.b;
+      // A and B share each measure's scale so their bars compare directly.
+      const sfiMax = solarSfiMax([...this.solarA, ...this.solarB]);
+      const W = which.toUpperCase();
+      solarCharts[which + 'Sfi'] = upsertChart(solarCharts[which + 'Sfi'], `cmpSolar${W}Sfi`,
+        buildSolarBar(rows, log, 'sfi', { max: sfiMax, color: CATEGORICAL_COLORS[3] }));
+      solarCharts[which + 'K'] = upsertChart(solarCharts[which + 'K'], `cmpSolar${W}K`,
+        buildSolarBar(rows, log, 'k_index', { max: 9, color: CATEGORICAL_COLORS[6] }));
     },
   };
 }
@@ -495,48 +502,96 @@ async function fetchSolarFor(log) {
   }
 }
 
-function dualAxisOptions() {
+// One solar measure for one session as bars -- one bar per reading. Every
+// reading gets a bar, so a session with a single reading (the one already in
+// effect at its first QSO, typical for an hour-long sprint between 2-hourly
+// polls) still draws; the old line chart with pointRadius 0 drew nothing for
+// one point. Each bar carries its value as a label, so a K-index of 0 --
+// which has no bar height -- still reads as "0" rather than an empty chart.
+function buildSolarBar(rows, log, field, { max, color }) {
+  if (!rows || !rows.length) return null;
+  const firstQso = sessionStart(log);
+  const at = (r) => new Date(r.fetched_at.replace(' ', 'T') + 'Z');
+  const beforeStart = (r) => firstQso != null && at(r).getTime() < firstQso;
+  const labels = rows.map((r) => {
+    const t = at(r).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return beforeStart(r) ? `${t} (start)` : t;
+  });
   const c = themeColors();
   return {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: { duration: 200 },
-    plugins: { legend: { display: true, labels: { color: c.text, boxWidth: 12 } } },
-    scales: {
-      x: { ticks: { color: c.muted, maxTicksLimit: 8, autoSkip: true }, grid: { color: c.grid } },
-      y: {
-        position: 'left', ticks: { color: c.text }, grid: { color: c.grid },
-        title: { display: true, text: 'SFI', color: c.muted },
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: field === 'sfi' ? 'SFI' : 'K-index',
+        data: rows.map((r) => r[field]),
+        backgroundColor: color,
+        borderRadius: 4,
+        maxBarThickness: 48,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 200 },
+      layout: { padding: { top: 18 } },   // room for the value labels
+      plugins: {
+        legend: { display: false },       // one series: the card heading names it
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const r = rows[items[0].dataIndex];
+              const when = at(r).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+              return beforeStart(r) ? `${when} -- in effect at session start` : when;
+            },
+          },
+        },
       },
-      y1: {
-        position: 'right', ticks: { color: c.text }, grid: { display: false },
-        title: { display: true, text: 'K-index', color: c.muted },
+      scales: {
+        x: { ticks: { color: c.muted }, grid: { display: false } },
+        y: {
+          min: 0, max,
+          ticks: { color: c.text, precision: 0, ...(field === 'k_index' ? { stepSize: 3 } : {}) },
+          grid: { color: c.grid },
+        },
       },
     },
+    plugins: [barValueLabels(c.text)],
   };
 }
 
-function buildSolarChart(rows) {
-  if (!rows || !rows.length) return null;
-  const labels = rows.map((r) => new Date(r.fetched_at.replace(' ', 'T') + 'Z')
-    .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+// Shared SFI ceiling for A and B: the larger session's peak, rounded up to
+// the next 50, so both charts use the same scale.
+function solarSfiMax(rows) {
+  const peak = Math.max(0, ...rows.map((r) => Number(r.sfi) || 0));
+  return Math.max(50, Math.ceil(peak / 50) * 50);
+}
+
+function sessionStart(log) {
+  const times = ((log && log.qsos) || []).map(qTime).filter((t) => !Number.isNaN(t));
+  return times.length ? Math.min(...times) : null;
+}
+
+// Draws each bar's value just above it, in text ink (never the series
+// color). Only used on the solar charts, which have a handful of bars.
+function barValueLabels(textColor) {
   return {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'SFI', data: rows.map((r) => r.sfi), yAxisID: 'y',
-          borderColor: CATEGORICAL_COLORS[3], backgroundColor: hexA(CATEGORICAL_COLORS[3], 0.15),
-          tension: 0.3, pointRadius: 0, borderWidth: 2,
-        },
-        {
-          label: 'K-index', data: rows.map((r) => r.k_index), yAxisID: 'y1',
-          borderColor: CATEGORICAL_COLORS[6], backgroundColor: hexA(CATEGORICAL_COLORS[6], 0.15),
-          tension: 0.3, pointRadius: 0, borderWidth: 2,
-        },
-      ],
+    id: 'barValueLabels',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      ctx.save();
+      ctx.fillStyle = textColor;
+      ctx.font = '600 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      chart.data.datasets.forEach((ds, i) => {
+        chart.getDatasetMeta(i).data.forEach((bar, j) => {
+          const v = ds.data[j];
+          if (v == null) return;
+          ctx.fillText(String(v), bar.x, bar.y - 4);
+        });
+      });
+      ctx.restore();
     },
-    options: dualAxisOptions(),
   };
 }
