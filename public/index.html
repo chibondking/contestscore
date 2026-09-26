@@ -32,6 +32,9 @@
     <!-- Contesting runs on UTC, not local time -- the operator's own wall
          clock is the wrong reference for exchange timestamps/log review. -->
     <span class="utc-clock" x-text="utcClock()" title="UTC"></span>
+    <!-- The station's transmitted call (N1MM's mycall), not the operator's:
+         see stationCall() in dashboard.js. -->
+    <span class="station-call" x-show="stationCall()" x-text="stationCall()" title="Transmitted call"></span>
     <span class="contest-name" x-show="score.contest" x-text="score.contest"></span>
     <span class="grid-locator" x-show="score.grid6" x-text="score.grid6"></span>
     <!-- Space weather (SFI / A / K). Populated from GET /api/solar +

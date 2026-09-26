@@ -157,6 +157,20 @@ function dashboard() {
       return new Date(this.now).toISOString().slice(11, 19) + 'Z';
     },
 
+    // The call this station is actually transmitting under -- N1MM's
+    // Station Data callsign, which is not necessarily the operator's own
+    // (a club call like WT9P/K9CT while WT2P sits at the keyboard). Read from
+    // `mycall`, never `operator`/`ops`/OpCall: a club station can have several
+    // operators at once, and those fields name the people, not the station.
+    // this.qsos is newest-first (API and socket path both), so the first row
+    // with a mycall is the call in use right now, which also follows a mid-
+    // contest change; score.call (the periodic dynamicresults snapshot)
+    // covers a page load before any QSO has been logged.
+    stationCall() {
+      const q = this.qsos.find((row) => row.mycall);
+      return (q && q.mycall) || this.score.call || '';
+    },
+
     // score.qsos comes from N1MM's own periodic dynamicresults broadcast --
     // a snapshot, not an event fired per QSO -- while this.qsos already
     // grows in real time off contact:new. NOT a raw count comparison

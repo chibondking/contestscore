@@ -231,6 +231,19 @@ body {
   color: var(--accent);
 }
 
+/* The transmitted call is the identity of the whole scoreboard, so it gets
+   the same "readable from across the room" treatment as the UTC clock,
+   larger and in the primary text colour rather than an accent chip. */
+.station-call {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.4rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  color: var(--text);
+}
+
 .grid-locator {
   color: var(--run); /* reuses the dashboard's existing amber/orange token */
   background: rgba(210, 153, 34, 0.15); /* --run at low alpha -- a translucent chip, not a solid badge */
