@@ -303,6 +303,17 @@ function dashboard() {
       return /QTC/i.test(q.exchange1 || '');
     },
 
+    // N1MM's own verdict that this QSO counted as a new multiplier for the
+    // active contest -- <ismultiplier1/2/3> in the ContactInfo packet
+    // (stored as is_mult1/2/3). Which of the three is which is contest-
+    // specific (e.g. state/section vs. zone vs. DXCC), so any of them
+    // lights the flag rather than this guessing at a meaning. N1MM decides
+    // it when the QSO is logged, so a later edit that changes the status
+    // arrives as a contactreplace and updates the row in place.
+    isMult(q) {
+      return !!(q.is_mult1 || q.is_mult2 || q.is_mult3);
+    },
+
     async fetchInitialState() {
       try {
         const [qsos, score, scoreHistory, radios, bridges, rate] = await Promise.all([

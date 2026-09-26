@@ -803,6 +803,16 @@ body {
   margin-left: 0.4rem;
   padding: 0.1rem 0.45rem;
 }
+/* New-multiplier marker, same shape as the QTC chip beside it. --green: a
+   good thing happened (contrast with QTC's amber "different"). */
+.chip--mult {
+  border-color: var(--green);
+  color: var(--green);
+  font-weight: bold;
+  font-size: 0.7rem;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.45rem;
+}
 
 @media (max-width: 700px) {
   .log-layout { flex-direction: column; }
