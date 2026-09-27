@@ -57,4 +57,32 @@ describe('cty resolver', () => {
     assert.equal(locationToken('DL1XYZ/P'), 'DL1XYZ');
     assert.equal(locationToken('W1AW'), 'W1AW');
   });
+
+  describe('lat/lon (world map)', () => {
+    it('lat is as given, lon is negated from cty.csv\'s west-positive column', () => {
+      // K,United States,...,37.60,91.87,... -- mid-US, correctly ~91.87 WEST.
+      const k = resolve('W1AW');
+      assert.ok(k.lat > 0 && k.lat < 90, 'USA latitude should be northern hemisphere');
+      assert.ok(k.lon < 0, 'USA longitude should be negative (west) after negation');
+      assert.equal(k.lat, 37.60);
+      assert.equal(k.lon, -91.87);
+    });
+
+    it('an entity given as east of Greenwich in cty.csv (negative raw) comes out positive', () => {
+      // 3A,Monaco,...,43.73,-7.40,... -- Monaco is ~7.4 E.
+      const monaco = resolve('3A2AA');
+      assert.equal(monaco.lat, 43.73);
+      assert.equal(monaco.lon, 7.40);
+    });
+
+    it('is null, not 0, when a record genuinely has no numeric coordinates', () => {
+      // Number('') is 0, a real (if unlikely) equator/prime-meridian
+      // coordinate, so this specifically uses a non-numeric placeholder --
+      // every real cty.csv row carries actual numbers in these columns.
+      const parsed = parseCty('ZZ,Nowhere,999,NA,1,1,N/A,N/A,0.0,ZZ;\n');
+      const r = makeResolver(parsed)('ZZ1AA');
+      assert.equal(r.lat, null);
+      assert.equal(r.lon, null);
+    });
+  });
 });

@@ -1,8 +1,10 @@
 // Country-file (cty.dat / cty.csv) resolver: callsign -> { entity, prefix,
-// continent, cqzone }. Used server-side at upload time (src/analyze/
+// continent, cqzone, lat, lon }. Used server-side at upload time (src/analyze/
 // index.js) to fill continent / DXCC / CQ-zone on parsed QSOs so the
 // analyzer's continent and DXCC breakdowns work for any contest, including
-// a bare Cabrillo log that carries none of that itself.
+// a bare Cabrillo log that carries none of that itself. `lat`/`lon` back the
+// world map (src/analyze/geo.js's resolveLatLon) -- an entity-center
+// approximation, not the actual station.
 //
 // Input is the "big CTY" cty.csv from country-files.com, one entity per
 // line:
@@ -19,9 +21,16 @@
 //          may carry overrides: "(n)" CQ zone, "[n]" ITU zone, "{CONT}"
 //          continent, plus "<lat/lon>" and "~tz~" which we ignore.
 //
-// This is not a full cty.dat implementation (no ITU-zone consumers here,
-// no lat/lon), just enough for aggregate contest stats. A portable op's
-// zone can still be wrong; that's acceptable for a breakdown.
+// col 7 (raw lon) is degrees WEST-positive -- the opposite of the normal
+// atlas/GeoJSON convention (east-positive). Confirmed against known
+// entities: K (USA) carries "91.87" (west of Greenwich, correct as +91.87W),
+// while 3A (Monaco, ~7.4 E) carries "-7.40". Negate it to get standard
+// (east-positive) longitude, which is what the world map's equirectangular
+// projection (public/img/world-outline.svg, same projection) expects.
+//
+// This is not a full cty.dat implementation (no ITU-zone consumers here),
+// just enough for aggregate contest stats. A portable op's zone can still
+// be wrong; that's acceptable for a breakdown.
 
 const OVERRIDE_RE = /\((\d+)\)|\[(\d+)\]|\{([A-Za-z]{2})\}|<[^>]*>|~[^~]*~/g;
 
@@ -45,12 +54,18 @@ function parseCty(text) {
     const parts = line.split(',');
     if (parts.length < 10) continue;
 
+    const rawLat = Number(parts[6]);
+    const rawLon = Number(parts[7]);
     const base = {
       entity: Number(parts[2]) || null,
       name: parts[1],
       prefix: parts[0].trim(),
       continent: parts[3].trim(),
       cqzone: String(parts[4]).trim(),
+      // Number('') is 0, a real (if unlikely) coordinate -- only fall back
+      // to null on an actually-absent/non-numeric column, via isNaN.
+      lat: Number.isNaN(rawLat) ? null : rawLat,
+      lon: Number.isNaN(rawLon) ? null : -rawLon,   // west-positive -> east-positive; see file header
     };
 
     // The primary prefix is itself a matchable prefix.

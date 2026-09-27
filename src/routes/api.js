@@ -13,6 +13,7 @@ const { getLookupService, getUdpListeners } = require('../udp');
 const { resolveSolarConfig, latestSolar } = require('../solar');
 const { freqToBand } = require('../parsers/util');
 const { getDb } = require('../db');
+const { resolveLatLon } = require('../analyze/geo');
 
 const router = Router();
 
@@ -158,10 +159,18 @@ router.get('/solar/history', (req, res) => {
 });
 
 // GET /api/qsos  optional ?band=&mode=&operator=
+// Each row also carries the world map's `lat`/`lon` (grid square if the
+// exchange had one, else the country file's entity center) -- computed
+// here, not stored on the qsos table; see src/analyze/geo.js's
+// resolveLatLon header comment.
 router.get('/qsos', (req, res) => {
   const { band, mode, operator } = req.query;
-  res.json(getQsos({ band, mode, operator }));
+  res.json(getQsos({ band, mode, operator }).map(withLatLon));
 });
+
+function withLatLon(qso) {
+  return { ...qso, ...(resolveLatLon(qso) || {}) };
+}
 
 // GET /api/score
 // Reshapes the raw score_snapshots row to match the socket `score:update`

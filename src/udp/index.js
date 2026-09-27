@@ -6,7 +6,7 @@ const {
   upsertRadio, upsertQso, getPersistedQso, deleteQso, insertScoreBreakdown, cacheCallsign,
 } = require('../db/queries');
 const { freqToBand } = require('../parsers/util');
-const { enrichGeo } = require('../analyze/geo');
+const { enrichGeo, resolveLatLon } = require('../analyze/geo');
 const { createLookupService } = require('../lookup');
 const config = require('../../config/default.json');
 
@@ -74,7 +74,11 @@ function startListeners(io) {
     // aggregate -- the columns freeze at the initial /api/qsos snapshot.
     let persisted = null;
     safely('contact:new', () => { upsertQso(data); persisted = getPersistedQso(data); });
-    io.emit('contact:new', persisted || data);
+    // lat/lon for the world map, same computed-not-stored treatment as
+    // GET /api/qsos (src/routes/api.js) -- attached to the emitted copy
+    // only, never passed to upsertQso above.
+    const toEmit = persisted || data;
+    io.emit('contact:new', { ...toEmit, ...(resolveLatLon(toEmit) || {}) });
     if (data.call) lookup.enqueue(data.call);
   });
 

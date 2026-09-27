@@ -141,6 +141,36 @@ describe('contact pipeline', () => {
     // peak-rate buckets depend on logged_at being present here.
     assert.ok(evt.payload.id, 'emitted contact:new should carry the DB row id');
     assert.match(evt.payload.logged_at, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    // World map: no gridsquare in this packet, so DL1ABC's coordinates come
+    // from the country file (DL, ~EU), not stored on the row itself --
+    // getQsos() above has no lat/lon column, only the live socket emit does.
+    assert.equal(row.lat, undefined);
+    assert.ok(evt.payload.lat > 0, 'DL should resolve to a real, northern-hemisphere latitude');
+    assert.ok(evt.payload.lon > -20 && evt.payload.lon < 40, 'DL should resolve to a European longitude');
+  });
+
+  it('a gridsquare in the packet drives contact:new\'s lat/lon, not the country file', async () => {
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<contactinfo>
+  <contestname>ARRL-FD</contestname>
+  <mycall>K1TTT</mycall>
+  <band>14</band>
+  <mode>CW</mode>
+  <call>W1AW</call>
+  <gridsquare>FN31</gridsquare>
+  <ID>pipeline-test-grid-0001</ID>
+</contactinfo>`;
+    await send(xml, CONTACT_PORT);
+    await waitFor(() => getQsos().some((q) => q.call === 'W1AW'));
+
+    const evt = io.events.filter((e) => e.name === 'contact:new').find((e) => e.payload.call === 'W1AW');
+    assert.ok(evt);
+    // FN31's grid center (41.5, -73 -- gridToLatLon's own math) is
+    // distinctly different from "K"'s (USA) country-file entity center
+    // (37.6, -91.87), proving the grid square won, not just that some
+    // coordinate came back.
+    assert.ok(evt.payload.lat > 41 && evt.payload.lat < 42);
+    assert.ok(evt.payload.lon > -73.5 && evt.payload.lon < -72.5);
   });
 
   it('contactreplace updates the existing row instead of duplicating it', async () => {

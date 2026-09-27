@@ -150,6 +150,31 @@
 
     </div>
 
+    <!-- Standard (equirectangular) projection -- src/routes/api.js and
+         src/udp/index.js attach lat/lon to each QSO (grid square if the
+         exchange carried one, else the country file's entity center); see
+         dashboard.js's mapPoints()/projectLatLon() for the shared canvas
+         math with the bundled world-outline.svg. QTCs are excluded (they
+         are relayed traffic re-sent for an existing contact, not a new
+         one -- same reasoning as the MULT chip). -->
+    <section class="card card--wide" id="worldmap" x-show="qsos.length > 0">
+      <h2>World Map <span class="map-subtitle">last 30 QSOs</span></h2>
+      <div class="map-box">
+        <svg viewBox="0 0 1000 500" class="worldmap-svg" preserveAspectRatio="xMidYMid meet">
+          <line x1="0" y1="250" x2="1000" y2="250" class="worldmap-graticule"></line>
+          <line x1="500" y1="0" x2="500" y2="500" class="worldmap-graticule"></line>
+          <path class="worldmap-land" :d="worldOutlinePath"></path>
+          <!-- Dots are injected as a raw SVG string via x-html, not a
+               <template x-for> -- confirmed live in a real browser that
+               Alpine's x-for/template breaks when nested inside <svg> (only
+               the first item ever bound). See mapDotsSvg()'s own comment
+               in dashboard.js. -->
+          <g x-html="mapDotsSvg()"></g>
+        </svg>
+      </div>
+      <p x-show="mapPoints().length === 0" class="empty">No located QSOs yet</p>
+    </section>
+
     <section class="card card--wide" id="operators" x-show="qsos.length > 0">
       <h2>Operators</h2>
       <table class="qso-table">

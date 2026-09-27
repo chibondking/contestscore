@@ -558,6 +558,49 @@ body {
   margin-bottom: 0.5rem;
 }
 
+/* World map (#worldmap, dashboard.js's mapPoints()/projectLatLon()).
+   viewBox is 1000x500 (2:1, matching world-outline.svg's own projection),
+   scaled to the card's width -- never a fixed pixel height, so it reads
+   the same on a phone and on a room TV. */
+.map-subtitle {
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--muted);
+  font-weight: normal;
+  font-size: 0.7rem;
+}
+
+.map-box { width: 100%; }
+
+.worldmap-svg { width: 100%; height: auto; display: block; }
+
+.worldmap-land { fill: var(--border); stroke: none; }
+
+.worldmap-graticule {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  opacity: 0.6;
+}
+
+.worldmap-dot {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+  opacity: 0.9;
+}
+
+.worldmap-dot:hover { opacity: 1; r: 6; }
+
+/* Same --green as .chip--mult -- a new multiplier is a good thing, not a
+   different severity, so this reuses that color rather than inventing one. */
+.worldmap-dot--mult {
+  fill: var(--green);
+  stroke: var(--surface);
+}
+
+.worldmap-dot--mult:hover { r: 7; }
+
 .chart-box { position: relative; width: 100%; }
 .chart-box--trend { height: 280px; }
 .chart-box--pie { height: 260px; }

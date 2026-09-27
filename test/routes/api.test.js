@@ -9,6 +9,7 @@ const {
   resetStatements, insertScoreBreakdown, upsertRadio, upsertQso, cacheCallsign, clearQsos,
   insertSolarSnapshot,
 } = require('../../src/db/queries');
+const { gridToLatLon, resolveCall } = require('../../src/analyze/geo');
 
 let server;
 let baseUrl;
@@ -88,6 +89,47 @@ describe('GET /api/score', () => {
     assert.equal(body.total, 1600);
     assert.equal(body.score_total, 1600);
     assert.equal(body.grid6, 'EN81LM');
+  });
+});
+
+// World map: GET /api/qsos rows carry a computed lat/lon (see
+// src/analyze/geo.js's resolveLatLon), never written to the qsos table.
+describe('GET /api/qsos (world map lat/lon)', () => {
+  beforeEach(() => { clearQsos(); });
+  after(() => { clearQsos(); });
+
+  it('prefers a real grid square over the country-file entity center', async () => {
+    upsertQso({ ext_id: 'g1', call: 'W1AW', band: '20', mode: 'CW', gridsquare: 'FN31' });
+    const res = await fetch(`${baseUrl}/api/qsos`);
+    const [q] = await res.json();
+    assert.deepEqual({ lat: q.lat, lon: q.lon }, gridToLatLon('FN31'));
+  });
+
+  it('falls back to the country file when there is no grid square', async () => {
+    upsertQso({ ext_id: 'g2', call: 'W1AW', band: '20', mode: 'CW' });
+    const res = await fetch(`${baseUrl}/api/qsos`);
+    const [q] = await res.json();
+    const k = resolveCall('W1AW');
+    assert.equal(q.lat, k.lat);
+    assert.equal(q.lon, k.lon);
+  });
+
+  it('omits lat/lon rather than sending null for an unresolvable call', async () => {
+    upsertQso({ ext_id: 'g3', call: '12345', band: '20', mode: 'CW' });
+    const res = await fetch(`${baseUrl}/api/qsos`);
+    const [q] = await res.json();
+    assert.equal('lat' in q, false);
+    assert.equal('lon' in q, false);
+  });
+
+  it('is computed at response time, not persisted -- refetching after a plain upsert stays consistent', async () => {
+    upsertQso({ ext_id: 'g4', call: 'DL1XYZ', band: '20', mode: 'CW' });
+    const first = await (await fetch(`${baseUrl}/api/qsos`)).json();
+    const second = await (await fetch(`${baseUrl}/api/qsos`)).json();
+    assert.deepEqual(
+      { lat: first[0].lat, lon: first[0].lon },
+      { lat: second[0].lat, lon: second[0].lon },
+    );
   });
 });
 

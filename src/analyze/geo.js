@@ -8,6 +8,11 @@
 //   - the realtime contact pipeline (src/udp/index.js) -- N1MM sends these
 //     fields, but TR4W and older/misconfigured N1MM setups may not, and
 //     then the dashboard's continent breakdown has nothing to show.
+//
+// resolveLatLon() (below) is a separate, additive lookup for the world map
+// (public/index.html's #worldmap card) -- unlike enrichGeo() it never
+// mutates the QSO or gets written to the qsos table; src/routes/api.js and
+// src/udp/index.js each attach it only on the copy sent to the browser.
 
 const fs = require('fs');
 const path = require('path');
@@ -75,4 +80,56 @@ function enrichGeo(qso, { override = [] } = {}) {
   return qso;
 }
 
-module.exports = { enrichGeo, resolveCall, _setResolver };
+// Maidenhead grid locator -> approximate center { lat, lon }. Accepts a
+// 2-, 4-, or 6-character locator (case-insensitive); N1MM's `gridsquare`
+// field is whatever the operator's exchange carried, so any length shows up
+// in practice. A 2-char locator (a 10x20 degree field) is centered on the
+// field; a bare grid with no sub-square digits is rare in an exchange but
+// handled the same way. Returns null for anything that doesn't parse --
+// callers fall back to the country file's entity-center coordinates.
+function gridToLatLon(grid) {
+  if (!grid || typeof grid !== 'string') return null;
+  const g = grid.trim().toUpperCase();
+  if (!/^[A-R]{2}([0-9]{2}([A-X]{2})?)?$/.test(g)) return null;
+
+  // Field: 20 deg lon x 10 deg lat per letter pair, A=0.
+  let lon = (g.charCodeAt(0) - 65) * 20 - 180;
+  let lat = (g.charCodeAt(1) - 65) * 10 - 90;
+  let lonSpan = 20;
+  let latSpan = 10;
+
+  if (g.length >= 4) {
+    // Square: 2 deg lon x 1 deg lat per digit.
+    lon += (g.charCodeAt(2) - 48) * 2;
+    lat += (g.charCodeAt(3) - 48) * 1;
+    lonSpan = 2;
+    latSpan = 1;
+  }
+  if (g.length === 6) {
+    // Subsquare: 1/24 of the square per letter.
+    lon += (g.charCodeAt(4) - 65) * (2 / 24);
+    lat += (g.charCodeAt(5) - 65) * (1 / 24);
+    lonSpan = 2 / 24;
+    latSpan = 1 / 24;
+  }
+
+  // Center of whatever the smallest resolved cell is, not its corner.
+  return { lat: lat + latSpan / 2, lon: lon + lonSpan / 2 };
+}
+
+// Approximate worked-station location for the world map: prefer a real
+// grid square (an actual reported location) over the country file's
+// entity-center guess. Not persisted on the QSO -- see the header comment.
+function resolveLatLon(qso) {
+  if (!qso) return null;
+
+  const fromGrid = gridToLatLon(qso.gridsquare);
+  if (fromGrid) return fromGrid;
+
+  if (!qso.call) return null;
+  const hit = resolveCall(qso.call);
+  if (!hit || hit.lat == null || hit.lon == null) return null;
+  return { lat: hit.lat, lon: hit.lon };
+}
+
+module.exports = { enrichGeo, resolveCall, gridToLatLon, resolveLatLon, _setResolver };

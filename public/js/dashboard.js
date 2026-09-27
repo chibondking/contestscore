@@ -1,3 +1,16 @@
+// Used by mapDotsSvg() below, which builds raw SVG markup by hand (see its
+// own comment for why) -- Alpine's x-text auto-escapes, but a hand-built
+// HTML string doesn't, and a callsign/exchange field ultimately comes from
+// whatever the logger sent.
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function dashboard() {
   // Chart.js instances live here, in a plain closure variable -- NOT as
   // Alpine data properties. Same reactivity trap as charts.js: Alpine
@@ -17,6 +30,11 @@ function dashboard() {
     scoreHistory: [],
     radios: [],
     qsos: [],
+    // World map: the land outline's SVG path `d`, fetched once from the
+    // static asset (public/img/world-outline.svg) and bound via :d on the
+    // dashboard's own <svg> -- see mapPoints() for the matching projection
+    // used to plot dots in the same coordinate space.
+    worldOutlinePath: '',
     // Per-station ContestPulse (or other bridge) liveness, keyed by
     // station_id. Not contest data -- db:cleared deliberately leaves this
     // alone, since it reflects the bridge process, not the QSO log.
@@ -133,6 +151,7 @@ function dashboard() {
       this.fetchFeatures();
       this.fetchBusts();
       this.fetchSolar();
+      this.fetchWorldOutline();
       // The rate windows decay purely with elapsed time, so they need to be
       // re-fetched on a timer even when nothing else is happening.
       setInterval(() => this.fetchRate(), 30000);
@@ -317,6 +336,74 @@ function dashboard() {
     isMult(q) {
       if (this.isQtc(q)) return false;
       return !!(q.is_mult1 || q.is_mult2 || q.is_mult3);
+    },
+
+    // World map, last 30 QSOs. Fetched once -- this is a static bundled
+    // asset (public/img/world-outline.svg), not contest data, so it needs
+    // no socket refresh and no db:cleared handling.
+    async fetchWorldOutline() {
+      try {
+        const svg = await fetch('/img/world-outline.svg').then((r) => r.text());
+        const m = svg.match(/\bd="([^"]+)"/);
+        if (m) this.worldOutlinePath = m[1];
+      } catch (err) {
+        console.error('Failed to load world outline:', err); // map just renders without land
+      }
+    },
+
+    // Projects a lat/lon onto the SAME 1000x500 equirectangular canvas
+    // world-outline.svg was generated with (viewBox="0 0 1000 500") --
+    // x = (lon+180)/360 * 1000, y = (90-lat)/180 * 500. Both must agree, or
+    // dots land off the coastline they are supposedly on.
+    projectLatLon(lat, lon) {
+      return { x: ((lon + 180) / 360) * 1000, y: ((90 - lat) / 180) * 500 };
+    },
+
+    // this.qsos is newest-first (see stationCall()'s own note). A QTC is
+    // relayed traffic re-sent for an existing contact (see isQtc), not a
+    // new one -- worth excluding here for the same reason the MULT chip
+    // does: counting it as one of "the last 30 QSOs" would both misstate
+    // the count and duplicate a dot already plotted for its real QSO.
+    // Only a QSO whose call actually resolves to a location (server-attached
+    // lat/lon -- see src/routes/api.js / src/udp/index.js) gets a dot.
+    mapPoints() {
+      const points = this.qsos
+        .filter((q) => !this.isQtc(q))
+        .slice(0, 30)
+        .filter((q) => q.lat != null && q.lon != null)
+        .map((q) => ({
+          key: q.ext_id ?? q.id ?? (q.call + q.band + q.mode + q.logged_at),
+          call: q.call,
+          band: q.band,
+          mode: q.mode,
+          mult: this.isMult(q),
+          ...this.projectLatLon(q.lat, q.lon),
+        }));
+      // Mult dots draw last (SVG paints in document order) so a mult never
+      // sits hidden under an ordinary dot that happens to land on the same
+      // pixel -- same "make the notable one visible" reasoning as the
+      // Recent QSOs chip, just expressed as z-order here instead of color.
+      points.sort((a, b) => (a.mult === b.mult ? 0 : a.mult ? 1 : -1));
+      return points;
+    },
+
+    // The dots are built as a raw SVG string and injected via x-html on a
+    // <g> (index.html), NOT a <template x-for> inside the <svg> --
+    // confirmed live in a real browser that Alpine's x-for/template breaks
+    // there: the browser's foreign-content (HTML-inside-SVG) parsing of a
+    // <template> mangles the directive attributes on its contents, so only
+    // the first item ever bound and every attribute after it came out
+    // empty ("p is not defined" thrown for the rest). x-html assigning
+    // innerHTML on an SVG element parses correctly in the SVG namespace,
+    // verified the same way. Escaped by hand since this is raw HTML now,
+    // not Alpine's own auto-escaped x-text.
+    mapDotsSvg() {
+      return this.mapPoints().map((p) => {
+        const title = escapeHtml(`${p.call} — ${p.band} MHz ${p.mode}${p.mult ? ' — MULT' : ''}`);
+        const cls = p.mult ? 'worldmap-dot worldmap-dot--mult' : 'worldmap-dot';
+        const r = p.mult ? 5 : 4;
+        return `<circle cx="${p.x}" cy="${p.y}" r="${r}" class="${cls}" title="${title}"></circle>`;
+      }).join('');
     },
 
     async fetchInitialState() {
