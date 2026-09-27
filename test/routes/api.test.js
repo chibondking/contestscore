@@ -9,7 +9,7 @@ const {
   resetStatements, insertScoreBreakdown, upsertRadio, upsertQso, cacheCallsign, clearQsos,
   insertSolarSnapshot,
 } = require('../../src/db/queries');
-const { gridToLatLon, resolveCall } = require('../../src/analyze/geo');
+const { gridToLatLon, resolveCall, usCallAreaLatLon } = require('../../src/analyze/geo');
 
 let server;
 let baseUrl;
@@ -106,12 +106,26 @@ describe('GET /api/qsos (world map lat/lon)', () => {
   });
 
   it('falls back to the country file when there is no grid square', async () => {
-    upsertQso({ ext_id: 'g2', call: 'W1AW', band: '20', mode: 'CW' });
+    // Non-US: W1AW would now go through the call-area refinement below
+    // instead of the bare country-file entity center.
+    upsertQso({ ext_id: 'g2', call: 'DL1XYZ', band: '20', mode: 'CW' });
     const res = await fetch(`${baseUrl}/api/qsos`);
     const [q] = await res.json();
-    const k = resolveCall('W1AW');
+    const k = resolveCall('DL1XYZ');
     assert.equal(q.lat, k.lat);
     assert.equal(q.lon, k.lon);
+  });
+
+  it('a mainland US call is refined to its call area, not cty.csv\'s single entity center', async () => {
+    // Confirmed live 2026-09: W6SX/AA7V (West Coast) plotted in Missouri
+    // before this refinement existed.
+    upsertQso({ ext_id: 'g5', call: 'W6SX', band: '20', mode: 'CW' });
+    const res = await fetch(`${baseUrl}/api/qsos`);
+    const [q] = await res.json();
+    const genericEntity = resolveCall('W6SX');
+    assert.notEqual(q.lat, genericEntity.lat);
+    assert.notEqual(q.lon, genericEntity.lon);
+    assert.deepEqual({ lat: q.lat, lon: q.lon }, usCallAreaLatLon('W6SX'));
   });
 
   it('omits lat/lon rather than sending null for an unresolvable call', async () => {

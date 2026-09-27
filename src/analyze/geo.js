@@ -16,7 +16,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { loadResolver } = require('./cty');
+const { loadResolver, locationToken } = require('./cty');
 
 const CTY_PATH = path.join(__dirname, 'cty.csv');
 
@@ -117,8 +117,56 @@ function gridToLatLon(grid) {
   return { lat: lat + latSpan / 2, lon: lon + lonSpan / 2 };
 }
 
+// The continental US is ONE DXCC entity (ADIF code 291) -- cty.csv gives it
+// exactly one lat/lon for the whole country (the "K" line), which is a
+// central-US point nowhere near a West Coast call. Hawaii/Alaska/Puerto
+// Rico etc. don't have this problem because they're each their OWN DXCC
+// entity with their own cty.csv line and coordinates already -- it's only
+// the 10 numbered call areas *within* the mainland (which a DXCC country
+// file has no concept of at all) that collapse to one point. Confirmed
+// live 2026-09 (W6SX, AA7V plotting in Missouri instead of the West
+// Coast): a real, reportable inaccuracy, not a hypothetical one.
+//
+// Centers are rough geographic approximations of each call area's states
+// (not population-weighted, not authoritative) -- same honesty as the
+// country-file entity center this refines. A vanity call can legitimately
+// carry a call-area digit that doesn't match the operator's real location;
+// this is a best-effort improvement over "always Missouri," not a claim of
+// precision.
+const US_CALL_AREA_CENTERS = {
+  0: { lat: 41.5, lon: -96.0 },  // CO IA KS MN MO NE ND SD
+  1: { lat: 43.0, lon: -71.5 },  // CT MA ME NH RI VT
+  2: { lat: 42.5, lon: -75.5 },  // NJ NY
+  3: { lat: 40.0, lon: -77.5 },  // DE DC MD PA
+  4: { lat: 33.0, lon: -83.5 },  // AL FL GA KY NC SC TN VA
+  5: { lat: 32.5, lon: -96.0 },  // AR LA MS NM OK TX
+  6: { lat: 37.0, lon: -120.0 }, // CA
+  7: { lat: 43.5, lon: -116.0 }, // AZ ID MT NV OR UT WA WY
+  8: { lat: 40.0, lon: -82.5 },  // MI OH WV
+  9: { lat: 41.0, lon: -89.0 },  // IL IN WI
+};
+// US-allocated prefix letters only (A[A-L], K, N, W, each optionally with a
+// second letter) -- NOT a bare [A-Z]{1,2}. A German call like DL1XYZ has the
+// exact same digit-then-letters shape and would otherwise match too; the
+// entity===291 gate in resolveLatLon() already keeps that from happening in
+// practice, but this function should be correct standing on its own, not
+// only correct because of how its one caller happens to use it.
+const US_CALL_AREA_RE = /^(?:A[A-L]|[KNW][A-Z]?)([0-9])[A-Z]{1,3}$/;
+
+// Only called once resolveCall() has already confirmed this is entity 291
+// (mainland US, not KH6/KL7/KP4/etc, which already resolve correctly on
+// their own) -- see resolveLatLon(). Reuses cty.js's own locationToken()
+// so "portable" calls are reduced the same way the entity lookup itself
+// already reduced them.
+function usCallAreaLatLon(call) {
+  const token = locationToken(String(call).toUpperCase().trim());
+  const m = US_CALL_AREA_RE.exec(token);
+  return m ? US_CALL_AREA_CENTERS[m[1]] : null;
+}
+
 // Approximate worked-station location for the world map: prefer a real
-// grid square (an actual reported location) over the country file's
+// grid square (an actual reported location), then a US call-area refinement
+// for the mainland (see usCallAreaLatLon), then the country file's
 // entity-center guess. Not persisted on the QSO -- see the header comment.
 function resolveLatLon(qso) {
   if (!qso) return null;
@@ -128,8 +176,15 @@ function resolveLatLon(qso) {
 
   if (!qso.call) return null;
   const hit = resolveCall(qso.call);
-  if (!hit || hit.lat == null || hit.lon == null) return null;
+  if (!hit) return null;
+
+  if (hit.entity === 291) {
+    const fromCallArea = usCallAreaLatLon(qso.call);
+    if (fromCallArea) return fromCallArea;
+  }
+
+  if (hit.lat == null || hit.lon == null) return null;
   return { lat: hit.lat, lon: hit.lon };
 }
 
-module.exports = { enrichGeo, resolveCall, gridToLatLon, resolveLatLon, _setResolver };
+module.exports = { enrichGeo, resolveCall, gridToLatLon, usCallAreaLatLon, resolveLatLon, _setResolver };
