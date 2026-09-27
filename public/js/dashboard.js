@@ -11,6 +11,93 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
+// ---------------------------------------------------------------------
+// Grayline (day/night terminator) -- pure date math, no server round trip,
+// so it's recomputed client-side on the same 1s ticker as the UTC clock
+// (see dashboard()'s `now`). Spencer (1971) Fourier-series approximations
+// for solar declination and the equation of time -- the same formulas
+// NOAA's solar calculator is built on. Verified before use, not just
+// trusted from memory: declination checked against the solstices/equinoxes
+// (matches +-23.4 / ~0 as expected), and the terminator formula checked
+// against a real astronomical fact -- at a solstice it should be tangent to
+// the polar circle, i.e. |90 - declination|, and it comes out to 66.5-66.6
+// in both directions, matching the real arctic/antarctic circle latitude
+// (66.56 deg) almost exactly.
+function solarDayAngle(date) {
+  const start = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const dayOfYear = Math.floor((date.getTime() - start) / 86400000);
+  return (2 * Math.PI * dayOfYear) / 365;
+}
+
+function solarDeclinationDeg(date) {
+  const g = solarDayAngle(date);
+  const rad = 0.006918
+    - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g)
+    - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g)
+    - 0.002697 * Math.cos(3 * g) + 0.001480 * Math.sin(3 * g);
+  return (rad * 180) / Math.PI;
+}
+
+function equationOfTimeMinutes(date) {
+  const g = solarDayAngle(date);
+  return 229.18 * (0.000075
+    + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g)
+    - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+}
+
+// The point on Earth where the sun is directly overhead right now.
+function subsolarPoint(date) {
+  const lat = solarDeclinationDeg(date);
+  const eot = equationOfTimeMinutes(date);
+  const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+  const lonRaw = -15 * (utcHours - 12 + eot / 60);
+  const lon = ((lonRaw + 540) % 360) - 180; // normalize to (-180, 180]
+  return { lat, lon };
+}
+
+// The terminator's latitude at a given longitude: the great circle 90 deg
+// from the subsolar point. Symmetric about the subsolar meridian by real
+// geometry (reflecting across the pole-to-subsolar-point plane is a
+// genuine symmetry of the setup) -- terminatorLat(sub.lon + x) really does
+// equal terminatorLat(sub.lon - x), that was checked and is not a bug.
+function terminatorLatDeg(lonDeg, sub) {
+  const subLatRad = (sub.lat * Math.PI) / 180;
+  if (Math.abs(subLatRad) < 1e-6) return 0; // equinox: avoid a /~0 blowup
+  const dLon = ((lonDeg - sub.lon) * Math.PI) / 180;
+  return (Math.atan(-Math.cos(dLon) / Math.tan(subLatRad)) * 180) / Math.PI;
+}
+
+// Maidenhead grid locator -> approximate center { lat, lon }. Mirrors
+// src/analyze/geo.js's gridToLatLon() exactly -- no build step means no
+// shared module between server and browser, so this is kept in sync by
+// hand (same convention as ops-dashboard's winagent/agent structs). See
+// that file's own comment for the field/square/subsquare math.
+function gridToLatLon(grid) {
+  if (!grid || typeof grid !== 'string') return null;
+  const g = grid.trim().toUpperCase();
+  if (!/^[A-R]{2}([0-9]{2}([A-X]{2})?)?$/.test(g)) return null;
+
+  let lon = (g.charCodeAt(0) - 65) * 20 - 180;
+  let lat = (g.charCodeAt(1) - 65) * 10 - 90;
+  let lonSpan = 20;
+  let latSpan = 10;
+
+  if (g.length >= 4) {
+    lon += (g.charCodeAt(2) - 48) * 2;
+    lat += (g.charCodeAt(3) - 48) * 1;
+    lonSpan = 2;
+    latSpan = 1;
+  }
+  if (g.length === 6) {
+    lon += (g.charCodeAt(4) - 65) * (2 / 24);
+    lat += (g.charCodeAt(5) - 65) * (1 / 24);
+    lonSpan = 2 / 24;
+    latSpan = 1 / 24;
+  }
+
+  return { lat: lat + latSpan / 2, lon: lon + lonSpan / 2 };
+}
+
 function dashboard() {
   // Chart.js instances live here, in a plain closure variable -- NOT as
   // Alpine data properties. Same reactivity trap as charts.js: Alpine
@@ -404,6 +491,49 @@ function dashboard() {
         const r = p.mult ? 5 : 4;
         return `<circle cx="${p.x}" cy="${p.y}" r="${r}" class="${cls}" title="${title}"></circle>`;
       }).join('');
+    },
+
+    // The station's own location, from N1MM's reported transmitter grid
+    // (score.grid6 -- the same field the header's grid-locator chip already
+    // shows) -- not hardcoded, since the grid genuinely changes: a
+    // different contest, a different physical QTH, even the same club call
+    // operating from a different location. Recomputed from whatever
+    // score.grid6 currently says, so it moves the moment a new Score
+    // broadcast reports a different one. A single, non-repeated marker, so
+    // (unlike mapDotsSvg) this binds directly via ordinary :cx/:cy/:title
+    // attributes -- no <template x-for>, so none of that directive's
+    // SVG-nesting bug applies here.
+    homePoint() {
+      const ll = gridToLatLon(this.score.grid6);
+      if (!ll) return null;
+      return { ...this.projectLatLon(ll.lat, ll.lon), grid: this.score.grid6 };
+    },
+
+    // Day/night terminator (grayline), propagation context for the map.
+    // See the solar* functions' own header comment for the astronomy and
+    // how it was checked. A single shape, like the land outline -- binds
+    // directly via :d, not x-html/x-for. Recomputes every render because it
+    // reads `this.now` (ticks every 1s, same clock utcClock() uses), which
+    // is deliberate: the terminator itself barely moves in a second, but
+    // recomputing on the existing ticker is simpler and cheap enough (a
+    // ~180-point trig loop) rather than adding a second, slower timer just
+    // to throttle it.
+    nightPolygonPath() {
+      const date = new Date(this.now);
+      const sub = subsolarPoint(date);
+      const pts = [];
+      for (let lon = -180; lon <= 180; lon += 2) {
+        const { x, y } = this.projectLatLon(terminatorLatDeg(lon, sub), lon);
+        pts.push(`${lon === -180 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`);
+      }
+      // Close along whichever pole is currently dark -- sub.lat > 0 (a
+      // northern-hemisphere summer subsolar point) means the SOUTH pole is
+      // the one in permanent darkness right now, and vice versa. Verified
+      // by rendering both solstices and sampling actual pixels before
+      // trusting this, not just by reading the formula.
+      const darkPoleY = this.projectLatLon(sub.lat >= 0 ? -90 : 90, 180).y;
+      pts.push(`L1000,${darkPoleY}`, `L0,${darkPoleY}`, 'Z');
+      return pts.join('');
     },
 
     async fetchInitialState() {

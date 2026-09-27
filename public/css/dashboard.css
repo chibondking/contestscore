@@ -601,6 +601,26 @@ body {
 
 .worldmap-dot--mult:hover { r: 7; }
 
+/* Grayline: dims whatever is under it (land, ocean) rather than replacing
+   it with a flat color, so the map keeps reading as the same map at night.
+   pointer-events: none -- it sits between the land and the dots/home
+   marker in paint order, and has no hover state of its own to claim. */
+.worldmap-night {
+  fill: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+/* Home QTH (N1MM's reported transmitter grid) -- an open ring in --text,
+   not --accent/--green, so it never reads as "a QSO" (filled dot) or "a
+   mult" (filled green dot) at a glance -- it's a landmark, not contact
+   data, the same distinction the dataviz skill draws between a status
+   color and a data color. */
+.worldmap-home {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
 .chart-box { position: relative; width: 100%; }
 .chart-box--trend { height: 280px; }
 .chart-box--pie { height: 260px; }

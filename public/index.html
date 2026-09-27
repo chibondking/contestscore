@@ -164,12 +164,25 @@
           <line x1="0" y1="250" x2="1000" y2="250" class="worldmap-graticule"></line>
           <line x1="500" y1="0" x2="500" y2="500" class="worldmap-graticule"></line>
           <path class="worldmap-land" :d="worldOutlinePath"></path>
+          <!-- Grayline: the current day/night terminator (dashboard.js's
+               nightPolygonPath(), a single shape -- safe to bind directly
+               via :d, same as the land outline above). Drawn over the land
+               so night reads as dimmer, but under the dots/home marker so
+               contact data stays fully legible either way. -->
+          <path class="worldmap-night" :d="nightPolygonPath()"></path>
           <!-- Dots are injected as a raw SVG string via x-html, not a
                <template x-for> -- confirmed live in a real browser that
                Alpine's x-for/template breaks when nested inside <svg> (only
                the first item ever bound). See mapDotsSvg()'s own comment
                in dashboard.js. -->
           <g x-html="mapDotsSvg()"></g>
+          <!-- Home: N1MM's reported transmitter grid (score.grid6), not a
+               fixed location -- see homePoint()'s own comment. A single
+               marker, so (like the land/night paths) this binds directly,
+               no x-for involved. -->
+          <circle x-show="homePoint()" :cx="homePoint() ? homePoint().x : 0"
+                  :cy="homePoint() ? homePoint().y : 0" r="7" class="worldmap-home"
+                  :title="homePoint() ? ('Home — ' + homePoint().grid) : ''"></circle>
         </svg>
       </div>
       <p x-show="mapPoints().length === 0" class="empty">No located QSOs yet</p>
