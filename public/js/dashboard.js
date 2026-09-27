@@ -489,7 +489,13 @@ function dashboard() {
         const title = escapeHtml(`${p.call} — ${p.band} MHz ${p.mode}${p.mult ? ' — MULT' : ''}`);
         const cls = p.mult ? 'worldmap-dot worldmap-dot--mult' : 'worldmap-dot';
         const r = p.mult ? 5 : 4;
-        return `<circle cx="${p.x}" cy="${p.y}" r="${r}" class="${cls}" title="${title}"></circle>`;
+        // A nested <title> child, not a `title` attribute -- confirmed
+        // that's what actually matters: a bare attribute only feeds the
+        // accessible-name computation (which is why the earlier
+        // getByTitle() check falsely looked like a pass), it does not
+        // trigger a real hover tooltip. <title> is SVG's own, standard
+        // tooltip mechanism.
+        return `<circle cx="${p.x}" cy="${p.y}" r="${r}" class="${cls}"><title>${title}</title></circle>`;
       }).join('');
     },
 

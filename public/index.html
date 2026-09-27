@@ -181,8 +181,12 @@
                marker, so (like the land/night paths) this binds directly,
                no x-for involved. -->
           <circle x-show="homePoint()" :cx="homePoint() ? homePoint().x : 0"
-                  :cy="homePoint() ? homePoint().y : 0" r="7" class="worldmap-home"
-                  :title="homePoint() ? ('Home — ' + homePoint().grid) : ''"></circle>
+                  :cy="homePoint() ? homePoint().y : 0" r="7" class="worldmap-home">
+            <!-- Nested <title>, not a `title` attribute -- see
+                 mapDotsSvg()'s comment in dashboard.js: the attribute alone
+                 doesn't trigger a real hover tooltip. -->
+            <title x-text="homePoint() ? ('Home — ' + homePoint().grid) : ''"></title>
+          </circle>
         </svg>
       </div>
       <p x-show="mapPoints().length === 0" class="empty">No located QSOs yet</p>
