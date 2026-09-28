@@ -207,6 +207,56 @@ describe('QTC handling (WAE)', () => {
   });
 });
 
+// A real bug, not hypothetical: confirmed live 2026-09-28 on a CQ WW RTTY
+// log (no WAE QTC mechanism at all -- isQtc matches zero rows) that still
+// reported "2 QTCs". qtcCount was computed as qsos.length minus the
+// deduped, non-QTC count -- which also silently absorbs genuine
+// same-call/band/mode repeat contacts (dedupeQsos's OWN job, nothing to do
+// with QTCs) into that subtraction. The real cause: one station worked 3
+// times on the same band/mode, N1MM correctly crediting only the first with
+// points, and the other two got mislabeled "QTCs" by the subtraction.
+describe('a genuine same-station repeat is never counted as a QTC', () => {
+  const qsos = [
+    // CR3W worked 3 times on the same band/mode -- 2 later repeats score 0,
+    // same shape as the real capture. None of these carry exchange1 =
+    // "QTC" -- isQtc must never match any of them.
+    qso({ call: 'CR3W', band: '40', mode: 'RTTY', countryprefix: 'CT3', points: 3, n1mm_timestamp: '2026-09-26 08:23:26' }),
+    qso({ call: 'CR3W', band: '40', mode: 'RTTY', countryprefix: 'CT3', points: 0, n1mm_timestamp: '2026-09-26 08:25:20' }),
+    qso({ call: 'CR3W', band: '40', mode: 'RTTY', countryprefix: 'CT3', points: 0, n1mm_timestamp: '2026-09-27 21:37:19' }),
+    // A real QTC, present in the same log, to prove the fix still counts an
+    // actual QTC correctly rather than just returning 0 unconditionally.
+    qso({ call: 'PA6Y', band: '20', mode: 'RTTY', countryprefix: 'PA', points: 1, n1mm_timestamp: '2026-09-26 09:00:00' }),
+    qso({ call: 'PA6Y', band: '20', mode: 'RTTY', countryprefix: 'PA', points: 1, exchange1: 'RQTC', n1mm_timestamp: '2026-09-26 09:00:05' }),
+  ];
+  const meta = { station_call: 'WT9P', has_points: true };
+
+  it('QSO/QTC counts reflect what isQtc actually matched, not a subtraction', () => {
+    const txt = renderReportText({ meta, qsos });
+    // 2 real QSOs (CR3W once, PA6Y once) -- the 2 CR3W repeats are dupes,
+    // dropped from the count entirely, not relabeled.
+    assert.match(txt, /QSOs \.+ 2\n/);
+    assert.match(txt, /QTCs \.+ 1\n/); // only PA6Y's real RQTC row
+  });
+
+  it('the sub-header never says "2 QTCs" for zero real QTC rows plus two dupes', () => {
+    const txt = renderReportText({ meta, qsos });
+    assert.match(txt, /2 QSOs \+ 1 QTCs/);
+    assert.doesNotMatch(txt, /\+ 2 QTCs/);
+  });
+
+  // The exact reported case, isolated: a contest with no QTC mechanism at
+  // all (CQ WW RTTY), a log that happens to contain repeats. No QTC line,
+  // tile, or column should appear anywhere -- not a QTC count of 2.
+  it('a log with dupes but ZERO real QTCs shows no QTC count anywhere', () => {
+    const noQtc = qsos.filter((q) => !/QTC/i.test(q.exchange1 || ''));
+    const txt = renderReportText({ meta, qsos: noQtc });
+    assert.doesNotMatch(txt, /QTCs/);
+    assert.doesNotMatch(txt, /QTC/);
+    const html = renderReport({ meta, qsos: noQtc });
+    assert.doesNotMatch(html, /QTCs/);
+  });
+});
+
 describe('dedupeQsos', () => {
   it('drops a genuine dupe (same call/band/mode worked twice), keeping the earlier QSO', () => {
     const first = qso({ n1mm_timestamp: '2025-05-24 12:00:00', points: 1, is_mult1: 1 });

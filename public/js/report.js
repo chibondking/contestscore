@@ -14,7 +14,7 @@ function renderReport(data) {
   const qsos = data.qsos || [];
   const tiles = summaryTiles(qsos, meta);
   const realCount = dedupeQsos(qsos.filter((q) => !isQtc(q))).length;
-  const qtcCount = qsos.length - realCount;
+  const qtcCount = qsos.filter(isQtc).length;
 
   const title = esc([meta.contest || meta.contest_key || 'Contest log',
     meta.station_call].filter(Boolean).join(' — '));
@@ -80,7 +80,7 @@ function renderReportText(data) {
   const qsos = data.qsos || [];
   const out = [];
   const realCount = dedupeQsos(qsos.filter((q) => !isQtc(q))).length;
-  const qtcCount = qsos.length - realCount;
+  const qtcCount = qsos.filter(isQtc).length;
 
   const title = [meta.contest || meta.contest_key || 'Contest log', meta.station_call]
     .filter(Boolean).join(' — ');
@@ -142,7 +142,7 @@ function renderReportText(data) {
 
 function summaryTiles(qsos, meta) {
   const real = dedupeQsos(qsos.filter((q) => !isQtc(q)));
-  const qtcCount = qsos.length - real.length;
+  const qtcCount = qsos.filter(isQtc).length;
   const times = sortedTimes(real);
   const points = qsos.reduce((s, q) => s + (Number(q.points) || 0), 0); // QTCs score too
   const mults = real.reduce((s, q) => s + mc(q), 0);
@@ -170,7 +170,7 @@ function summaryTiles(qsos, meta) {
 // only; the HTML report keeps summaryTiles.
 function glanceRows(qsos, meta) {
   const real = dedupeQsos(qsos.filter((q) => !isQtc(q)));
-  const qtcCount = qsos.length - real.length;
+  const qtcCount = qsos.filter(isQtc).length;
   const times = sortedTimes(real);
   const points = qsos.reduce((s, q) => s + (Number(q.points) || 0), 0); // QTCs score too
   const mults = real.reduce((s, q) => s + mc(q), 0);
@@ -457,6 +457,18 @@ function mc(q) {
 function isQtc(q) {
   return /QTC/i.test(q.exchange1 || '');
 }
+
+// qtcCount is ALWAYS qsos.filter(isQtc).length -- a direct count -- never
+// qsos.length - dedupeQsos(qsos.filter(q => !isQtc(q))).length. That
+// subtraction looks equivalent but isn't: dedupeQsos also drops genuine
+// same-call/band/mode repeat contacts (a station legitimately worked twice,
+// N1MM itself crediting only the first with points), which have nothing to
+// do with QTCs. Confirmed live 2026-09-28 on a real CQ WW RTTY log (no WAE
+// QTC mechanism at all, isQtc matched zero rows) that reported "2 QTCs" --
+// the real cause was one station worked 3 times on the same band/mode, 2 of
+// those correctly excluded from the QSO count as dupes, then wrongly
+// re-labeled "QTCs" by the subtraction. Every qtcCount site below was wrong
+// the same way; fixed to filter directly instead.
 
 // Among non-QTC rows, keep only the earliest (qTime()) QSO per (call, band,
 // mode group). A genuine dupe -- the same station worked again on the same
