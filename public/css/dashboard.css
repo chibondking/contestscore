@@ -632,17 +632,17 @@ body {
 .worldmap-dot {
   fill: var(--map-dot);
   stroke: var(--map-mark-edge);
-  stroke-width: 1.2;
+  stroke-width: 1;
   filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.8));
 }
 
-.worldmap-dot:hover { r: 6; }
+.worldmap-dot:hover { r: 5; }
 
 /* Green, like .chip--mult -- a new multiplier is a good thing, not a
    different severity. */
 .worldmap-dot--mult { fill: var(--map-mult); }
 
-.worldmap-dot--mult:hover { r: 7; }
+.worldmap-dot--mult:hover { r: 6; }
 
 /* Grayline: a tint over land and ocean alike (so the map keeps reading as
    the same map at night), with the city-lights image drawn on top of it --

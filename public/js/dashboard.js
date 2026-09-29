@@ -520,7 +520,7 @@ function dashboard() {
       return this.mapPoints().map((p) => {
         const title = escapeHtml(`${p.call} — ${p.band} MHz ${p.mode}${p.mult ? ' — MULT' : ''}`);
         const cls = p.mult ? 'worldmap-dot worldmap-dot--mult' : 'worldmap-dot';
-        const r = p.mult ? 5 : 4;
+        const r = p.mult ? 4 : 3;
         // A nested <title> child, not a `title` attribute -- confirmed
         // that's what actually matters: a bare attribute only feeds the
         // accessible-name computation (which is why the earlier
