@@ -517,23 +517,44 @@ function dashboard() {
     // last 30 overall narrowed down -- otherwise a quiet band would show
     // only the one or two of its QSOs that happen to be recent.
     mapPoints() {
-      const points = this.qsos
+      const located = this.qsos
         .filter((q) => !this.isQtc(q))
         .filter((q) => this.mapBand === 'all' || q.band === this.mapBand)
         .slice(0, 30)
-        .filter((q) => q.lat != null && q.lon != null)
-        .map((q) => ({
-          key: q.ext_id ?? q.id ?? (q.call + q.band + q.mode + q.logged_at),
-          call: q.call,
-          band: q.band,
-          mode: q.mode,
-          mult: this.isMult(q),
-          ...this.projectLatLon(q.lat, q.lon),
-        }));
-      // Mult dots draw last (SVG paints in document order) so a mult never
-      // sits hidden under an ordinary dot that happens to land on the same
-      // pixel -- same "make the notable one visible" reasoning as the
-      // Recent QSOs chip, just expressed as z-order here instead of color.
+        .filter((q) => q.lat != null && q.lon != null);
+
+      // One dot per station per spot: the same call worked on several bands
+      // resolves to the same lat/lon every time, so separate dots would sit
+      // exactly on top of each other and only the top one could ever be
+      // hovered (seen live: N3AD's newer 160m QSO hidden under its 80m
+      // mult). Its tooltip lists every QSO, newest first, and it's a mult
+      // dot if any of them was. Grouped by call AND spot, so a rover whose
+      // exchange grid moved still gets a dot per location. band/mode stay
+      // the newest QSO's.
+      const groups = new Map();
+      for (const q of located) { // newest-first
+        const pt = this.projectLatLon(q.lat, q.lon);
+        const id = `${q.call}|${pt.x.toFixed(1)},${pt.y.toFixed(1)}`;
+        let g = groups.get(id);
+        if (!g) {
+          g = {
+            key: q.ext_id ?? q.id ?? (q.call + q.band + q.mode + q.logged_at),
+            call: q.call, band: q.band, mode: q.mode, mult: false, qsos: [], ...pt,
+          };
+          groups.set(id, g);
+        }
+        const mult = this.isMult(q);
+        g.qsos.push({ band: q.band, mode: q.mode, mult });
+        g.mult = g.mult || mult;
+      }
+
+      // SVG paints in document order, so oldest first puts the newest
+      // station on top where different stations overlap. Then mult dots
+      // last of all, so a mult never sits hidden under an ordinary dot
+      // (same "make the notable one visible" reasoning as the Recent QSOs
+      // chip, as z-order instead of color). The sort is stable, so each
+      // group keeps its oldest-to-newest order.
+      const points = [...groups.values()].reverse();
       points.sort((a, b) => (a.mult === b.mult ? 0 : a.mult ? 1 : -1));
       return points;
     },
@@ -559,7 +580,7 @@ function dashboard() {
     // not Alpine's own auto-escaped x-text.
     mapDotsSvg() {
       return this.mapPoints().map((p) => {
-        const title = escapeHtml(`${p.call} — ${bandLabel(p.band)} ${p.mode}${p.mult ? ' — MULT' : ''}`);
+        const title = escapeHtml(`${p.call} — ${p.qsos.map((q) => `${bandLabel(q.band)} ${q.mode}${q.mult ? ' MULT' : ''}`).join(', ')}`);
         const cls = p.mult ? 'worldmap-dot worldmap-dot--mult' : 'worldmap-dot';
         const r = p.mult ? 4 : 3;
         // A nested <title> child, not a `title` attribute -- confirmed

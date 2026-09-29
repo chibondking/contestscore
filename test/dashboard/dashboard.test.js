@@ -195,7 +195,7 @@ describe('world map: band filter', () => {
     d.qsos = [located({ call: 'A1A', band: '7' }), located({ call: 'B1B', band: '14' })];
     assert.equal(d.mapPoints().length, 2);
     d.mapBand = '14';
-    assert.deepEqual(d.mapPoints().map((p) => p.call), ['B1B']);
+    assert.deepEqual([...d.mapPoints()].map((p) => p.call), ['B1B']);
   });
 
   it('is the last 30 on that band, not the last 30 overall narrowed down', () => {
@@ -208,5 +208,34 @@ describe('world map: band filter', () => {
     assert.equal(d.mapPoints().filter((p) => p.band === '7').length, 0);
     d.mapBand = '7';
     assert.equal(d.mapPoints().length, 5);
+  });
+});
+
+describe('world map: overlapping dots', () => {
+  const located = (o) => qso({ lat: 40.5, lon: -75, ...o });
+
+  it('one station worked on several bands is one dot, listing every QSO newest first', () => {
+    const d = dashboard();
+    // Seen live: N3AD's newer 160m QSO hidden under its older 80m mult.
+    d.qsos = [located({ call: 'N3AD', band: '1.8' }), located({ call: 'N3AD', band: '3.5', is_mult1: 1 })];
+    const pts = d.mapPoints();
+    assert.equal(pts.length, 1);
+    assert.equal(pts[0].band, '1.8'); // the newest QSO's
+    assert.equal(pts[0].mult, true);  // any mult makes it a mult dot
+    assert.match(d.mapDotsSvg(), /<title>N3AD — 160m CW, 80m CW MULT<\/title>/);
+  });
+
+  it('draws the newest station on top where different stations overlap (mults still above all)', () => {
+    const d = dashboard();
+    d.qsos = [located({ call: 'NEW1' }), located({ call: 'OLD1' })]; // newest-first
+    assert.deepEqual([...d.mapPoints()].map((p) => p.call), ['OLD1', 'NEW1']);
+    d.qsos = [located({ call: 'NEW1' }), located({ call: 'OLD1', is_mult1: 1 })];
+    assert.deepEqual([...d.mapPoints()].map((p) => p.call), ['NEW1', 'OLD1']);
+  });
+
+  it('a station at two different spots (rover) keeps a dot per spot', () => {
+    const d = dashboard();
+    d.qsos = [located({ call: 'K1R/R', lat: 42 }), located({ call: 'K1R/R', lat: 41 })];
+    assert.equal(d.mapPoints().length, 2);
   });
 });
