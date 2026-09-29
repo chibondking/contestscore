@@ -2,6 +2,28 @@
 // toggleWorldMap()). Same contestpulse_ prefix as chrome.js's theme key.
 const WORLDMAP_KEY = 'contestpulse_worldmap';
 
+// Band field (N1MM's MHz, e.g. "7") -> ham band name ("40m"), and a sort
+// key that orders bands by frequency. Same tables as report.js/compare.js
+// -- each page's script is a plain classic script with no shared module
+// (see CLAUDE.md), so each keeps its own copy.
+function bandLabel(band) {
+  const n = parseFloat(band);
+  if (Number.isNaN(n)) return band || '—';
+  const ranges = [
+    [1.7, 2.1, '160m'], [3.4, 4.1, '80m'], [5.2, 5.5, '60m'], [6.9, 7.4, '40m'],
+    [10.0, 10.2, '30m'], [13.9, 14.5, '20m'], [18.0, 18.2, '17m'], [20.9, 21.5, '15m'],
+    [24.8, 25.1, '12m'], [27.9, 29.8, '10m'], [49, 55, '6m'], [69, 75, '4m'],
+    [143, 149, '2m'], [218, 226, '1.25m'], [419, 451, '70cm'],
+  ];
+  const hit = ranges.find(([lo, hi]) => n >= lo && n < hi);
+  return hit ? hit[2] : String(band);
+}
+
+function bandSortKey(b) {
+  const n = parseFloat(b);
+  return Number.isNaN(n) ? Infinity : n;
+}
+
 // Used by mapDotsSvg() below, which builds raw SVG markup by hand (see its
 // own comment for why) -- Alpine's x-text auto-escapes, but a hand-built
 // HTML string doesn't, and a callsign/exchange field ultimately comes from
@@ -126,6 +148,10 @@ function dashboard() {
     // really set in init() -- this factory runs before any DOM/storage
     // exists in the tests' sandbox, so it can't read either here.
     showWorldMap: true,
+    // Band filter for the map: 'all', or one of mapBands()' raw band
+    // values. A view choice for right now, so it isn't persisted -- a
+    // remembered 40m would silently empty the map in the next contest.
+    mapBand: 'all',
     mapOceanHref: '/img/map/ocean-dark.webp',
     // Per-station ContestPulse (or other bridge) liveness, keyed by
     // station_id. Not contest data -- db:cleared deliberately leaves this
@@ -234,6 +260,7 @@ function dashboard() {
         this.scoreHistory = [];
         this.radios = [];
         this.busts = [];
+        this.mapBand = 'all'; // that band's QSOs are gone too
         this.fetchRate(); // trailing windows should drop to zero, not linger
         this.touch();
       });
@@ -485,9 +512,14 @@ function dashboard() {
     // the count and duplicate a dot already plotted for its real QSO.
     // Only a QSO whose call actually resolves to a location (server-attached
     // lat/lon -- see src/routes/api.js / src/udp/index.js) gets a dot.
+    //
+    // With a band picked (mapBand), it's the last 30 on that band, not the
+    // last 30 overall narrowed down -- otherwise a quiet band would show
+    // only the one or two of its QSOs that happen to be recent.
     mapPoints() {
       const points = this.qsos
         .filter((q) => !this.isQtc(q))
+        .filter((q) => this.mapBand === 'all' || q.band === this.mapBand)
         .slice(0, 30)
         .filter((q) => q.lat != null && q.lon != null)
         .map((q) => ({
@@ -506,6 +538,15 @@ function dashboard() {
       return points;
     },
 
+    // Bands present in the log (QTCs excluded, as on the map), lowest
+    // frequency first -- the choices for the map's band filter.
+    mapBands() {
+      const bands = new Set(this.qsos.filter((q) => !this.isQtc(q) && q.band).map((q) => q.band));
+      return [...bands].sort((a, b) => bandSortKey(a) - bandSortKey(b));
+    },
+
+    bandLabel(band) { return bandLabel(band); },
+
     // The dots are built as a raw SVG string and injected via x-html on a
     // <g> (index.html), NOT a <template x-for> inside the <svg> --
     // confirmed live in a real browser that Alpine's x-for/template breaks
@@ -518,7 +559,7 @@ function dashboard() {
     // not Alpine's own auto-escaped x-text.
     mapDotsSvg() {
       return this.mapPoints().map((p) => {
-        const title = escapeHtml(`${p.call} — ${p.band} MHz ${p.mode}${p.mult ? ' — MULT' : ''}`);
+        const title = escapeHtml(`${p.call} — ${bandLabel(p.band)} ${p.mode}${p.mult ? ' — MULT' : ''}`);
         const cls = p.mult ? 'worldmap-dot worldmap-dot--mult' : 'worldmap-dot';
         const r = p.mult ? 4 : 3;
         // A nested <title> child, not a `title` attribute -- confirmed

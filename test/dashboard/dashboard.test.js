@@ -179,3 +179,34 @@ describe('world map: show/hide', () => {
     assert.equal(d.showWorldMap, true);
   });
 });
+
+describe('world map: band filter', () => {
+  const located = (o) => qso({ lat: 50, lon: 10, ...o });
+
+  it('offers each band in the log once, lowest frequency first', () => {
+    const d = dashboard();
+    d.qsos = [located({ band: '14' }), located({ band: '7' }), located({ band: '14' }), located({ band: '1.8' })];
+    assert.deepEqual([...d.mapBands()], ['1.8', '7', '14']);
+    assert.deepEqual([...d.mapBands()].map((b) => d.bandLabel(b)), ['160m', '40m', '20m']);
+  });
+
+  it('All shows every band; a picked band shows only that band', () => {
+    const d = dashboard();
+    d.qsos = [located({ call: 'A1A', band: '7' }), located({ call: 'B1B', band: '14' })];
+    assert.equal(d.mapPoints().length, 2);
+    d.mapBand = '14';
+    assert.deepEqual(d.mapPoints().map((p) => p.call), ['B1B']);
+  });
+
+  it('is the last 30 on that band, not the last 30 overall narrowed down', () => {
+    const d = dashboard();
+    // newest-first: 40 recent 20m QSOs, then 5 older 40m ones
+    d.qsos = [
+      ...Array.from({ length: 40 }, (_, i) => located({ call: `K${i}A`, band: '14' })),
+      ...Array.from({ length: 5 }, (_, i) => located({ call: `W${i}B`, band: '7' })),
+    ];
+    assert.equal(d.mapPoints().filter((p) => p.band === '7').length, 0);
+    d.mapBand = '7';
+    assert.equal(d.mapPoints().length, 5);
+  });
+});

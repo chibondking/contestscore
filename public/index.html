@@ -161,7 +161,7 @@
          for an existing contact, not a new one -- same reasoning as the
          MULT chip). -->
     <section class="card card--wide" id="worldmap" x-show="qsos.length > 0">
-      <h2>World Map <span class="map-subtitle">last 30 QSOs</span>
+      <h2>World Map <span class="map-subtitle" x-text="mapBand === 'all' ? 'last 30 QSOs' : ('last 30 QSOs on ' + bandLabel(mapBand))"></span>
         <!-- Per-viewer show/hide, remembered in localStorage (see
              toggleWorldMap()). Collapses to just this header rather than
              removing the card, so the way back is always right here. -->
@@ -173,6 +173,14 @@
            terminator every second or hold its images in the layout. -->
       <template x-if="showWorldMap">
       <div id="worldmap-body">
+      <!-- Band filter: All, or one band. Only offered once the log has more
+           than one band (with one, All already is that band). -->
+      <div class="map-bands" role="group" aria-label="Show QSOs on band" x-show="mapBands().length > 1">
+        <button type="button" class="map-band" :aria-pressed="mapBand === 'all'" @click="mapBand = 'all'">All</button>
+        <template x-for="b in mapBands()" :key="b">
+          <button type="button" class="map-band" :aria-pressed="mapBand === b" @click="mapBand = b" x-text="bandLabel(b)"></button>
+        </template>
+      </div>
       <div class="map-box">
         <svg viewBox="0 0 1000 500" class="worldmap-svg" preserveAspectRatio="xMidYMid meet">
           <defs>
@@ -223,7 +231,7 @@
           </circle>
         </svg>
       </div>
-      <p x-show="mapPoints().length === 0" class="empty">No located QSOs yet</p>
+      <p x-show="mapPoints().length === 0" class="empty" x-text="mapBand === 'all' ? 'No located QSOs yet' : ('No located QSOs on ' + bandLabel(mapBand))"></p>
       </div>
       </template>
     </section>
