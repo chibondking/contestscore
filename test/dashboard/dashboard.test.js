@@ -118,3 +118,64 @@ describe('stationCall', () => {
     assert.equal(d.stationCall(), '');
   });
 });
+
+describe('world map: night mask shape', () => {
+  // Pulls every "x,y" vertex out of an SVG path string.
+  const vertices = (d) => [...d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+
+  it('pads past the left/right edges so the blurred mask stays solid at the map edges', () => {
+    const d = dashboard();
+    d.now = Date.UTC(2026, 5, 21, 12, 0, 0); // June solstice
+    const xs = vertices(d.nightPolygonPath()).map(([x]) => x);
+    assert.equal(Math.min(...xs), -40);
+    assert.equal(Math.max(...xs), 1040);
+  });
+
+  it('closes past whichever pole is dark: north in December, south in June', () => {
+    const d = dashboard();
+    d.now = Date.UTC(2026, 11, 21, 12, 0, 0); // December solstice: north pole dark
+    let ys = vertices(d.nightPolygonPath()).map(([, y]) => y);
+    assert.equal(Math.min(...ys), -40);
+    d.now = Date.UTC(2026, 5, 21, 12, 0, 0);  // June solstice: south pole dark
+    ys = vertices(d.nightPolygonPath()).map(([, y]) => y);
+    assert.equal(Math.max(...ys), 540);
+  });
+
+  it('starts and ends the terminator at the same height (lon -180 and 180 are one meridian)', () => {
+    const d = dashboard();
+    d.now = Date.UTC(2026, 8, 29, 3, 30, 0);
+    const v = vertices(d.nightPolygonPath());
+    assert.deepEqual(v[0], [-40, v[1][1]]); // padded start sits level with lon -180
+    const right = v.find(([x]) => x === 1040);
+    assert.equal(right[1], v[1][1]);
+  });
+});
+
+describe('world map: time zones', () => {
+  const svg = dashboard().mapZonesSvg();
+
+  it('has a badge for every zone from -11 to +11 (the dateline zones are split by the map edge)', () => {
+    const labels = [...svg.matchAll(/<text[^>]*>([^<]+)<\/text>/g)].map((m) => m[1]);
+    assert.equal(labels.length, 23);
+    assert.equal(labels[0], '-11');
+    assert.equal(labels[11], '0');
+    assert.equal(labels[22], '+11');
+  });
+
+  it('draws a boundary every 15 degrees, centered on each zone meridian', () => {
+    const xs = [...svg.matchAll(/<line x1="([\d.]+)"/g)].map((m) => Number(m[1]));
+    assert.equal(xs.length, 24);
+    assert.ok(xs.includes(479.17) && xs.includes(520.83)); // +/-7.5 deg around Greenwich
+  });
+});
+
+describe('world map: show/hide', () => {
+  it('toggles, and a missing localStorage (private window, this sandbox) is not an error', () => {
+    const d = dashboard();
+    assert.equal(d.showWorldMap, true);
+    d.toggleWorldMap();
+    assert.equal(d.showWorldMap, false);
+    d.toggleWorldMap();
+    assert.equal(d.showWorldMap, true);
+  });
+});

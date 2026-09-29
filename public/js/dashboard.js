@@ -1,3 +1,7 @@
+// localStorage key for the world map card's per-viewer show/hide (see
+// toggleWorldMap()). Same contestpulse_ prefix as chrome.js's theme key.
+const WORLDMAP_KEY = 'contestpulse_worldmap';
+
 // Used by mapDotsSvg() below, which builds raw SVG markup by hand (see its
 // own comment for why) -- Alpine's x-text auto-escapes, but a hand-built
 // HTML string doesn't, and a callsign/exchange field ultimately comes from
@@ -117,11 +121,12 @@ function dashboard() {
     scoreHistory: [],
     radios: [],
     qsos: [],
-    // World map: the land outline's SVG path `d`, fetched once from the
-    // static asset (public/img/world-outline.svg) and bound via :d on the
-    // dashboard's own <svg> -- see mapPoints() for the matching projection
-    // used to plot dots in the same coordinate space.
-    worldOutlinePath: '',
+    // World map card: shown/hidden per viewer (toggleWorldMap(), persisted
+    // under WORLDMAP_KEY), and which theme's ocean image it draws. Both are
+    // really set in init() -- this factory runs before any DOM/storage
+    // exists in the tests' sandbox, so it can't read either here.
+    showWorldMap: true,
+    mapOceanHref: '/img/map/ocean-dark.webp',
     // Per-station ContestPulse (or other bridge) liveness, keyed by
     // station_id. Not contest data -- db:cleared deliberately leaves this
     // alone, since it reflects the bridge process, not the QSO log.
@@ -238,7 +243,13 @@ function dashboard() {
       this.fetchFeatures();
       this.fetchBusts();
       this.fetchSolar();
-      this.fetchWorldOutline();
+      // Map: a viewer's own show/hide choice, and the ocean for the active
+      // theme (the theme toggle reloads the page, so reading it once here
+      // is enough -- same as the Chart.js colors).
+      try { this.showWorldMap = localStorage.getItem(WORLDMAP_KEY) !== 'hidden'; } catch { /* keep shown */ }
+      if (document.documentElement.getAttribute('data-theme') === 'light') {
+        this.mapOceanHref = '/img/map/ocean-light.webp';
+      }
       // The rate windows decay purely with elapsed time, so they need to be
       // re-fetched on a timer even when nothing else is happening.
       setInterval(() => this.fetchRate(), 30000);
@@ -425,21 +436,42 @@ function dashboard() {
       return !!(q.is_mult1 || q.is_mult2 || q.is_mult3);
     },
 
-    // World map, last 30 QSOs. Fetched once -- this is a static bundled
-    // asset (public/img/world-outline.svg), not contest data, so it needs
-    // no socket refresh and no db:cleared handling.
-    async fetchWorldOutline() {
-      try {
-        const svg = await fetch('/img/world-outline.svg').then((r) => r.text());
-        const m = svg.match(/\bd="([^"]+)"/);
-        if (m) this.worldOutlinePath = m[1];
-      } catch (err) {
-        console.error('Failed to load world outline:', err); // map just renders without land
+    // Show/hide the world map card, remembered per viewer. A convenience,
+    // not state anyone else needs -- so localStorage, and a storage failure
+    // (private window, blocked site data) just means it isn't remembered.
+    toggleWorldMap() {
+      this.showWorldMap = !this.showWorldMap;
+      try { localStorage.setItem(WORLDMAP_KEY, this.showWorldMap ? 'shown' : 'hidden'); } catch { /* not remembered */ }
+    },
+
+    // Time zone bands in the style of SDR Console's World Map: a boundary
+    // line every 15 deg (nominal nautical zones centered on each 15 deg
+    // meridian, not the real political borders), every other band faintly
+    // shaded, and a UTC-offset badge on each zone's center meridian along
+    // the top edge. The +/-12 zones straddle the dateline at the map's
+    // edges, so they get no badge (it would be cut in half). Static -- no
+    // reactive reads, so x-html renders it once.
+    mapZonesSvg() {
+      const x = (lon) => ((lon + 180) / 360) * 1000;
+      const out = [];
+      for (let k = -12; k <= 12; k += 1) {
+        const west = Math.max(-180, k * 15 - 7.5);
+        const east = Math.min(180, k * 15 + 7.5);
+        if (k % 2 !== 0) {
+          out.push(`<rect x="${x(west).toFixed(2)}" y="0" width="${(x(east) - x(west)).toFixed(2)}" height="500" class="worldmap-zone-band"></rect>`);
+        }
+        if (k < 12) out.push(`<line x1="${x(east).toFixed(2)}" y1="0" x2="${x(east).toFixed(2)}" y2="500" class="worldmap-zone-line"></line>`);
       }
+      for (let k = -11; k <= 11; k += 1) {
+        const label = k > 0 ? `+${k}` : String(k);
+        out.push(`<g class="worldmap-zone-badge"><circle cx="${x(k * 15).toFixed(2)}" cy="11" r="8.5"></circle>`
+          + `<text x="${x(k * 15).toFixed(2)}" y="11">${label}</text></g>`);
+      }
+      return out.join('');
     },
 
     // Projects a lat/lon onto the SAME 1000x500 equirectangular canvas
-    // world-outline.svg was generated with (viewBox="0 0 1000 500") --
+    // the map layers were built on (public/img/map/, viewBox="0 0 1000 500") --
     // x = (lon+180)/360 * 1000, y = (90-lat)/180 * 500. Both must agree, or
     // dots land off the coastline they are supposedly on.
     projectLatLon(lat, lon) {
@@ -537,8 +569,19 @@ function dashboard() {
       // the one in permanent darkness right now, and vice versa. Verified
       // by rendering both solstices and sampling actual pixels before
       // trusting this, not just by reading the formula.
+      //
+      // The shape is padded 40 units past the viewBox on the left, right
+      // and pole sides (the terminator is periodic, so lon -180 and 180
+      // share a y). The map blurs this shape into a soft-edged mask
+      // (index.html's #worldmap-soft), and without the padding the blur
+      // would also fade the night side along the map's own edges. The
+      // <svg> clips anything outside the viewBox, so the padding is never
+      // drawn.
       const darkPoleY = this.projectLatLon(sub.lat >= 0 ? -90 : 90, 180).y;
-      pts.push(`L1000,${darkPoleY}`, `L0,${darkPoleY}`, 'Z');
+      const padPoleY = darkPoleY === 0 ? -40 : 540;
+      const edgeY = this.projectLatLon(terminatorLatDeg(180, sub), 180).y.toFixed(1);
+      pts[0] = `M-40,${edgeY}L${pts[0].slice(1)}`;
+      pts.push(`L1040,${edgeY}`, `L1040,${padPoleY}`, `L-40,${padPoleY}`, 'Z');
       return pts.join('');
     },
 

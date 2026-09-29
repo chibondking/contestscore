@@ -26,7 +26,7 @@
 // entities: K (USA) carries "91.87" (west of Greenwich, correct as +91.87W),
 // while 3A (Monaco, ~7.4 E) carries "-7.40". Negate it to get standard
 // (east-positive) longitude, which is what the world map's equirectangular
-// projection (public/img/world-outline.svg, same projection) expects.
+// projection (public/img/map/'s layers, same projection) expects.
 //
 // This is not a full cty.dat implementation (no ITU-zone consumers here),
 // just enough for aggregate contest stats. A portable op's zone can still

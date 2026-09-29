@@ -559,7 +559,7 @@ body {
 }
 
 /* World map (#worldmap, dashboard.js's mapPoints()/projectLatLon()).
-   viewBox is 1000x500 (2:1, matching world-outline.svg's own projection),
+   viewBox is 1000x500 (2:1, matching the public/img/map/ layers' projection),
    scaled to the card's width -- never a fixed pixel height, so it reads
    the same on a phone and on a room TV. */
 .map-subtitle {
@@ -570,55 +570,108 @@ body {
   font-size: 0.7rem;
 }
 
-.map-box { width: 100%; }
+/* The map is imagery, not the page's surface, so its marks get their own
+   colors instead of --accent/--surface: a blue --accent dot disappears into
+   a blue ocean. Dark (the default theme) first, light overrides below. */
+:root {
+  --map-ocean:       #06122a;  /* shown until the ocean image loads */
+  --map-dot:         #ffc94d;
+  --map-mult:        #3fb950;
+  --map-mark-edge:   #050a18;
+  --map-home:        #ffffff;
+  --map-night:       rgba(2, 6, 22, 0.55);
+  --map-zone-line:   rgba(255, 255, 255, 0.12);
+  --map-zone-band:   rgba(255, 255, 255, 0.025);
+  --map-badge-bg:    rgba(8, 14, 32, 0.8);
+  --map-badge-edge:  rgba(255, 255, 255, 0.35);
+  --map-badge-text:  #e6edf3;
+}
+:root[data-theme="light"] {
+  --map-ocean:       #5b93c9;
+  --map-dot:         #ffb020;
+  --map-night:       rgba(10, 20, 55, 0.45);
+  --map-zone-line:   rgba(0, 0, 0, 0.16);
+  --map-zone-band:   rgba(0, 0, 0, 0.03);
+  --map-badge-bg:    rgba(255, 255, 255, 0.88);
+  --map-badge-edge:  rgba(0, 0, 0, 0.35);
+  --map-badge-text:  #1a1a1a;
+}
+
+.map-box {
+  width: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--map-ocean);
+}
 
 .worldmap-svg { width: 100%; height: auto; display: block; }
 
-.worldmap-land { fill: var(--border); stroke: none; }
+/* The relief imagery is built for a light page; in the dark theme it's
+   dimmed a touch so the map doesn't outshine every card around it. */
+:root:not([data-theme="light"]) .worldmap-land { filter: brightness(0.8) saturate(0.9); }
 
-.worldmap-graticule {
-  stroke: var(--border);
-  stroke-width: 1;
-  stroke-dasharray: 4 4;
-  opacity: 0.6;
+/* Show/Hide in the card header (toggleWorldMap()). Pushed to the right edge
+   of .card h2's flex row. */
+.card-toggle {
+  margin-left: auto;
+  font: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.6rem;
+  cursor: pointer;
 }
+.card-toggle:hover { color: var(--text); border-color: var(--muted); }
+.card-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* A dark edge plus a soft shadow keeps every mark readable over relief,
+   ocean and city lights alike. */
 .worldmap-dot {
-  fill: var(--accent);
-  stroke: var(--surface);
-  stroke-width: 1.5;
-  opacity: 0.9;
+  fill: var(--map-dot);
+  stroke: var(--map-mark-edge);
+  stroke-width: 1.2;
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.8));
 }
 
-.worldmap-dot:hover { opacity: 1; r: 6; }
+.worldmap-dot:hover { r: 6; }
 
-/* Same --green as .chip--mult -- a new multiplier is a good thing, not a
-   different severity, so this reuses that color rather than inventing one. */
-.worldmap-dot--mult {
-  fill: var(--green);
-  stroke: var(--surface);
-}
+/* Green, like .chip--mult -- a new multiplier is a good thing, not a
+   different severity. */
+.worldmap-dot--mult { fill: var(--map-mult); }
 
 .worldmap-dot--mult:hover { r: 7; }
 
-/* Grayline: dims whatever is under it (land, ocean) rather than replacing
-   it with a flat color, so the map keeps reading as the same map at night.
-   pointer-events: none -- it sits between the land and the dots/home
-   marker in paint order, and has no hover state of its own to claim. */
-.worldmap-night {
-  fill: rgba(0, 0, 0, 0.45);
-  pointer-events: none;
+/* Grayline: a tint over land and ocean alike (so the map keeps reading as
+   the same map at night), with the city-lights image drawn on top of it --
+   both shaped by the soft-edged night mask. pointer-events: none -- it
+   sits under the dots/home marker and has no hover of its own. */
+.worldmap-nightside { pointer-events: none; }
+.worldmap-night { fill: var(--map-night); }
+
+/* Time zones (mapZonesSvg()): faint, so they're context behind the data. */
+.worldmap-zone-line { stroke: var(--map-zone-line); stroke-width: 1; pointer-events: none; }
+.worldmap-zone-band { fill: var(--map-zone-band); pointer-events: none; }
+.worldmap-zone-badge { pointer-events: none; }
+.worldmap-zone-badge circle { fill: var(--map-badge-bg); stroke: var(--map-badge-edge); stroke-width: 0.8; }
+.worldmap-zone-badge text {
+  fill: var(--map-badge-text);
+  font-size: 8px;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: central;
 }
 
-/* Home QTH (N1MM's reported transmitter grid) -- an open ring in --text,
-   not --accent/--green, so it never reads as "a QSO" (filled dot) or "a
-   mult" (filled green dot) at a glance -- it's a landmark, not contact
-   data, the same distinction the dataviz skill draws between a status
-   color and a data color. */
+/* Home QTH (N1MM's reported transmitter grid) -- an open ring, not a
+   filled dot, so it never reads as "a QSO" or "a mult" at a glance: it's a
+   landmark, not contact data. */
 .worldmap-home {
   fill: none;
-  stroke: var(--text);
-  stroke-width: 2;
+  stroke: var(--map-home);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
 }
 
 .chart-box { position: relative; width: 100%; }

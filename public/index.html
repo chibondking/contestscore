@@ -151,25 +151,59 @@
     </div>
 
     <!-- Standard (equirectangular) projection -- src/routes/api.js and
-         src/udp/index.js attach lat/lon to each QSO (grid square if the
-         exchange carried one, else the country file's entity center); see
-         dashboard.js's mapPoints()/projectLatLon() for the shared canvas
-         math with the bundled world-outline.svg. QTCs are excluded (they
-         are relayed traffic re-sent for an existing contact, not a new
-         one -- same reasoning as the MULT chip). -->
+         src/udp/index.js attach lat/lon to each QSO (exchange grid, else a
+         HamQTH grid, else the country file's estimate); see dashboard.js's
+         mapPoints()/projectLatLon() for the canvas math. Every layer under
+         the dots is plate carree over the whole globe, same projection, so
+         they stack in the viewBox with no reprojection -- built by
+         scripts/build-worldmap.py from Natural Earth + NASA Black Marble
+         (both public domain). QTCs are excluded (relayed traffic re-sent
+         for an existing contact, not a new one -- same reasoning as the
+         MULT chip). -->
     <section class="card card--wide" id="worldmap" x-show="qsos.length > 0">
-      <h2>World Map <span class="map-subtitle">last 30 QSOs</span></h2>
+      <h2>World Map <span class="map-subtitle">last 30 QSOs</span>
+        <!-- Per-viewer show/hide, remembered in localStorage (see
+             toggleWorldMap()). Collapses to just this header rather than
+             removing the card, so the way back is always right here. -->
+        <button type="button" class="card-toggle" @click="toggleWorldMap()"
+                :aria-expanded="showWorldMap" aria-controls="worldmap-body"
+                x-text="showWorldMap ? 'Hide' : 'Show'"></button>
+      </h2>
+      <!-- x-if, not x-show: a hidden map shouldn't keep recomputing the
+           terminator every second or hold its images in the layout. -->
+      <template x-if="showWorldMap">
+      <div id="worldmap-body">
       <div class="map-box">
         <svg viewBox="0 0 1000 500" class="worldmap-svg" preserveAspectRatio="xMidYMid meet">
-          <line x1="0" y1="250" x2="1000" y2="250" class="worldmap-graticule"></line>
-          <line x1="500" y1="0" x2="500" y2="500" class="worldmap-graticule"></line>
-          <path class="worldmap-land" :d="worldOutlinePath"></path>
-          <!-- Grayline: the current day/night terminator (dashboard.js's
-               nightPolygonPath(), a single shape -- safe to bind directly
-               via :d, same as the land outline above). Drawn over the land
-               so night reads as dimmer, but under the dots/home marker so
-               contact data stays fully legible either way. -->
-          <path class="worldmap-night" :d="nightPolygonPath()"></path>
+          <defs>
+            <!-- Soft terminator edge: the night mask's shape is blurred, so
+                 dusk fades in over a few degrees instead of a hard line.
+                 nightPolygonPath() pads its shape past the viewBox edges so
+                 the blur doesn't also fade the night side at the map's own
+                 left/right/pole edges. -->
+            <filter id="worldmap-soft" x="-10%" y="-10%" width="120%" height="120%">
+              <feGaussianBlur stdDeviation="6"></feGaussianBlur>
+            </filter>
+            <mask id="worldmap-night-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="500">
+              <path :d="nightPolygonPath()" fill="#fff" filter="url(#worldmap-soft)"></path>
+            </mask>
+          </defs>
+          <!-- Ocean: per-theme image (dark navy / lighter blues), picked once
+               in init() -- the theme toggle reloads the page, and binding
+               the href means only one of the two is ever downloaded. -->
+          <image :href="mapOceanHref" x="0" y="0" width="1000" height="500" preserveAspectRatio="none"></image>
+          <image href="/img/map/land.webp" class="worldmap-land" x="0" y="0" width="1000" height="500" preserveAspectRatio="none"></image>
+          <image href="/img/map/borders.svg" x="0" y="0" width="1000" height="500" preserveAspectRatio="none"></image>
+          <!-- Grayline: a tint plus city lights, both only where the mask
+               says it's night. Over the land so night reads as night, under
+               the zones/dots/home marker so contact data stays legible. -->
+          <g mask="url(#worldmap-night-mask)" class="worldmap-nightside">
+            <rect class="worldmap-night" x="0" y="0" width="1000" height="500"></rect>
+            <image href="/img/map/lights.webp" x="0" y="0" width="1000" height="500" preserveAspectRatio="none"></image>
+          </g>
+          <!-- Time zone bands + UTC offset badges along the top (static,
+               see mapZonesSvg()). -->
+          <g x-html="mapZonesSvg()"></g>
           <!-- Dots are injected as a raw SVG string via x-html, not a
                <template x-for> -- confirmed live in a real browser that
                Alpine's x-for/template breaks when nested inside <svg> (only
@@ -190,6 +224,8 @@
         </svg>
       </div>
       <p x-show="mapPoints().length === 0" class="empty">No located QSOs yet</p>
+      </div>
+      </template>
     </section>
 
     <section class="card card--wide" id="operators" x-show="qsos.length > 0">
