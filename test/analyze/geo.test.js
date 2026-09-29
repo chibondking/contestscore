@@ -1,7 +1,8 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  enrichGeo, resolveCall, gridToLatLon, usCallAreaLatLon, resolveLatLon, _setResolver,
+  enrichGeo, resolveCall, gridToLatLon, usCallAreaLatLon, resolveLatLon, resolveLatLonEnriched,
+  _setResolver,
 } = require('../../src/analyze/geo');
 
 describe('enrichGeo (shared by the analyzer and the realtime pipeline)', () => {
@@ -216,5 +217,44 @@ describe('resolveLatLon: US call-area refinement wired in', () => {
 
   it('a non-US DX call is unaffected', () => {
     assert.deepEqual(resolveLatLon({ call: 'DL1XYZ' }), { lat: resolveCall('DL1XYZ').lat, lon: resolveCall('DL1XYZ').lon });
+  });
+});
+
+describe('resolveLatLonEnriched (world map, HamQTH/lookup-enriched)', () => {
+  it('uses a cached lookup grid over the country-file/call-area guess', () => {
+    const q = { call: 'K9WX', band: '40', mode: 'RTTY' };
+    const cached = { call: 'K9WX', grid: 'EM69', found: true, source: 'hamqth' };
+    assert.deepEqual(resolveLatLonEnriched(q, cached), { ...gridToLatLon('EM69'), locSource: 'hamqth' });
+  });
+
+  it('still prefers the QSO\'s own exchange grid over a cached lookup grid', () => {
+    const q = { call: 'W1AW', gridsquare: 'FN31' };
+    const cached = { call: 'W1AW', grid: 'EM69', found: true, source: 'hamqth' };
+    assert.deepEqual(resolveLatLonEnriched(q, cached), { ...gridToLatLon('FN31'), locSource: 'exchange' });
+  });
+
+  it('falls back to the old method (untouched) when the cache says not-found', () => {
+    const q = { call: 'W6SX' };
+    const cached = { call: 'W6SX', found: false };
+    assert.deepEqual(resolveLatLonEnriched(q, cached), { ...usCallAreaLatLon('W6SX'), locSource: 'estimate' });
+  });
+
+  it('falls back to the old method the same way when there is no cache row at all (no provider, or not reached yet)', () => {
+    const q = { call: 'W6SX' };
+    assert.deepEqual(resolveLatLonEnriched(q, null), { ...usCallAreaLatLon('W6SX'), locSource: 'estimate' });
+    assert.deepEqual(resolveLatLonEnriched(q, undefined), { ...usCallAreaLatLon('W6SX'), locSource: 'estimate' });
+  });
+
+  it('falls back to the old method when the cache is found but has no usable grid', () => {
+    const q = { call: 'DL1XYZ' };
+    const cached = { call: 'DL1XYZ', found: true, country: 'Germany' }; // no `grid` field
+    const old = resolveLatLon(q);
+    assert.deepEqual(resolveLatLonEnriched(q, cached), { ...old, locSource: 'estimate' });
+  });
+
+  it('degrades exactly like resolveLatLon for an unresolvable call, cache or not', () => {
+    assert.equal(resolveLatLonEnriched({ call: '12345' }, null), null);
+    assert.equal(resolveLatLonEnriched({ call: '' }, { found: true, grid: 'EM69' }), null);
+    assert.equal(resolveLatLonEnriched(null, null), null);
   });
 });

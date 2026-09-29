@@ -187,4 +187,47 @@ function resolveLatLon(qso) {
   return { lat: hit.lat, lon: hit.lon };
 }
 
-module.exports = { enrichGeo, resolveCall, gridToLatLon, usCallAreaLatLon, resolveLatLon, _setResolver };
+// Same job as resolveLatLon(), but takes the worked call's callsign_cache
+// record (HamQTH today; any future lookup provider that fills `grid`) as a
+// second, additive source -- a real callbook/QRZ-style grid, which is
+// usually far more precise than the country file's one-point-per-DXCC-entity
+// guess (see the US_CALL_AREA_CENTERS comment above for how rough that guess
+// already admits to being).
+//
+// Priority: the QSO's OWN exchange grid still wins outright -- a grid the
+// other station actually sent over the air (common on VHF+/rover contests)
+// is ground truth for that specific QSO, and can legitimately disagree with
+// what a lookup service has on file (a rover, a DXpedition, an outdated
+// callbook entry). Only when the exchange has nothing usable do we reach
+// for the lookup's grid; only when that ALSO has nothing usable do we fall
+// through to resolveLatLon() -- the exact old method, untouched -- so a
+// disabled/uncredentialed lookup provider or a callsign it simply hasn't
+// resolved yet (no cache row, or cached with found:false) degrades to
+// exactly what the map already did before HamQTH lookups existed.
+//
+// `cached` is the parsed callsign_cache.data JSON (see src/db/queries.js's
+// getCachedLocation), or null/undefined if there is no row -- callers don't
+// need to know or care whether that's because lookups are disabled, the
+// provider hasn't reached this call yet, or HamQTH itself came back
+// not-found. Adds `locSource` ('exchange' | the cache row's own `source`,
+// e.g. 'hamqth' | 'estimate') alongside lat/lon so a future UI could
+// distinguish a real report from a guess; resolveLatLon() itself carries no
+// such field and every existing caller/test of it is unaffected.
+function resolveLatLonEnriched(qso, cached) {
+  if (!qso) return null;
+
+  const fromGrid = gridToLatLon(qso.gridsquare);
+  if (fromGrid) return { ...fromGrid, locSource: 'exchange' };
+
+  if (qso.call && cached && cached.found) {
+    const fromCache = gridToLatLon(cached.grid);
+    if (fromCache) return { ...fromCache, locSource: cached.source || 'lookup' };
+  }
+
+  const old = resolveLatLon(qso);
+  return old ? { ...old, locSource: 'estimate' } : null;
+}
+
+module.exports = {
+  enrichGeo, resolveCall, gridToLatLon, usCallAreaLatLon, resolveLatLon, resolveLatLonEnriched, _setResolver,
+};

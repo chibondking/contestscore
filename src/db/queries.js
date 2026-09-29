@@ -422,6 +422,25 @@ function getCachedCallsign(call) { return prepare().getCachedCallsign.get(call);
 function cacheCallsign(call, data, source) {
   return prepare().cacheCallsign.run(call, JSON.stringify(data), source);
 }
+// getCachedCallsign() gives the raw row (data is still a JSON string, plus
+// call/source/cached_at); most callers -- the world map's lookup enrichment
+// (src/analyze/geo.js's resolveLatLonEnriched) -- just want the parsed
+// record or null, and shouldn't need to know the row shape or guard against
+// a malformed JSON blob themselves. Never throws: a bad row is treated the
+// same as no row, consistent with "a lookup provider outage/glitch degrades
+// the map, it doesn't crash it".
+//
+// The row's own `source` column, not whatever (if anything) the JSON blob
+// says, is the answer: it's a real column cacheCallsign() always writes
+// (src/udp/index.js's lookup:result handler passes data.source explicitly),
+// while the blob is whatever shape that particular provider's payload
+// happened to have. It wins over a same-named field inside the JSON so a
+// future caller can't accidentally get overridden by stale/foreign data.
+function getCachedLocation(call) {
+  const row = prepare().getCachedCallsign.get(call);
+  if (!row) return null;
+  try { return { ...JSON.parse(row.data), source: row.source }; } catch { return null; }
+}
 function getNotFoundCalls() { return prepare().getNotFoundCalls.all().map((r) => r.call); }
 
 function insertSolarSnapshot(r = {}) {
@@ -506,7 +525,7 @@ module.exports = {
   upsertRadio, getRadios,
   insertScoreBreakdown, getLatestScore, getScoreHistory, getScoreBreakdown,
   getSetting, setSetting,
-  getCachedCallsign, cacheCallsign, getNotFoundCalls,
+  getCachedCallsign, getCachedLocation, cacheCallsign, getNotFoundCalls,
   insertSolarSnapshot, getLatestSolar, pruneSolarSnapshots, getSolarInRange, getSolarForSession,
   insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,
   pruneAnalyzedLogs,

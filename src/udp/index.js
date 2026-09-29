@@ -4,10 +4,11 @@ const { createContactListener } = require('./contactListener');
 const { createScoreListener } = require('./scoreListener');
 const {
   upsertRadio, upsertQso, getPersistedQso, deleteQso, insertScoreBreakdown, cacheCallsign,
+  getCachedLocation,
 } = require('../db/queries');
 const { freqToBand } = require('../parsers/util');
-const { enrichGeo, resolveLatLon } = require('../analyze/geo');
-const { createLookupService } = require('../lookup');
+const { enrichGeo, resolveLatLonEnriched } = require('../analyze/geo');
+const { createLookupService, stripSuffix } = require('../lookup');
 const config = require('../../config/default.json');
 
 const emitter = new EventEmitter();
@@ -76,9 +77,19 @@ function startListeners(io) {
     safely('contact:new', () => { upsertQso(data); persisted = getPersistedQso(data); });
     // lat/lon for the world map, same computed-not-stored treatment as
     // GET /api/qsos (src/routes/api.js) -- attached to the emitted copy
-    // only, never passed to upsertQso above.
+    // only, never passed to upsertQso above. Prefers a HamQTH/lookup-service
+    // grid already on file for this call over the old country-file/call-area
+    // estimate; see src/analyze/geo.js's resolveLatLonEnriched header
+    // comment. A DB read failure here must not take the live feed down with
+    // it, so it's caught the same way isCached() guards the lookup queue
+    // itself (src/lookup/index.js) -- worst case this one contact's dot
+    // falls back to the old estimate instead of blocking the whole emit.
     const toEmit = persisted || data;
-    io.emit('contact:new', { ...toEmit, ...(resolveLatLon(toEmit) || {}) });
+    let cached = null;
+    if (toEmit.call) {
+      try { cached = getCachedLocation(stripSuffix(toEmit.call)); } catch { cached = null; }
+    }
+    io.emit('contact:new', { ...toEmit, ...(resolveLatLonEnriched(toEmit, cached) || {}) });
     if (data.call) lookup.enqueue(data.call);
   });
 

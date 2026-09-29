@@ -310,6 +310,24 @@ describe('callsign_cache', () => {
   });
 });
 
+describe('getCachedLocation (parsed callsign_cache, for the world map)', () => {
+  it('returns the parsed data blob with the source column merged in', () => {
+    q.cacheCallsign('K9WX', { call: 'K9WX', grid: 'EM69', found: true }, 'hamqth');
+    assert.deepEqual(q.getCachedLocation('K9WX'), {
+      call: 'K9WX', grid: 'EM69', found: true, source: 'hamqth',
+    });
+  });
+
+  it("the row's own source column wins over a same-named field inside the JSON blob", () => {
+    q.cacheCallsign('K9WX', { call: 'K9WX', grid: 'EM69', found: true, source: 'stale' }, 'hamqth');
+    assert.equal(q.getCachedLocation('K9WX').source, 'hamqth');
+  });
+
+  it('returns null for an uncached callsign', () => {
+    assert.equal(q.getCachedLocation('ZZ9ZZZ'), null);
+  });
+});
+
 describe('getQsoRate', () => {
   // logged_at only has a DEFAULT (datetime('now')) at insert time -- it's
   // not a settable field on upsertQso -- so ages are simulated the same way

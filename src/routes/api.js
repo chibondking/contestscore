@@ -5,6 +5,7 @@ const {
   getLatestScore, getScoreHistory,
   getNotFoundCalls,
   getSolarForSession,
+  getCachedLocation,
 } = require('../db/queries');
 const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
@@ -13,7 +14,7 @@ const { getLookupService, getUdpListeners } = require('../udp');
 const { resolveSolarConfig, latestSolar } = require('../solar');
 const { freqToBand } = require('../parsers/util');
 const { getDb } = require('../db');
-const { resolveLatLon } = require('../analyze/geo');
+const { resolveLatLonEnriched } = require('../analyze/geo');
 
 const router = Router();
 
@@ -160,16 +161,23 @@ router.get('/solar/history', (req, res) => {
 
 // GET /api/qsos  optional ?band=&mode=&operator=
 // Each row also carries the world map's `lat`/`lon` (grid square if the
-// exchange had one, else the country file's entity center) -- computed
-// here, not stored on the qsos table; see src/analyze/geo.js's
-// resolveLatLon header comment.
+// exchange had one; else a HamQTH/lookup-service grid on file for the call;
+// else the country file's entity center) -- computed here, not stored on
+// the qsos table; see src/analyze/geo.js's resolveLatLonEnriched header
+// comment.
 router.get('/qsos', (req, res) => {
   const { band, mode, operator } = req.query;
   res.json(getQsos({ band, mode, operator }).map(withLatLon));
 });
 
+// A missing/disabled lookup provider, or a call it hasn't resolved yet,
+// just means getCachedLocation() returns null -- resolveLatLonEnriched()
+// already treats that the same as "no enrichment available" and falls back
+// to the old country-file/call-area estimate on its own; nothing here needs
+// to know which of those cases it is.
 function withLatLon(qso) {
-  return { ...qso, ...(resolveLatLon(qso) || {}) };
+  const cached = qso.call ? getCachedLocation(stripSuffix(qso.call)) : null;
+  return { ...qso, ...(resolveLatLonEnriched(qso, cached) || {}) };
 }
 
 // GET /api/score

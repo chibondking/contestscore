@@ -145,6 +145,41 @@ describe('GET /api/qsos (world map lat/lon)', () => {
       { lat: second[0].lat, lon: second[0].lon },
     );
   });
+
+  it('uses a HamQTH-cached grid over the call-area/entity guess when the exchange has none', async () => {
+    cacheCallsign('K9WX', { call: 'K9WX', grid: 'EM69', found: true }, 'hamqth');
+    upsertQso({ ext_id: 'g6', call: 'K9WX', band: '40', mode: 'RTTY' });
+    const res = await fetch(`${baseUrl}/api/qsos`);
+    const [q] = await res.json();
+    assert.deepEqual({ lat: q.lat, lon: q.lon }, gridToLatLon('EM69'));
+    assert.equal(q.locSource, 'hamqth');
+  });
+
+  it('still prefers the exchange\'s own reported grid over a cached lookup grid', async () => {
+    cacheCallsign('W1AW', { call: 'W1AW', grid: 'EM69', found: true }, 'hamqth');
+    upsertQso({ ext_id: 'g7', call: 'W1AW', band: '20', mode: 'CW', gridsquare: 'FN31' });
+    const res = await fetch(`${baseUrl}/api/qsos`);
+    const [q] = await res.json();
+    assert.deepEqual({ lat: q.lat, lon: q.lon }, gridToLatLon('FN31'));
+    assert.equal(q.locSource, 'exchange');
+  });
+
+  it('falls back to the old call-area/entity estimate when the lookup came back not-found', async () => {
+    cacheCallsign('W6SX', { call: 'W6SX', found: false }, 'hamqth');
+    upsertQso({ ext_id: 'g8', call: 'W6SX', band: '20', mode: 'CW' });
+    const res = await fetch(`${baseUrl}/api/qsos`);
+    const [q] = await res.json();
+    assert.deepEqual({ lat: q.lat, lon: q.lon }, usCallAreaLatLon('W6SX'));
+    assert.equal(q.locSource, 'estimate');
+  });
+
+  it('falls back to the old estimate the same way when no provider is enabled at all (nothing cached)', async () => {
+    upsertQso({ ext_id: 'g9', call: 'W6SX', band: '20', mode: 'CW' });
+    const res = await fetch(`${baseUrl}/api/qsos`);
+    const [q] = await res.json();
+    assert.deepEqual({ lat: q.lat, lon: q.lon }, usCallAreaLatLon('W6SX'));
+    assert.equal(q.locSource, 'estimate');
+  });
 });
 
 describe('GET /api/radios', () => {

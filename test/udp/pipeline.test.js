@@ -10,7 +10,9 @@ const dgram = require('dgram');
 const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { initDb, closeDb } = require('../../src/db/index');
-const { resetStatements, getQsos, getRadios, getLatestScore, getScoreBreakdown } = require('../../src/db/queries');
+const {
+  resetStatements, getQsos, getRadios, getLatestScore, getScoreBreakdown, cacheCallsign,
+} = require('../../src/db/queries');
 const { startListeners, emitter } = require('../../src/udp');
 
 const RADIO_PORT = Number(process.env.UDP_RADIO_PORT);
@@ -171,6 +173,33 @@ describe('contact pipeline', () => {
     // coordinate came back.
     assert.ok(evt.payload.lat > 41 && evt.payload.lat < 42);
     assert.ok(evt.payload.lon > -73.5 && evt.payload.lon < -72.5);
+  });
+
+  it('a HamQTH-cached grid drives contact:new\'s lat/lon when the packet itself carries none', async () => {
+    // Simulates the lookup service (src/lookup/) having already resolved
+    // this call before the QSO landed -- e.g. it was worked earlier in the
+    // session and is already in callsign_cache. Keyed by the suffix-stripped
+    // call the same way src/lookup/index.js's enqueue() stores it.
+    cacheCallsign('K9WX', { call: 'K9WX', grid: 'EM69', found: true }, 'hamqth');
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<contactinfo>
+  <contestname>CQWWRTTY</contestname>
+  <mycall>WT9P</mycall>
+  <band>7</band>
+  <mode>RTTY</mode>
+  <call>K9WX</call>
+  <ID>pipeline-test-hamqth-0001</ID>
+</contactinfo>`;
+    await send(xml, CONTACT_PORT);
+    await waitFor(() => getQsos().some((q) => q.call === 'K9WX'));
+
+    const evt = io.events.filter((e) => e.name === 'contact:new').find((e) => e.payload.call === 'K9WX');
+    assert.ok(evt);
+    const { gridToLatLon } = require('../../src/analyze/geo');
+    const expected = gridToLatLon('EM69');
+    assert.equal(evt.payload.lat, expected.lat);
+    assert.equal(evt.payload.lon, expected.lon);
+    assert.equal(evt.payload.locSource, 'hamqth');
   });
 
   it('contactreplace updates the existing row instead of duplicating it', async () => {
