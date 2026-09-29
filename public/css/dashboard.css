@@ -579,7 +579,7 @@ body {
   --map-mult:        #3fb950;
   --map-mark-edge:   #050a18;
   --map-home:        #ffffff;
-  --map-night:       rgba(2, 6, 22, 0.55);
+  --map-night:       rgba(2, 6, 22, 0.72);
   --map-zone-line:   rgba(255, 255, 255, 0.12);
   --map-zone-band:   rgba(255, 255, 255, 0.025);
   --map-badge-bg:    rgba(8, 14, 32, 0.8);
@@ -589,7 +589,7 @@ body {
 :root[data-theme="light"] {
   --map-ocean:       #5b93c9;
   --map-dot:         #ffb020;
-  --map-night:       rgba(10, 20, 55, 0.45);
+  --map-night:       rgba(10, 20, 55, 0.6);
   --map-zone-line:   rgba(0, 0, 0, 0.16);
   --map-zone-band:   rgba(0, 0, 0, 0.03);
   --map-badge-bg:    rgba(255, 255, 255, 0.88);
