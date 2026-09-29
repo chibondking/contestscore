@@ -206,6 +206,7 @@ contestscore/
     index.html              # dashboard shell
     charts.html             # trend charts + spec-driven "more charts" grid
     stats.html              # SH5/CBS-style post-contest breakdown tables
+    solar.html              # 30-day space-weather charts (SFI/SN/A/K) + current tiles
     analyze.html            # analyzer: upload / manual / live tabs + result landing
     compare.html            # two analyses side by side
     admin.html              # DB reset UI
@@ -213,6 +214,7 @@ contestscore/
       dashboard.js          # socket.io client, DOM updates
       charts.js             # Chart.js; ?log=<id> loads a saved analysis instead of the live feed
       stats.js              # stats tables; same ?log=<id> hook
+      solar.js              # solar page: fixed 30-day window, plain JS (no Alpine), helpers tested in test/solar/
       analyze.js            # analyzer page logic (upload/manual/live/compare/saved list)
       compare.js            # log-vs-log comparison
       manual.js             # buildManualCabrillo(): manual form -> Cabrillo string

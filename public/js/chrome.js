@@ -31,6 +31,7 @@ const THEME_KEY = 'contestpulse_theme';
     { page: 'dashboard', href: '/', label: 'Dashboard' },
     { page: 'charts', href: '/charts.html', label: 'Charts' },
     { page: 'stats', href: '/stats.html', label: 'Stats' },
+    { page: 'solar', href: '/solar.html', label: 'Solar' },
     { page: 'analyze', href: '/analyze', label: 'Analyze' },
     { page: 'admin', href: '/admin.html', label: 'Admin' },
   ];

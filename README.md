@@ -293,6 +293,16 @@ country-file lookup — see `enrichGeo` below). Full detail in
   from `/api/qsos` and live-refreshed via the same socket events the main
   dashboard uses; unlike the Charts page it keys time off N1MM's own QSO
   timestamp rather than server ingestion time (see `stats.js` `qsoTime()`).
+- **`/solar.html` (Solar)** — space weather over the last 30 days: the
+  current reading (SFI, sunspots, A, K with its NOAA storm level, X-ray,
+  geomagnetic field) as tiles, then one chart each for SFI, sunspot number,
+  A-index and K-index (a dashed line marks K5, a G1 storm). The window is
+  always 30 days back from now, however much history exists, so a new
+  install shows its readings at the right edge of the same axis. Each
+  reading holds as a step until the next; the line breaks where readings
+  are missing (a gap over 6h) rather than bridging it. Every reading is
+  also listed in a table. Data from `/api/solar` and `/api/solar/history`
+  (the 2-hourly hamqsl.com poll in `src/solar/`); refreshes every 15 min.
 - **`/analyze` (Analyze)** — get the full Stats + Charts treatment for a
   contest log, saved at a shareable `/analyze/<id>` link, from any of three
   sources: **upload** a submitted Cabrillo (`.cbr`/`.log`) or ADIF (`.adi`);
@@ -575,7 +585,7 @@ src/
   state/bridgeStatus.js   ContestPulse heartbeat freshness tracking
   routes/                 REST endpoints (api.js) + ingest.js (bridge) + analyze.js (log upload)
 public/
-  index.html, charts.html, stats.html, analyze.html, compare.html, admin.html   The pages
+  index.html, charts.html, stats.html, solar.html, analyze.html, compare.html, admin.html   The pages
   js/
     dashboard.js, charts.js, stats.js, analyze.js, compare.js, admin.js   Per-page Alpine.js logic (not ES modules -- see CLAUDE.md)
     report.js   renderReport() -- self-contained HTML report for a saved analysis (also unit-tested)

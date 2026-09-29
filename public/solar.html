@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Applied before first paint so a viewer who chose light never sees a
+       dark flash -- same as every other page; see chrome.js. -->
+  <script>
+    try {
+      if (localStorage.getItem('contestpulse_theme') === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    } catch {}
+  </script>
+  <title>ContestPulse Solar</title>
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <header class="header" data-page="solar"></header>
+
+  <!-- Space weather from src/solar/ (hamqsl.com, polled every ~2h, kept in
+       solar_snapshots). Always a 30-day window -- see solar.js's header. -->
+  <main class="grid">
+
+    <section class="card card--wide">
+      <h2>Current conditions</h2>
+      <div id="solar-now"><p class="empty">Loading&hellip;</p></div>
+    </section>
+
+    <section class="card card--wide">
+      <h2>Last 30 days <span class="map-subtitle">UTC, one step per reading</span></h2>
+      <p id="solar-status" class="empty"></p>
+    </section>
+
+    <!-- 2x2 (1 column on a phone), not the page grid's auto-fill, which
+         strands the fourth chart on its own row at common widths. -->
+    <div class="grid grid--nested solar-charts">
+
+    <section class="card">
+      <h2>Solar flux (SFI)</h2>
+      <div class="chart-box chart-box--solar30"><canvas id="solarSfi" aria-label="Solar flux, last 30 days" role="img"></canvas></div>
+    </section>
+
+    <section class="card">
+      <h2>Sunspot number</h2>
+      <div class="chart-box chart-box--solar30"><canvas id="solarSn" aria-label="Sunspot number, last 30 days" role="img"></canvas></div>
+    </section>
+
+    <section class="card">
+      <h2>A-index</h2>
+      <div class="chart-box chart-box--solar30"><canvas id="solarA" aria-label="A-index, last 30 days" role="img"></canvas></div>
+    </section>
+
+    <section class="card">
+      <h2>K-index <span class="map-subtitle">0&ndash;9, dashed line = storm</span></h2>
+      <div class="chart-box chart-box--solar30"><canvas id="solarK" aria-label="K-index, last 30 days" role="img"></canvas></div>
+    </section>
+
+    </div>
+
+    <!-- The same readings as text: for screen readers, exact values, and
+         anyone who'd rather scan numbers than lines. -->
+    <section class="card card--wide">
+      <details>
+        <summary class="solar-summary">All readings (<span id="solar-table-count">0</span>)</summary>
+        <table class="qso-table">
+          <thead><tr><th>Time (UTC)</th><th>SFI</th><th>Sunspots</th><th>A</th><th>K</th></tr></thead>
+          <tbody id="solar-table"></tbody>
+        </table>
+      </details>
+    </section>
+
+  </main>
+
+  <footer class="footer"></footer>
+
+  <script src="/js/chrome.js"></script>
+  <script src="/js/solar.js"></script>
+</body>
+</html>
