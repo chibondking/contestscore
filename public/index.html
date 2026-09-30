@@ -159,8 +159,10 @@
          scripts/build-worldmap.py from Natural Earth + NASA Black Marble
          (both public domain). QTCs are excluded (relayed traffic re-sent
          for an existing contact, not a new one -- same reasoning as the
-         MULT chip). -->
-    <section class="card card--wide" id="worldmap" x-show="qsos.length > 0">
+         MULT chip). The card is always shown (so the page layout doesn't
+         jump when the first QSO lands); only the map itself waits for QSOs
+         -- see the x-if around .map-box below. -->
+    <section class="card card--wide" id="worldmap">
       <h2>World Map <span class="map-subtitle" x-text="mapBand === 'all' ? 'last 30 QSOs' : ('last 30 QSOs on ' + bandLabel(mapBand))"></span>
         <!-- Per-viewer show/hide, remembered in localStorage (see
              toggleWorldMap()). Collapses to just this header rather than
@@ -181,6 +183,10 @@
           <button type="button" class="map-band" :aria-pressed="mapBand === b" @click="mapBand = b" x-text="bandLabel(b)"></button>
         </template>
       </div>
+      <!-- x-if, not x-show: with no QSOs there's nothing to plot, so the
+           map (and its every-second terminator recompute) isn't rendered at
+           all -- the empty-state line below takes its place. -->
+      <template x-if="qsos.length > 0">
       <div class="map-box">
         <svg viewBox="0 0 1000 500" class="worldmap-svg" preserveAspectRatio="xMidYMid meet">
           <defs>
@@ -231,7 +237,9 @@
           </circle>
         </svg>
       </div>
-      <p x-show="mapPoints().length === 0" class="empty" x-text="mapBand === 'all' ? 'No located QSOs yet' : ('No located QSOs on ' + bandLabel(mapBand))"></p>
+      </template>
+      <p x-show="qsos.length === 0 || mapPoints().length === 0" class="empty"
+         x-text="qsos.length === 0 ? 'No QSOs logged yet -- the map appears with the first contact.' : (mapBand === 'all' ? 'No located QSOs yet' : ('No located QSOs on ' + bandLabel(mapBand)))"></p>
       </div>
       </template>
     </section>
