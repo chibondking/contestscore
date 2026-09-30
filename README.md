@@ -192,6 +192,10 @@ it.) Verified against a DXLog.net 2.6.37 capture
 
 - **Radio station name** — DXLog sends `<Station>` rather than N1MM's
   `<StationName>`, even in N1MM mode; both are read.
+- **Radio card: TX/RX dot yes, transmit message no** — DXLog sends
+  `IsTransmitting`, so each radio's red (TX) / green (RX) dot works as with
+  N1MM. It doesn't send N1MM's `FunctionKeyCaption`, so the message N1MM
+  shows beside a transmitting radio (e.g. "F1: CQ") never appears.
 - **No deletes** — DXLog has no QSO delete, only X-QSO, which arrives as a
   `contactreplace` with `IsClaimedQso` 0 and is handled as above.
 - **Score updates are slower** — DXLog sends its Score broadcast on the same
