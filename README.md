@@ -196,8 +196,15 @@ it.) Verified against a DXLog.net 2.6.37 capture
   `contactreplace` with `IsClaimedQso` 0 and is handled as above.
 - **Score updates are slower** — DXLog sends its Score broadcast on the same
   timer as its online-scoreboard posts, so the Score card refreshes at that
-  interval rather than after every QSO. QSOs, rate, and the map are live
-  regardless.
+  interval (DXLog's setting: 2–30 min) rather than after every QSO. The card
+  says so with a **DXLog · every ~N min** chip (measured from DXLog's own
+  posts, ignoring manual pushes; **DXLog · delayed** until there are enough
+  to measure) in place of
+  the "catching up" badge. QSOs, rate, and the map are live regardless.
+- **Push a score when you start** — the header's contest name comes only
+  from the Score broadcast (and the station call does too, until the first
+  QSO), so it stays blank until DXLog's first score post. Trigger a manual
+  score push in DXLog right after starting it to fill them in immediately.
 - **Received exchange** — DXLog doesn't fill N1MM's `<name>`/`<rcvnr>`/
   `<exchange1>`; the received exchange only appears inside
   `<CabrilloString>`, whose columns vary by contest, so it isn't shown.

@@ -1013,6 +1013,22 @@ body {
    rather than red -- it's not an error to fix, the operator already dealt
    with it -- and the row itself dims with the call struck through, so it
    reads as "not a QSO" even without the chip. */
+/* Score card: the score comes from a logger that reports on an interval
+   (DXLog). Muted, not amber/red -- it's how that logger works, not a fault;
+   the "catching up" badge is the one that means something's behind. */
+.score-source-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  margin-left: 0.5rem;
+  white-space: nowrap;
+}
+
 .chip--x {
   border-color: var(--muted);
   color: var(--muted);

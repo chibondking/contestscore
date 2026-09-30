@@ -464,4 +464,12 @@ describe('DXLog packets end to end', () => {
     assert.ok(evt);
     assert.equal(evt.payload.is_claimed_qso, 0);
   });
+
+  it('its Score post reaches the browser marked as DXLog', async () => {
+    await send(dx('dynamicresults.xml'), SCORE_PORT);
+    await waitFor(() => io.events.some((e) => e.name === 'score:update' && e.payload.soft === 'DXLog'));
+    const evt = io.events.filter((e) => e.name === 'score:update').at(-1);
+    assert.equal(evt.payload.soft, 'DXLog');
+    assert.equal(evt.payload.total, 6);
+  });
 });

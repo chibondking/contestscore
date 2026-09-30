@@ -78,6 +78,12 @@
                showing a total that's already out of date; clears itself the
                moment a new broadcast's qsos count catches back up. -->
           <span class="bridge-badge bridge-badge--stale score-stale-badge" x-show="scoreStale()" title="The score snapshot hasn't caught up to the live QSO log yet">catching up</span>
+          <!-- DXLog's Score broadcast rides its online-scoreboard timer, so
+               this card lags the live log by design -- say so, with the
+               measured interval, instead of "catching up". QSOs, rate and
+               the map stay realtime. -->
+          <span class="score-source-badge" x-show="scoreIsDelayed()" x-text="scoreSourceChip()"
+                title="DXLog sends its score on its online-scoreboard timer, not after every QSO, so this card updates on that interval. QSOs, rate and the map are realtime."></span>
         </h2>
         <div class="score-row" :class="{ 'score-row--stale': scoreStale() }">
           <div class="metric">

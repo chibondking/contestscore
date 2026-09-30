@@ -94,6 +94,10 @@ async function parseScore(buf) {
     st_prov_oth:    qth.stprvoth || '',
     grid6:          qth.grid6 || '',
     score_total:    Number(s.score) || 0,
+    // The sending logger (<soft>) -- "DXLog" for DXLog.net, whose Score
+    // broadcast rides its online-scoreboard timer; the dashboard flags that
+    // score as delayed. Absent in N1MM's own documented example.
+    soft:           s.soft || '',
     timestamp:      s.timestamp || '',
     breakdown:      breakdownRows,
   };

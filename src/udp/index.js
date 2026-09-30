@@ -113,6 +113,7 @@ function startListeners(io) {
       mults: total ? total.mults : null,
       total: data.score_total,
       grid6: data.grid6,
+      soft: data.soft || '',
       breakdown: data.breakdown,
     });
   });

@@ -263,3 +263,54 @@ describe('X-QSOs (is_claimed_qso 0)', () => {
     assert.deepEqual([...d.mapBands()], ['7']);
   });
 });
+
+describe('Score card: delayed score source (DXLog)', () => {
+  const at = (min) => new Date(Date.UTC(2026, 8, 30, 1, 0, 0) + min * 60000).toISOString();
+
+  it('flags a DXLog score as delayed, with no chip for N1MM', () => {
+    const d = dashboard();
+    d.score = { soft: 'DXLog', total: 6 };
+    assert.equal(d.scoreIsDelayed(), true);
+    assert.equal(d.scoreSourceChip(), 'DXLog · delayed'); // no interval measured yet
+    d.score = { soft: '', total: 6 };
+    assert.equal(d.scoreIsDelayed(), false);
+    assert.equal(d.scoreSourceChip(), '');
+  });
+
+  it('shows the measured interval: median of recent gaps, ignoring pauses and manual pushes', () => {
+    const d = dashboard();
+    d.score = { soft: 'DXLog' };
+    // 5-min timer; a 50-min pause (DXLog closed) and a manual push 30s after
+    // a timed post are neither the interval.
+    d.scoreHistory = [0, 5, 10, 60, 60.5, 65, 70, 76].map((m) => ({ soft: 'DXLog', captured_at: at(m) }));
+    assert.equal(d.scoreIntervalMinutes(), 5);
+    assert.equal(d.scoreSourceChip(), 'DXLog · every ~5 min');
+  });
+
+  it('handles both ends of DXLog\'s 2-30 min timer setting', () => {
+    const d = dashboard();
+    d.score = { soft: 'DXLog' };
+    d.scoreHistory = [0, 2, 4, 6].map((m) => ({ soft: 'DXLog', captured_at: at(m) }));
+    assert.equal(d.scoreIntervalMinutes(), 2);
+    d.scoreHistory = [0, 30, 60, 90].map((m) => ({ soft: 'DXLog', captured_at: at(m) }));
+    assert.equal(d.scoreIntervalMinutes(), 30);
+  });
+
+  it('needs at least two gaps before quoting an interval', () => {
+    const d = dashboard();
+    d.score = { soft: 'DXLog' };
+    d.scoreHistory = [0, 5].map((m) => ({ soft: 'DXLog', captured_at: at(m) }));
+    assert.equal(d.scoreIntervalMinutes(), null);
+  });
+
+  it('never shows "catching up" for DXLog -- the lag is its reporting interval', () => {
+    const d = dashboard();
+    d.now = Date.UTC(2026, 8, 30, 1, 10, 0);
+    d.qsos = [qso({ logged_at: '2026-09-30 01:05:00' })];
+    d.score = { soft: 'DXLog', captured_at: at(0) };
+    assert.equal(d.scoreStale(), false);
+    d.score = { soft: '', captured_at: at(0) }; // same lag from N1MM is still flagged
+    assert.equal(d.scoreStale(), true);
+  });
+});
+

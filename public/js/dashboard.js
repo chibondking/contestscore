@@ -28,6 +28,17 @@ function bandSortKey(b) {
 // log -- Recent QSOs shows it, marked -- but counts toward nothing: no QSO
 // totals, rates, operator stats, continents or map dots. Missing/null counts
 // (older rows, loggers that never send the flag), same as the column default.
+// A Score source that reports on an interval rather than per QSO -- DXLog.net
+// (see scoreIsDelayed()). Matched on the broadcast's <soft>.
+// DXLog's score timer runs 2-30 min (CJ, 2026-09-30). Gaps outside these
+// bounds aren't the timer -- see scoreIntervalMinutes().
+const DXLOG_MIN_GAP_MS = 90 * 1000;
+const DXLOG_MAX_GAP_MS = 45 * 60 * 1000;
+
+function isDelayedScoreSource(soft) {
+  return /^dxlog/i.test(String(soft || ''));
+}
+
 function isCountedQso(q) {
   return q.is_claimed_qso == null || Number(q.is_claimed_qso) !== 0;
 }
@@ -337,7 +348,13 @@ function dashboard() {
     // after the score's own captured_at, and enough time has passed since
     // then (comfortably past the observed ~10s broadcast cadence) that a
     // fresh snapshot should have caught up by now.
+    //
+    // Not for a delayed score source (DXLog -- see scoreIsDelayed()): there
+    // the lag is DXLog's reporting interval, expected and always present,
+    // and the score-source chip already says so. "Catching up" would sit
+    // on the card almost permanently.
     scoreStale() {
+      if (this.scoreIsDelayed()) return false;
       if (!this.score.captured_at || this.qsos.length === 0) return false;
       const capturedAt = new Date(this.score.captured_at).getTime();
       // qsos[0] is the most recent QSO -- getQsos() orders DESC and
@@ -345,6 +362,38 @@ function dashboard() {
       const lastQsoAt = new Date(this.qsos[0].logged_at.replace(' ', 'T') + 'Z').getTime();
       const STALE_GRACE_MS = 30000;
       return lastQsoAt > capturedAt && (this.now - capturedAt) > STALE_GRACE_MS;
+    },
+
+    // DXLog.net sends its Score broadcast on the same timer as its online-
+    // scoreboard posts -- minutes apart, not after every QSO like N1MM -- so
+    // the Score card is behind the live QSO log by design. Detected from
+    // the broadcast's own <soft> (see parsers/score.js).
+    scoreIsDelayed() {
+      return isDelayedScoreSource(this.score.soft);
+    },
+
+    // The measured gap between DXLog's recent Score posts, in whole minutes
+    // -- the median of the last few. DXLog's timer is 2-30 min, so a gap
+    // under 90s is a manual score push (not the timer) and one over 45 min
+    // is a pause or a restart; both are ignored. null until there are at
+    // least two timer gaps to go on.
+    scoreIntervalMinutes() {
+      const times = this.scoreHistory
+        .filter((r) => isDelayedScoreSource(r.soft))
+        .map((r) => new Date(r.captured_at).getTime())
+        .filter((t) => !Number.isNaN(t));
+      const gaps = times.slice(1).map((t, i) => t - times[i])
+        .filter((g) => g >= DXLOG_MIN_GAP_MS && g <= DXLOG_MAX_GAP_MS)
+        .slice(-6)
+        .sort((a, b) => a - b);
+      if (gaps.length < 2) return null;
+      return Math.max(1, Math.round(gaps[Math.floor(gaps.length / 2)] / 60000));
+    },
+
+    scoreSourceChip() {
+      if (!this.scoreIsDelayed()) return '';
+      const m = this.scoreIntervalMinutes();
+      return m ? `DXLog · every ~${m} min` : 'DXLog · delayed';
     },
 
     formatDeployTime(iso) {

@@ -143,12 +143,12 @@ function prepare() {
       (contest, call, ops, power, assisted, transmitter, category_ops,
        category_bands, category_mode, overlay, dxcc_country, cq_zone,
        iaru_zone, arrl_section, st_prov_oth, grid6, band, mode, qsos,
-       points, mults, is_total, score_total, captured_at)
+       points, mults, is_total, score_total, soft, captured_at)
     VALUES
       (@contest, @call, @ops, @power, @assisted, @transmitter, @category_ops,
        @category_bands, @category_mode, @overlay, @dxcc_country, @cq_zone,
        @iaru_zone, @arrl_section, @st_prov_oth, @grid6, @band, @mode, @qsos,
-       @points, @mults, @is_total, @score_total, @captured_at)
+       @points, @mults, @is_total, @score_total, @soft, @captured_at)
   `);
 
   // A single Score (dynamicresults) broadcast produces one row per
@@ -404,6 +404,7 @@ function insertScoreBreakdown(score) {
     st_prov_oth: score.st_prov_oth || '',
     grid6: score.grid6 || '',
     score_total: score.score_total || 0,
+    soft: score.soft || '',
     captured_at: capturedAt,
   };
   prepare().insertScoreBreakdown(header, score.breakdown || []);

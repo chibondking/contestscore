@@ -50,6 +50,7 @@ describe('DXLog (N1MM-compatible broadcast)', () => {
     assert.equal(s.contest, 'CW-OPS');
     assert.equal(s.score_total, 6);
     assert.equal(s.grid6, 'EN51RP');
+    assert.equal(s.soft, 'DXLog'); // drives the Score card's delayed-source chip
     const total = s.breakdown.find((b) => b.is_total);
     assert.deepEqual({ qsos: total.qsos, points: total.points, mults: total.mults }, { qsos: 3, points: 3, mults: 2 });
   });

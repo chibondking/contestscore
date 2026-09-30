@@ -381,3 +381,20 @@ describe('getQsoRate', () => {
     assert.ok(rate.every((r) => r.qsos === 0));
   });
 });
+
+describe('score_snapshots.soft', () => {
+  it('stores the sending logger on every row of a snapshot', () => {
+    q.insertScoreBreakdown({ contest: 'CW-OPS', call: 'WT2P', score_total: 6, soft: 'DXLog', breakdown: [
+      { band: '40', mode: 'ALL', qsos: 2, points: 2, mults: 2, is_total: false },
+      { band: 'total', mode: 'ALL', qsos: 3, points: 3, mults: 2, is_total: true },
+    ] });
+    assert.equal(q.getLatestScore().soft, 'DXLog');
+    assert.equal(q.getScoreHistory().at(-1).soft, 'DXLog');
+  });
+
+  it('is empty when the logger does not say (N1MM)', () => {
+    q.insertScoreBreakdown({ contest: 'CQWW', call: 'WT2P', score_total: 1, breakdown: [{ band: 'total', mode: 'ALL', qsos: 1, points: 1, is_total: true }] });
+    assert.equal(q.getLatestScore().soft, '');
+  });
+});
+
