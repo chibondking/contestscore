@@ -300,6 +300,14 @@ describe('GET /api/busts', () => {
     assert.equal(body.busts[0].operator, 'WT2P');
   });
 
+  it('skips an X-QSO -- the operator already struck it out', async () => {
+    enableLookup();
+    cacheCallsign('WT2ZZZ', { call: 'WT2ZZZ', source: 'hamqth', found: false }, 'hamqth');
+    upsertQso({ ext_id: 'x1', call: 'WT2ZZZ', band: '20', mode: 'CW', operator: 'WT2P', is_claimed_qso: 0 });
+    const body = await (await fetch(`${baseUrl}/api/busts`)).json();
+    assert.equal(body.busts.length, 0);
+  });
+
   it('matches a portable call against its suffix-stripped cache entry', async () => {
     enableLookup();
     cacheCallsign('N0XXX', { call: 'N0XXX', source: 'hamqth', found: false }, 'hamqth');

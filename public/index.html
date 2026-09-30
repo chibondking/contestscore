@@ -278,9 +278,10 @@
             </thead>
             <tbody>
               <template x-for="q in qsos.slice(0, 20)" :key="q.ext_id ?? q.id ?? (q.call + q.band + q.mode)">
-                <tr>
+                <tr :class="isXQso(q) && 'qso-row--x'">
                   <td>
                     <span x-text="q.call"></span>
+                    <span class="chip chip--x" x-show="isXQso(q)" title="X-QSO -- marked invalid in the logger; not counted anywhere">X-QSO</span>
                     <span class="chip chip--qtc" x-show="isQtc(q)" title="QTC -- relayed traffic, not a new contact">QTC</span>
                     <span class="chip chip--mult" x-show="isMult(q)" title="New multiplier (per N1MM)">MULT</span>
                   </td>

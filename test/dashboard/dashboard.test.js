@@ -239,3 +239,27 @@ describe('world map: overlapping dots', () => {
     assert.equal(d.mapPoints().length, 2);
   });
 });
+
+describe('X-QSOs (is_claimed_qso 0)', () => {
+  const located = (o) => qso({ lat: 40, lon: -80, logged_at: '2026-09-30 00:58:00', points: 1, ...o });
+
+  it('stay in the list for Recent QSOs but count toward nothing', () => {
+    const d = dashboard();
+    d.qsos = [
+      located({ call: 'K9MMS', ext_id: 'x', is_claimed_qso: 0, points: 0, continent: 'NA' }),
+      located({ call: 'K3LR', ext_id: 'a', continent: 'NA' }),
+      located({ call: 'W1AW', ext_id: 'b', is_claimed_qso: null, continent: 'NA' }), // no flag = counts
+    ];
+    assert.equal(d.qsos.length, 3);
+    assert.deepEqual([...d.countedQsos()].map((q) => q.call), ['K3LR', 'W1AW']);
+    assert.equal(d.isXQso(d.qsos[0]), true);
+    assert.equal(d.isXQso(d.qsos[1]), false);
+    assert.deepEqual([...d.mapPoints()].map((p) => p.call).sort(), ['K3LR', 'W1AW']);
+  });
+
+  it('never appear in a map band filter on their own', () => {
+    const d = dashboard();
+    d.qsos = [located({ call: 'K9MMS', band: '3.5', is_claimed_qso: 0 }), located({ call: 'K3LR', band: '7' })];
+    assert.deepEqual([...d.mapBands()], ['7']);
+  });
+});

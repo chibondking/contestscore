@@ -1009,6 +1009,20 @@ body {
   margin-left: 0.4rem;
   padding: 0.1rem 0.45rem;
 }
+/* X-QSO: struck out in the logger, counted nowhere (isCountedQso). Muted
+   rather than red -- it's not an error to fix, the operator already dealt
+   with it -- and the row itself dims with the call struck through, so it
+   reads as "not a QSO" even without the chip. */
+.chip--x {
+  border-color: var(--muted);
+  color: var(--muted);
+  font-weight: bold;
+  font-size: 0.7rem;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.45rem;
+}
+.qso-row--x td { opacity: 0.55; }
+.qso-row--x td:first-child > span:first-child { text-decoration: line-through; }
 
 @media (max-width: 700px) {
   .log-layout { flex-direction: column; }

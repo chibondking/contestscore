@@ -238,6 +238,8 @@ router.get('/busts', (req, res) => {
   const busts = [];
   if (notFound.size) {
     for (const q of getQsos()) {
+      // An X-QSO the operator already struck out isn't a bust to chase.
+      if (q.is_claimed_qso != null && Number(q.is_claimed_qso) === 0) continue;
       if (!notFound.has(stripSuffix(q.call))) continue;
       const key = `${q.call}|${q.band}|${q.mode}`;
       if (seen.has(key)) continue;

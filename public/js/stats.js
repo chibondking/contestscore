@@ -47,7 +47,7 @@ function stats() {
           this.logMeta = body.meta || null;
           return;
         }
-        this.qsos = await fetch('/api/qsos').then((r) => r.json());
+        this.qsos = (await fetch('/api/qsos').then((r) => r.json())).filter(isCountedQso);
       } catch (err) {
         console.error('Failed to load stats data:', err);
       }
@@ -973,6 +973,13 @@ function sortBandLabels(labels) {
     if (ib === -1) return -1;
     return ia - ib;
   });
+}
+
+// An X-QSO (is_claimed_qso 0 -- struck out in the logger) counts toward
+// nothing on this page. Same rule as dashboard.js's isCountedQso; each page
+// script keeps its own copy (no shared module -- see CLAUDE.md).
+function isCountedQso(q) {
+  return q.is_claimed_qso == null || Number(q.is_claimed_qso) !== 0;
 }
 
 // Same guard as manual.js/report.js: this file is loaded as a plain

@@ -16,7 +16,10 @@ async function parseRadio(buf) {
   if (!r) throw new Error('Not a RadioInfo packet');
   return {
     radio_nr:        Number(r.RadioNr) || 0,
-    station_name:    r.StationName || '',
+    // N1MM sends <StationName>; DXLog (even in its N1MM-compatible mode)
+    // sends the same thing as <Station>. Confirmed from a DXLog 2.6.37
+    // capture, 2026-09-30.
+    station_name:    r.StationName || r.Station || '',
     freq:            tensOfHzToHz(r.Freq),
     tx_freq:         tensOfHzToHz(r.TXFreq),
     mode:            r.Mode || '',

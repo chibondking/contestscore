@@ -121,8 +121,15 @@ function topValue(values) {
 // opts.claimedScore: the running score total from the latest Score
 // broadcast (src/db/queries.getLatestScore().score_total), stored as the
 // analysis's claimed score. Null when no Score broadcast has arrived.
+//
+// An X-QSO (is_claimed_qso = 0 -- N1MM, and DXLog in its N1MM-compatible
+// mode, send one as a contactreplace with IsClaimedQso 0) goes to
+// `excluded`, exactly like a Cabrillo X-QSO line: kept for the record, left
+// out of every stat.
 function analyzeLiveQsos(rows, opts = {}) {
-  const qsos = (rows || []).map((r) => ({
+  const counted = (rows || []).filter(isClaimedQso);
+  const xqsos = (rows || []).filter((r) => !isClaimedQso(r));
+  const qsos = counted.map((r) => ({
     call: r.call || '', band: r.band || '', mode: r.mode || '',
     operator: r.operator || '', mycall: r.mycall || '',
     countryprefix: r.countryprefix || '', continent: r.continent || '',
@@ -139,7 +146,7 @@ function analyzeLiveQsos(rows, opts = {}) {
 
   for (const q of qsos) enrichGeo(q);
 
-  const contest = topValue(qsos.map((q, i) => rows[i].contestname));
+  const contest = topValue(counted.map((r) => r.contestname));
   const spec = specForContest(contest);
 
   return {
@@ -154,15 +161,22 @@ function analyzeLiveQsos(rows, opts = {}) {
       operators: [...new Set(qsos.map((q) => q.operator).filter(Boolean))].join(' '),
       claimed_score: opts.claimedScore != null ? Number(opts.claimedScore) : null,
       qso_count: qsos.length,
-      excluded_count: 0,
+      excluded_count: xqsos.length,
       has_points: qsos.some((q) => q.points),
       has_mults: qsos.some((q) => q.is_mult1 || q.is_mult2 || q.is_mult3),
       has_operator: qsos.some((q) => q.operator),
       has_run_flag: qsos.some((q) => q.is_run_qso),
     },
     qsos,
-    excluded: [],
+    excluded: xqsos.map((r) => ({ call: r.call || '', band: r.band || '', mode: r.mode || '', n1mm_timestamp: r.n1mm_timestamp || r.logged_at || '' })),
   };
+}
+
+// A live row counts unless the logger explicitly marked it unclaimed (an
+// X-QSO). Missing/null -- older rows, loggers that never send the flag --
+// counts, same as the column's DEFAULT 1.
+function isClaimedQso(r) {
+  return r.is_claimed_qso == null || Number(r.is_claimed_qso) !== 0;
 }
 
 module.exports = { analyzeLog, analyzeLiveQsos, detectFormat, newId };

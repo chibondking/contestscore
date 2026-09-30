@@ -354,6 +354,13 @@ describe('getQsoRate', () => {
     assert.equal(rate.find((r) => r.minutes === 10).rate_per_hour, 6);
   });
 
+  it('an X-QSO (is_claimed_qso 0) never counts toward the rate', () => {
+    q.clearQsos();
+    q.upsertQso({ ...QSO, ext_id: 'rate-ok' });
+    q.upsertQso({ ...QSO, ext_id: 'rate-x', call: 'K9MMS', is_claimed_qso: 0 });
+    assert.ok(q.getQsoRate().every((r) => r.qsos === 1));
+  });
+
   it('a QSO older than a window falls out of it, but not the wider ones', () => {
     q.clearQsos();
     q.upsertQso({ ...QSO, ext_id: 'rate-old' });

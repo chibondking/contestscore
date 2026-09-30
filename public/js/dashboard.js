@@ -24,6 +24,14 @@ function bandSortKey(b) {
   return Number.isNaN(n) ? Infinity : n;
 }
 
+// An X-QSO (N1MM's IsClaimedQso 0, stored as is_claimed_qso) stays in the
+// log -- Recent QSOs shows it, marked -- but counts toward nothing: no QSO
+// totals, rates, operator stats, continents or map dots. Missing/null counts
+// (older rows, loggers that never send the flag), same as the column default.
+function isCountedQso(q) {
+  return q.is_claimed_qso == null || Number(q.is_claimed_qso) !== 0;
+}
+
 // Used by mapDotsSvg() below, which builds raw SVG markup by hand (see its
 // own comment for why) -- Alpine's x-text auto-escapes, but a hand-built
 // HTML string doesn't, and a callsign/exchange field ultimately comes from
@@ -349,7 +357,7 @@ function dashboard() {
     // memory here.
     continentCounts() {
       const counts = {};
-      for (const q of this.qsos) {
+      for (const q of this.countedQsos()) {
         const c = (q.continent || '').trim().toUpperCase();
         if (!c) continue;
         counts[c] = (counts[c] || 0) + 1;
@@ -394,7 +402,7 @@ function dashboard() {
     // window would smooth out.
     operatorStats() {
       const byOp = new Map();
-      for (const q of this.qsos) {
+      for (const q of this.countedQsos()) {
         const op = q.operator || '—';
         if (!byOp.has(op)) byOp.set(op, { operator: op, qsos: 0, points: 0, buckets60: new Map(), buckets10: new Map() });
         const entry = byOp.get(op);
@@ -517,7 +525,7 @@ function dashboard() {
     // last 30 overall narrowed down -- otherwise a quiet band would show
     // only the one or two of its QSOs that happen to be recent.
     mapPoints() {
-      const located = this.qsos
+      const located = this.countedQsos()
         .filter((q) => !this.isQtc(q))
         .filter((q) => this.mapBand === 'all' || q.band === this.mapBand)
         .slice(0, 30)
@@ -562,11 +570,17 @@ function dashboard() {
     // Bands present in the log (QTCs excluded, as on the map), lowest
     // frequency first -- the choices for the map's band filter.
     mapBands() {
-      const bands = new Set(this.qsos.filter((q) => !this.isQtc(q) && q.band).map((q) => q.band));
+      const bands = new Set(this.countedQsos().filter((q) => !this.isQtc(q) && q.band).map((q) => q.band));
       return [...bands].sort((a, b) => bandSortKey(a) - bandSortKey(b));
     },
 
     bandLabel(band) { return bandLabel(band); },
+
+    // The QSOs that count (see isCountedQso) -- what every total, rate and
+    // map dot on this page is built from. this.qsos itself keeps X-QSOs so
+    // Recent QSOs can still show them.
+    countedQsos() { return this.qsos.filter(isCountedQso); },
+    isXQso(q) { return !isCountedQso(q); },
 
     // The dots are built as a raw SVG string and injected via x-html on a
     // <g> (index.html), NOT a <template x-for> inside the <svg> --
@@ -691,7 +705,7 @@ function dashboard() {
     // than a full trend chart -- still spans a 48-hour contest without
     // rendering hundreds of cramped points.
     autoBucketMinutes() {
-      const times = this.qsos
+      const times = this.countedQsos()
         .map((q) => q.logged_at && new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime())
         .filter((t) => t && !Number.isNaN(t));
       if (times.length < 2) return 15;
@@ -704,7 +718,7 @@ function dashboard() {
       const bucketMinutes = this.autoBucketMinutes();
       const bucketMs = bucketMinutes * 60000;
       const counts = new Map();
-      for (const q of this.qsos) {
+      for (const q of this.countedQsos()) {
         const t = q.logged_at ? new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime() : NaN;
         if (Number.isNaN(t)) continue;
         const bucket = Math.floor(t / bucketMs) * bucketMs;

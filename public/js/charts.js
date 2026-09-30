@@ -98,7 +98,7 @@ function charts() {
           fetch('/api/qsos').then((r) => r.json()),
           fetch('/api/score/history').then((r) => r.json()),
         ]);
-        this.qsos = dedupeForCharting(qsos);
+        this.qsos = dedupeForCharting(qsos.filter(isCountedQso));
         this.scoreHistory = scoreHistory;
       } catch (err) {
         console.error('Failed to load chart data:', err);
@@ -963,4 +963,11 @@ const EXTRA_CHART_SPECS = [
 // helpers this way lets Node's test runner exercise them directly.
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { isQtc, modeGroup, dedupeForCharting };
+}
+
+// An X-QSO (is_claimed_qso 0 -- struck out in the logger) counts toward
+// nothing on this page. Same rule as dashboard.js's isCountedQso; each page
+// script keeps its own copy (no shared module -- see CLAUDE.md).
+function isCountedQso(q) {
+  return q.is_claimed_qso == null || Number(q.is_claimed_qso) !== 0;
 }

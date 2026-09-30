@@ -70,3 +70,26 @@ describe('analyzeLiveQsos', () => {
     assert.equal(meta.has_operator, false);
   });
 });
+
+describe('analyzeLiveQsos: X-QSOs', () => {
+  it('leaves an X-QSO (is_claimed_qso 0) out of the analysis, listed as excluded', () => {
+    const { meta, qsos, excluded } = analyzeLiveQsos([
+      row({ call: 'K3LR' }),
+      row({ call: 'K9MMS', is_claimed_qso: 0, points: 0, is_mult1: 0 }),
+      row({ call: 'W1AW', is_claimed_qso: null }), // no flag at all still counts
+    ]);
+    assert.deepEqual(qsos.map((q) => q.call), ['K3LR', 'W1AW']);
+    assert.equal(meta.qso_count, 2);
+    assert.equal(meta.excluded_count, 1);
+    assert.deepEqual(excluded, [{ call: 'K9MMS', band: '14', mode: 'CW', n1mm_timestamp: '2026-09-06 12:00:00' }]);
+  });
+
+  it('takes the contest name from the counted QSOs', () => {
+    const { meta } = analyzeLiveQsos([
+      row({ contestname: 'CW-OPS' }),
+      row({ contestname: 'OTHER', is_claimed_qso: 0 }),
+      row({ contestname: 'OTHER', is_claimed_qso: 0 }),
+    ]);
+    assert.equal(meta.contest, 'CW-OPS');
+  });
+});

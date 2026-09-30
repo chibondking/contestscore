@@ -436,3 +436,32 @@ describe('cross-port dispatch', () => {
     assert.equal(io.events.some((e) => e.name === 'radio:update'), false);
   });
 });
+
+// DXLog.net with its N1MM-compatible broadcast on -- real packets from a
+// DXLog 2.6.37 capture (test/fixtures/dxlog/), sent over UDP exactly as
+// received. DXLog's own ports (12064 radio, 13061 contacts) are just
+// ContestPulse config; here they go to the test listeners' ports.
+describe('DXLog packets end to end', () => {
+  const dx = (name) => require('fs').readFileSync(require('path').join(__dirname, '../fixtures/dxlog', name));
+
+  it('a QSO lands claimed, its X-QSO lands unclaimed, and the radio gets its station name', async () => {
+    await send(dx('contactinfo.xml'), CONTACT_PORT);
+    await send(dx('contactreplace-xqso.xml'), CONTACT_PORT);
+    await send(dx('radioinfo.xml'), RADIO_PORT);
+    await waitFor(() => getQsos().some((q) => q.call === 'K9MMS') && getQsos().some((q) => q.call === 'K9CT')
+      && getRadios().some((r) => r.station_name === 'WT2P_TP'));
+
+    const k9ct = getQsos().find((q) => q.call === 'K9CT');
+    const k9mms = getQsos().find((q) => q.call === 'K9MMS');
+    assert.equal(k9ct.is_claimed_qso, 1);
+    assert.equal(k9ct.is_mult1, 1);
+    assert.equal(k9mms.is_claimed_qso, 0);
+    assert.equal(k9mms.points, 0);
+
+    // The X-QSO reached the browsers too, flag and all, so Recent QSOs can
+    // mark it.
+    const evt = io.events.filter((e) => e.name === 'contact:new').find((e) => e.payload.call === 'K9MMS');
+    assert.ok(evt);
+    assert.equal(evt.payload.is_claimed_qso, 0);
+  });
+});

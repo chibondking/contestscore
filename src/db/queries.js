@@ -107,7 +107,8 @@ function prepare() {
   // server actually recorded the QSO, consistent regardless of clock skew
   // on whichever PC logged it.
   const _getQsoCountSince = db.prepare(`
-    SELECT COUNT(*) AS count FROM qsos WHERE logged_at >= datetime('now', @modifier)
+    SELECT COUNT(*) AS count FROM qsos
+    WHERE logged_at >= datetime('now', @modifier) AND COALESCE(is_claimed_qso, 1) != 0
   `);
 
   const _upsertRadio = db.prepare(`

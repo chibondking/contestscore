@@ -160,6 +160,48 @@ showed a Score broadcast landing on whatever port that station's config
 called "radio port." Content-based dispatch handles either case
 transparently instead of silently dropping real data.
 
+**X-QSOs** — a QSO marked invalid in the logger (N1MM re-sends it as a
+`contactreplace` with `IsClaimedQso` 0) stays visible in Recent QSOs, dimmed
+and struck through with an **X-QSO** chip, but counts toward nothing: QSO
+totals, the rate meter, operator stats, continents, the map, Charts, Stats,
+the bust list, and an "analyze from live" snapshot (where it's listed as
+removed, the same as a Cabrillo `X-QSO:` line). The score card is unaffected
+— it's the logger's own score broadcast.
+
+## DXLog.net configuration
+
+DXLog works through its **N1MM-compatible UDP broadcast** — turn that on in
+DXLog's network/UDP settings. DXLog's own broadcast format is not
+supported: it structures contests very differently from N1MM (multipliers
+as text, no QSO IDs in N1MM's sense, no edit packets), which doesn't map
+cleanly onto a dashboard.
+
+DXLog sends each broadcast type to its own port, which differ from N1MM's
+defaults. Point ContestPulse at them in its `config.json`:
+
+```json
+"radio_port": 12064,
+"contact_port": 13061,
+"score_port": 12062
+```
+
+(contestscore itself dispatches by the packet's XML root element, so which
+port a packet arrives on doesn't matter once ContestPulse is listening on
+it.) Verified against a DXLog.net 2.6.37 capture
+(`test/fixtures/dxlog/`); what differs from N1MM:
+
+- **Radio station name** — DXLog sends `<Station>` rather than N1MM's
+  `<StationName>`, even in N1MM mode; both are read.
+- **No deletes** — DXLog has no QSO delete, only X-QSO, which arrives as a
+  `contactreplace` with `IsClaimedQso` 0 and is handled as above.
+- **Score updates are slower** — DXLog sends its Score broadcast on the same
+  timer as its online-scoreboard posts, so the Score card refreshes at that
+  interval rather than after every QSO. QSOs, rate, and the map are live
+  regardless.
+- **Received exchange** — DXLog doesn't fill N1MM's `<name>`/`<rcvnr>`/
+  `<exchange1>`; the received exchange only appears inside
+  `<CabrilloString>`, whose columns vary by contest, so it isn't shown.
+
 ## Known gaps
 
 ### WAE (Worked All Europe) multiplier attribution
