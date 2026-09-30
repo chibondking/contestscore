@@ -723,6 +723,26 @@ body {
 .solar-tile__value { font-size: 1.6rem; font-weight: 600; color: var(--text); line-height: 1.3; }
 .solar-tile__note, .solar-note { font-size: 0.75rem; color: var(--muted); }
 .solar-updated { font-size: 0.8rem; color: var(--muted); margin-top: 0.6rem; }
+/* Short explanation + level legend under the A/K charts. Plain muted text;
+   the current A band gets a border and text ink rather than a color, so
+   it never borrows a series or status color. */
+.solar-explain { font-size: 0.78rem; color: var(--muted); margin-top: 0.6rem; line-height: 1.45; }
+.solar-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+}
+.solar-legend__item {
+  font-size: 0.72rem;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+}
+.solar-legend__item--now { color: var(--text); border-color: var(--muted); font-weight: 600; }
 .solar-charts { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
 @media (max-width: 520px) { .solar-charts { grid-template-columns: 1fr; } }
 /* The table toggle reads like a card heading, arrow included. */

@@ -51,11 +51,24 @@
     <section class="card">
       <h2>A-index</h2>
       <div class="chart-box chart-box--solar30"><canvas id="solarA" aria-label="A-index, last 30 days" role="img"></canvas></div>
+      <!-- Levels are NOAA's; the band matching the latest reading is
+           highlighted by solar.js (highlightALevel), same bands as the tile
+           and tooltip text (A_LEVELS). -->
+      <p class="solar-explain">The day's overall geomagnetic disturbance (planetary Ap). Lower is better for HF: high values mean absorption and fading, worst on polar paths.</p>
+      <ul class="solar-legend" id="solar-a-legend" aria-label="A-index levels">
+        <li class="solar-legend__item" data-level="quiet">0&ndash;7 quiet</li>
+        <li class="solar-legend__item" data-level="unsettled">8&ndash;15 unsettled</li>
+        <li class="solar-legend__item" data-level="active">16&ndash;29 active</li>
+        <li class="solar-legend__item" data-level="minor storm">30&ndash;49 minor storm</li>
+        <li class="solar-legend__item" data-level="major storm">50&ndash;99 major storm</li>
+        <li class="solar-legend__item" data-level="severe storm">100+ severe storm</li>
+      </ul>
     </section>
 
     <section class="card">
       <h2>K-index <span class="map-subtitle">0&ndash;9, dashed line = storm</span></h2>
       <div class="chart-box chart-box--solar30"><canvas id="solarK" aria-label="K-index, last 30 days" role="img"></canvas></div>
+      <p class="solar-explain">A 3-hour snapshot of the same disturbance, on a log scale: 0&ndash;3 quiet, 4 active, 5+ a storm (G1&ndash;G5).</p>
     </section>
 
     </div>

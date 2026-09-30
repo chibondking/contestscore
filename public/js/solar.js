@@ -77,6 +77,24 @@ function kLabel(k) {
   return 'quiet';
 }
 
+// NOAA's bands for the (planetary) A-index -- a day's overall geomagnetic
+// disturbance, where K is a 3-hour snapshot. Shared by the tile, the
+// tooltip and the legend under the A chart (solar.html), so all three
+// always agree.
+const A_LEVELS = [
+  { max: 7, label: 'quiet' },
+  { max: 15, label: 'unsettled' },
+  { max: 29, label: 'active' },
+  { max: 49, label: 'minor storm' },
+  { max: 99, label: 'major storm' },
+  { max: Infinity, label: 'severe storm' },
+];
+
+function aLabel(a) {
+  if (a == null || a === '' || Number.isNaN(Number(a))) return '';
+  return A_LEVELS.find((l) => Number(a) <= l.max).label;
+}
+
 function fmtUtc(ms, withTime = true) {
   const d = new Date(ms);
   const date = d.toLocaleDateString([], { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -176,7 +194,8 @@ function solarChartConfig(m, points, min, max) {
           callbacks: {
             title: (items) => fmtUtc(items[0].raw.x),
             label: (item) => {
-              const extra = m.field === 'k_index' ? ` (${kLabel(item.raw.y)})` : '';
+              const lvl = m.field === 'k_index' ? kLabel(item.raw.y) : m.field === 'a_index' ? aLabel(item.raw.y) : '';
+              const extra = lvl ? ` (${lvl})` : '';
               return ` ${m.label}: ${item.raw.y}${extra}`;
             },
           },
@@ -225,12 +244,20 @@ function renderSolarTiles(latest) {
     <div class="solar-tiles">
       ${tile('SFI', latest.sfi)}
       ${tile('Sunspots', latest.sunspots)}
-      ${tile('A-index', latest.a)}
+      ${tile('A-index', latest.a, aLabel(latest.a))}
       ${tile('K-index', latest.k, kLabel(latest.k))}
       ${tile('X-ray', latest.xray)}
       ${tile('Geomag', latest.geomag)}
     </div>
     <p class="solar-updated">Latest reading ${fmtUtc(at)} (${ago})</p>`;
+}
+
+// Marks the current A-index band in the legend under the A chart.
+function highlightALevel(a) {
+  const current = aLabel(a);
+  document.querySelectorAll('#solar-a-legend [data-level]').forEach((el) => {
+    el.classList.toggle('solar-legend__item--now', el.dataset.level === current);
+  });
 }
 
 function renderSolarTable(rows) {
@@ -263,6 +290,7 @@ async function loadSolarPage() {
   }
 
   renderSolarTiles(latest);
+  highlightALevel(latest && latest.a);
   const inWindow = rows.filter((r) => solarTime(r.fetched_at) >= min);
   const first = inWindow.length ? solarTime(inWindow[0].fetched_at) : null;
   document.getElementById('solar-status').textContent = !rows.length
@@ -290,5 +318,5 @@ if (typeof document !== 'undefined') {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { solarSeries, solarDayTicks, kLabel, solarTime, sqlUtc, SOLAR_MEASURES, SOLAR_GAP_MS, DAY_MS };
+  module.exports = { solarSeries, solarDayTicks, kLabel, aLabel, A_LEVELS, solarTime, sqlUtc, SOLAR_MEASURES, SOLAR_GAP_MS, DAY_MS };
 }

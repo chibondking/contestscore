@@ -1,7 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  solarSeries, solarDayTicks, kLabel, solarTime, sqlUtc, SOLAR_MEASURES, DAY_MS,
+  solarSeries, solarDayTicks, kLabel, aLabel, A_LEVELS, solarTime, sqlUtc, SOLAR_MEASURES, DAY_MS,
 } = require('../../public/js/solar');
 
 const row = (fetched_at, o = {}) => ({ sfi: 100, a_index: 5, k_index: 1, sunspots: 40, fetched_at, ...o });
@@ -60,6 +60,28 @@ describe('kLabel', () => {
     assert.equal(kLabel(7), 'G3 storm');
     assert.equal(kLabel(9), 'G5 storm');
     assert.equal(kLabel(null), '');
+  });
+});
+
+describe('aLabel', () => {
+  it('uses NOAA A-index bands, edges inclusive', () => {
+    assert.equal(aLabel(0), 'quiet');
+    assert.equal(aLabel(7), 'quiet');
+    assert.equal(aLabel(8), 'unsettled');
+    assert.equal(aLabel(15), 'unsettled');
+    assert.equal(aLabel(16), 'active');
+    assert.equal(aLabel(29), 'active');
+    assert.equal(aLabel(30), 'minor storm');
+    assert.equal(aLabel(50), 'major storm');
+    assert.equal(aLabel(100), 'severe storm');
+    assert.equal(aLabel(400), 'severe storm');
+    assert.equal(aLabel(null), '');
+  });
+
+  it("matches the legend under the A chart, so tile, tooltip and legend can't disagree", () => {
+    const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../public/solar.html'), 'utf8');
+    const legend = [...html.matchAll(/data-level="([^"]+)"/g)].map((m) => m[1]);
+    assert.deepEqual(legend, A_LEVELS.map((l) => l.label));
   });
 });
 
