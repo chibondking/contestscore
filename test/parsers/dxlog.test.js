@@ -55,3 +55,30 @@ describe('DXLog (N1MM-compatible broadcast)', () => {
     assert.deepEqual({ qsos: total.qsos, points: total.points, mults: total.mults }, { qsos: 3, points: 3, mults: 2 });
   });
 });
+
+describe("DXLog's native broadcast (its own format, not N1MM-compatible)", () => {
+  it('a new QSO: mult, ID, station, serial and exchange from the native fields', async () => {
+    const c = await parseContact(fixture('native-contactinfo.xml'));
+    assert.equal(c.call, 'K3WW');
+    assert.equal(c.ext_id, 'd048bc92b73341868d73305e4c630130'); // <guid>
+    assert.equal(c.is_mult1, 1); // <mult1>K3WW</mult1>
+    assert.equal(c.is_mult2, 0); // <mult2></mult2>
+    assert.equal(c.station_name, 'WT2P_TP'); // <stationid>
+    assert.equal(c.snt_nr, '8'); // <nr>
+    assert.equal(c.exchange1, 'CHAS 178'); // <exch1> <exch2>
+    assert.equal(c.is_run_qso, 0);
+    assert.equal(c.is_original, 1); // <local>True
+    assert.equal(c.is_claimed_qso, 1);
+    assert.equal(c.points, 1);
+    assert.equal(c.band, '7');
+  });
+
+  it('marking it X-QSO re-sends the same guid, unclaimed and no longer a mult', async () => {
+    const c = await parseContact(fixture('native-contactinfo-xqso.xml'));
+    assert.equal(c.ext_id, 'd048bc92b73341868d73305e4c630130');
+    assert.equal(c.is_claimed_qso, 0); // <xqso>True
+    assert.equal(c.is_mult1, 0);
+    assert.equal(c.points, 0);
+  });
+});
+

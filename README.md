@@ -170,11 +170,16 @@ removed, the same as a Cabrillo `X-QSO:` line). The score card is unaffected
 
 ## DXLog.net configuration
 
-DXLog works through its **N1MM-compatible UDP broadcast** — turn that on in
-DXLog's network/UDP settings. DXLog's own broadcast format is not
-supported: it structures contests very differently from N1MM (multipliers
-as text, no QSO IDs in N1MM's sense, no edit packets), which doesn't map
-cleanly onto a dashboard.
+DXLog works best through its **N1MM-compatible UDP broadcast** — turn that on
+in DXLog's network/UDP settings.
+
+If DXLog is left on its **own (native) broadcast format**, QSOs still come
+through fully: contestscore recognises it (`<guid>`, `<logger>DXLog…`) and maps
+its fields — `<guid>` as the QSO ID (so an edit or X-QSO updates the same QSO),
+`<stationid>`, `<nr>`, `<exch1>`–`<exch4>`, `<runqso>`, `<xqso>`, and
+`<mult1>`–`<mult3>`, which hold the multiplier itself (e.g. the call in CW-OPS)
+and count as a mult whenever they're filled in. Radio and score packets are
+the same in both formats.
 
 DXLog sends each broadcast type to its own port, which differ from N1MM's
 defaults. Point ContestPulse at them in its `config.json`:

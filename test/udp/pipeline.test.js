@@ -465,6 +465,22 @@ describe('DXLog packets end to end', () => {
     assert.equal(evt.payload.is_claimed_qso, 0);
   });
 
+  it('native format: a QSO lands as a mult, and its X-QSO edit updates that same row', async () => {
+    await send(dx('native-contactinfo.xml'), CONTACT_PORT);
+    await waitFor(() => getQsos().some((q) => q.call === 'K3WW'));
+    let rows = getQsos().filter((q) => q.call === 'K3WW');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].is_mult1, 1);
+    assert.equal(rows[0].station_name, 'WT2P_TP');
+
+    await send(dx('native-contactinfo-xqso.xml'), CONTACT_PORT);
+    await waitFor(() => getQsos().some((q) => q.call === 'K3WW' && q.is_claimed_qso === 0));
+    rows = getQsos().filter((q) => q.call === 'K3WW');
+    assert.equal(rows.length, 1); // keyed on <guid>: an edit, not a second QSO
+    assert.equal(rows[0].is_mult1, 0);
+    assert.equal(rows[0].points, 0);
+  });
+
   it('its Score post reaches the browser marked as DXLog', async () => {
     await send(dx('dynamicresults.xml'), SCORE_PORT);
     await waitFor(() => io.events.some((e) => e.name === 'score:update' && e.payload.soft === 'DXLog'));
