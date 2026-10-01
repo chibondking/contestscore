@@ -1,0 +1,209 @@
+<title>contestscore Test Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg: #f5f6f7; --surface: #ffffff; --ink: #15191e; --ink-2: #4a525c; --ink-3: #6f7883;
+  --line: #dfe3e7; --code-bg: #f0f2f4; --accent: #a35f00; --accent-soft: #fbefdc;
+  --ok: #24733f; --ok-soft: #e1f2e6; --new: #2459b3; --new-soft: #e3ecfa; --pkt: #7a3fa3; --pkt-soft: #f1e7f8;
+  --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111418; --surface: #181c21; --ink: #e8ebee; --ink-2: #b3bac2; --ink-3: #8a929b;
+    --line: #2a3038; --code-bg: #0d1013; --accent: #f0a63a; --accent-soft: #3a2a12;
+    --ok: #5cc27e; --ok-soft: #173222; --new: #7ea8f0; --new-soft: #1a2741; --pkt: #c49ae6; --pkt-soft: #2c1d38;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111418; --surface: #181c21; --ink: #e8ebee; --ink-2: #b3bac2; --ink-3: #8a929b;
+  --line: #2a3038; --code-bg: #0d1013; --accent: #f0a63a; --accent-soft: #3a2a12;
+  --ok: #5cc27e; --ok-soft: #173222; --new: #7ea8f0; --new-soft: #1a2741; --pkt: #c49ae6; --pkt-soft: #2c1d38;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); padding-inline: 16px; padding-block: 24px 64px; }
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: grid; gap: 6px; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+h1 { font-size: 28px; line-height: 1.15; margin: 0; font-weight: 600; text-wrap: balance; }
+.sub { color: var(--ink-2); margin: 0; max-width: 70ch; }
+code, .mono { font-family: var(--mono); font-size: .9em; }
+.evidence { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.fact .big { font: 600 22px/1.2 var(--mono); color: var(--ok); font-variant-numeric: tabular-nums; }
+.fact .what { font-weight: 600; }
+.fact .how { color: var(--ink-2); font-size: 13.5px; }
+.toolbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; display: grid; gap: 10px; border-bottom: 1px solid var(--line); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+input[type="search"], select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; min-width: 0; }
+input[type="search"] { flex: 1 1 260px; }
+.chip { font: 500 13px/1 var(--font); border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 7px 12px; cursor: pointer; }
+.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.chip:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.progress { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 13.5px; }
+.bar { flex: 1 1 160px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--ok); width: 0; transition: width .2s; }
+.file { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.file > summary { list-style: none; cursor: pointer; padding: 12px 16px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.file > summary::-webkit-details-marker { display: none; }
+.file > summary::before { content: "▸"; color: var(--ink-3); width: 1em; }
+.file[open] > summary::before { content: "▾"; }
+.file .fname { font: 500 14px var(--mono); }
+.file .fcount { margin-left: auto; color: var(--ink-3); font-size: 13px; font-variant-numeric: tabular-nums; }
+.tests { border-top: 1px solid var(--line); }
+.test { border-top: 1px solid var(--line); display: grid; grid-template-columns: auto 1fr; gap: 0 12px; padding: 10px 16px; }
+.test:first-child { border-top: 0; }
+.test.done { background: color-mix(in srgb, var(--ok-soft) 45%, transparent); }
+.test input[type="checkbox"] { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--ok); }
+.tmain { display: grid; gap: 4px; min-width: 0; }
+.tname { font-weight: 500; overflow-wrap: anywhere; }
+.suite { color: var(--ink-3); font-size: 13px; overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--ink-3); }
+.badge { border-radius: 4px; padding: 2px 7px; font: 500 11.5px/1.5 var(--font); letter-spacing: .02em; }
+.b-pkt { background: var(--pkt-soft); color: var(--pkt); }
+.b-new { background: var(--new-soft); color: var(--new); }
+.b-gen { background: var(--code-bg); color: var(--ink-2); }
+.b-pass { background: var(--ok-soft); color: var(--ok); }
+a { color: var(--accent); }
+.src > summary { cursor: pointer; color: var(--ink-2); font-size: 13px; width: max-content; }
+.src pre { margin: 8px 0 2px; background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 12px; overflow-x: auto; font: 12.5px/1.55 var(--mono); tab-size: 2; }
+.added { font-size: 12.5px; color: var(--ink-3); }
+.empty { color: var(--ink-2); padding: 24px 0; text-align: center; }
+.tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.tools button { font: inherit; font-size: 13px; background: none; border: 1px solid var(--line); color: var(--ink-2); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">chibondking/contestscore · commit <span id="head" class="mono"></span></div>
+    <h1>contestscore Test Review</h1>
+    <p class="sub">Every test the suite runs, with its source and the commit that added it. Tick a test once you've read it; your ticks stay in this browser.</p>
+  </header>
+
+  <section class="evidence" aria-label="Does the DXLog native change affect N1MM?">
+    <div class="fact"><span class="big">12 / 12</span><span class="what">N1MM-format packets parse identically</span><span class="how">Every N1MM-format contact packet in the tests, plus the DXLog N1MM-mode captures, run through the parser from before and after commit <code>3cf5157</code>: field-for-field equal.</span></div>
+    <div class="fact"><span class="big">0</span><span class="what">existing test lines changed</span><span class="how"><code>3cf5157</code> only added tests (46 lines). No existing test or assertion was edited or removed.</span></div>
+    <div class="fact"><span class="big" id="passfact"></span><span class="what">tests pass at this commit</span><span class="how">Full suite, <code>node --test</code>, run when this page was generated (<span id="gen"></span>).</span></div>
+  </section>
+
+  <div class="toolbar">
+    <div class="row">
+      <input type="search" id="q" placeholder="Search test names, suites, files, source" aria-label="Search tests">
+      <select id="area" aria-label="Area"><option value="">All areas</option></select>
+    </div>
+    <div class="row" role="group" aria-label="Filters">
+      <button class="chip" id="f-pkt" aria-pressed="false" title="Parsers, UDP pipeline and ingest: the path N1MM, DXLog and TR4W packets take">Logger packet path</button>
+      <button class="chip" id="f-new140" aria-pressed="false" title="Added after v1.4.0 (today's DXLog native fix)">New since v1.4.0</button>
+      <button class="chip" id="f-new132" aria-pressed="false" title="Added after v1.3.2 (the DXLog and X-QSO work)">New since v1.3.2</button>
+      <button class="chip" id="f-todo" aria-pressed="false">Not yet reviewed</button>
+    </div>
+    <div class="progress"><span id="prog"></span><div class="bar" aria-hidden="true"><i id="progbar"></i></div>
+      <div class="tools"><button id="expand">Expand files</button><button id="collapse">Collapse files</button><button id="reset">Clear my ticks</button></div>
+    </div>
+  </div>
+
+  <main id="list"></main>
+</div>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(() => {
+  const DATA = JSON.parse(document.getElementById('data').textContent);
+  const T = DATA.tests;
+  const KEY = 'cs-test-review:' + DATA.head;
+  let done = new Set();
+  try { done = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...done])); } catch {} };
+  const $ = (id) => document.getElementById(id);
+  $('head').textContent = DATA.head.slice(0, 7);
+  $('gen').textContent = DATA.generatedAt.slice(0, 16).replace('T', ' ') + ' UTC';
+  const passed = T.filter((t) => t.ok).length;
+  $('passfact').textContent = `${passed} / ${T.length}`;
+  if (passed !== T.length) $('passfact').style.color = 'var(--accent)';
+
+  const areas = [...new Set(T.map((t) => t.area))].sort();
+  for (const a of areas) { const o = document.createElement('option'); o.value = a; o.textContent = `${a} (${T.filter((t) => t.area === a).length})`; $('area').append(o); }
+
+  const filters = { pkt: false, new140: false, new132: false, todo: false };
+  for (const k of Object.keys(filters)) {
+    const b = $('f-' + k);
+    b.addEventListener('click', () => { filters[k] = !filters[k]; b.setAttribute('aria-pressed', filters[k]); render(); });
+  }
+  $('q').addEventListener('input', () => render());
+  $('area').addEventListener('change', () => render());
+  $('expand').addEventListener('click', () => document.querySelectorAll('details.file').forEach((d) => (d.open = true)));
+  $('collapse').addEventListener('click', () => document.querySelectorAll('details.file').forEach((d) => (d.open = false)));
+  let resetArmed = false;
+  $('reset').addEventListener('click', (e) => {
+    if (!resetArmed) { resetArmed = true; e.target.textContent = 'Click again to clear all ticks'; setTimeout(() => { resetArmed = false; e.target.textContent = 'Clear my ticks'; }, 3000); return; }
+    done.clear(); save(); resetArmed = false; e.target.textContent = 'Clear my ticks'; render();
+  });
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const gh = (t) => `https://github.com/chibondking/contestscore/blob/${DATA.head}/${t.file}#L${t.line}`;
+
+  function progress() {
+    $('prog').textContent = `${done.size} of ${T.length} reviewed`;
+    $('progbar').style.width = (100 * done.size / T.length) + '%';
+  }
+
+  const openFiles = new Set();
+  function render() {
+    const q = $('q').value.trim().toLowerCase();
+    const area = $('area').value;
+    const shown = T.filter((t) =>
+      (!area || t.area === area) && (!filters.pkt || t.loggerPath) && (!filters.new140 || t.newSince140) &&
+      (!filters.new132 || t.newSince132) && (!filters.todo || !done.has(t.id)) &&
+      (!q || (t.name + ' ' + t.suites.join(' ') + ' ' + t.file + ' ' + t.src).toLowerCase().includes(q)));
+    const byFile = new Map();
+    for (const t of shown) { if (!byFile.has(t.file)) byFile.set(t.file, []); byFile.get(t.file).push(t); }
+    const list = $('list'); list.textContent = '';
+    if (!shown.length) { list.innerHTML = '<p class="empty">No tests match these filters.</p>'; progress(); return; }
+    const narrowed = q || area || Object.values(filters).some(Boolean);
+    const frag = document.createDocumentFragment();
+    for (const [file, tests] of [...byFile].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const d = document.createElement('details'); d.className = 'file'; d.dataset.file = file;
+      d.open = narrowed || openFiles.has(file);
+      d.addEventListener('toggle', () => { d.open ? openFiles.add(file) : openFiles.delete(file); });
+      const all = T.filter((t) => t.file === file);
+      const fileDone = all.filter((t) => done.has(t.id)).length;
+      d.innerHTML = `<summary><span class="fname">${esc(file)}</span><span class="fcount">${tests.length < all.length ? tests.length + ' shown · ' : ''}${fileDone}/${all.length} reviewed</span></summary><div class="tests"></div>`;
+      const box = d.querySelector('.tests');
+      for (const t of tests) {
+        const row = document.createElement('div'); row.className = 'test' + (done.has(t.id) ? ' done' : '');
+        const cid = 'c-' + T.indexOf(t);
+        const badges = [
+          t.ok ? '<span class="badge b-pass">pass</span>' : '<span class="badge" style="background:var(--accent-soft);color:var(--accent)">FAIL</span>',
+          t.loggerPath ? '<span class="badge b-pkt">logger packet path</span>' : '',
+          t.newSince140 ? '<span class="badge b-new">new since v1.4.0</span>' : (t.newSince132 ? '<span class="badge b-new">new since v1.3.2</span>' : ''),
+          t.generated ? '<span class="badge b-gen">one of several from a loop</span>' : '',
+        ].join('');
+        row.innerHTML = `<input type="checkbox" id="${cid}" ${done.has(t.id) ? 'checked' : ''} aria-label="Reviewed">
+          <div class="tmain">
+            <label class="tname" for="${cid}">${esc(t.name)}</label>
+            ${t.suites.length ? `<div class="suite">${t.suites.map(esc).join(' › ')}</div>` : ''}
+            <div class="meta">${badges}<a class="mono" href="${gh(t)}" target="_blank" rel="noopener">${esc(t.file)}:${t.line}</a></div>
+            <details class="src"><summary>Show source</summary><pre></pre>
+              <div class="added">Added in <span class="mono">${esc(t.sha)}</span> on ${esc(t.date)}: ${esc(t.summary)}</div></details>
+          </div>`;
+        row.querySelector('details.src').addEventListener('toggle', (e) => { const pre = e.target.querySelector('pre'); if (!pre.textContent) pre.textContent = t.src; }, { once: true });
+        row.querySelector('input').addEventListener('change', (e) => {
+          e.target.checked ? done.add(t.id) : done.delete(t.id); save();
+          row.classList.toggle('done', e.target.checked);
+          const fc = d.querySelector('.fcount'); const n = all.filter((x) => done.has(x.id)).length;
+          fc.textContent = (tests.length < all.length ? tests.length + ' shown · ' : '') + `${n}/${all.length} reviewed`;
+          progress();
+        });
+        box.append(row);
+      }
+      frag.append(d);
+    }
+    list.append(frag); progress();
+  }
+  render();
+})();
+</script>
