@@ -308,3 +308,86 @@ describe('genuine dupe handling (non-QTC)', () => {
     assert.match(txt, /Total +2 +2/);
   });
 });
+
+describe('Callsigns worked on the most bands', () => {
+  const t = (m) => `2025-05-24 12:${String(m).padStart(2, '0')}:00`;
+  const qsos = [
+    // K3LR: 3 bands (20/40/80), logged out of band order
+    qso({ call: 'K3LR', band: '14', n1mm_timestamp: t(0) }),
+    qso({ call: 'K3LR', band: '3.5', n1mm_timestamp: t(1) }),
+    qso({ call: 'K3LR', band: '7', n1mm_timestamp: t(2) }),
+    // W1AW: 2 bands, but 3 Q (two modes on 20m)
+    qso({ call: 'W1AW', band: '14', mode: 'CW', n1mm_timestamp: t(3) }),
+    qso({ call: 'W1AW', band: '14', mode: 'SSB', n1mm_timestamp: t(4) }),
+    qso({ call: 'W1AW', band: '21', n1mm_timestamp: t(5) }),
+    // N2IC: 2 bands, 2 Q -- ranks below W1AW on the Q tie-break
+    qso({ call: 'N2IC', band: '14', n1mm_timestamp: t(6) }),
+    qso({ call: 'N2IC', band: '28', n1mm_timestamp: t(7) }),
+    // DL1XYZ: one band only -- not listed
+    qso({ call: 'DL1XYZ', band: '14', n1mm_timestamp: t(8) }),
+  ];
+
+  it('lists multi-band calls in the text summary, most bands first, ties by Q', () => {
+    const txt = renderReportText({ meta: { station_call: 'WT2P' }, qsos });
+    const block = txt.split('\nCallsigns worked on the most bands\n')[1];
+    assert.ok(block, 'section present');
+    const lines = block.split('\n');
+    assert.match(lines[0], /^Call +Bands +Q +Which Bands$/);
+    assert.match(lines[2], /^K3LR +3 +3 +80m, 40m, 20m$/); // low-to-high band order
+    assert.match(lines[3], /^W1AW +2 +3 +20m, 15m$/);
+    assert.match(lines[4], /^N2IC +2 +2 +20m, 10m$/);
+    assert.doesNotMatch(block.split('\n\n')[0], /DL1XYZ/);
+  });
+
+  it('left-aligns the band list (it is text, not a number)', () => {
+    const txt = renderReportText({ meta: { station_call: 'WT2P' }, qsos });
+    const block = txt.split('\nCallsigns worked on the most bands\n')[1].split('\n');
+    const col = block[0].indexOf('Which Bands');
+    assert.equal(block[2].indexOf('80m'), col);
+    assert.equal(block[4].indexOf('20m'), col);
+  });
+
+  it('renders the same table in the HTML report, band list not in a numeric cell', () => {
+    const html = renderReport({ meta: { station_call: 'WT2P' }, qsos });
+    assert.match(html, /<h2>Callsigns worked on the most bands<\/h2>/);
+    assert.match(html, /<td>K3LR<\/td><td class="n">3<\/td><td class="n">3<\/td><td>80m, 40m, 20m<\/td>/);
+    assert.match(html, /<th>Which Bands<\/th>/);
+    assert.doesNotMatch(html, /<td>DL1XYZ<\/td><td class="n">1<\/td>/);
+  });
+
+  it('places the section after Top DXCC and before Sections, in both renderers', () => {
+    const withSec = qsos.map((q) => ({ ...q, section: 'NY' }));
+    const txt = renderReportText({ meta: { station_call: 'WT2P' }, qsos: withSec });
+    const iDx = txt.indexOf('\nTop DXCC entities\n');
+    const iMb = txt.indexOf('\nCallsigns worked on the most bands\n');
+    const iSec = txt.indexOf('\nSections / exchanges worked');
+    assert.ok(iDx < iMb && iMb < iSec);
+    const html = renderReport({ meta: { station_call: 'WT2P' }, qsos: withSec });
+    assert.ok(html.indexOf('Top DXCC entities') < html.indexOf('Callsigns worked on the most bands'));
+    assert.ok(html.indexOf('Callsigns worked on the most bands') < html.indexOf('Sections / exchanges worked'));
+  });
+
+  it('omits the section when no call was worked on more than one band', () => {
+    const single = [qso({ call: 'K3LR', band: '14' }), qso({ call: 'W1AW', band: '7' })];
+    assert.doesNotMatch(renderReportText({ meta: {}, qsos: single }), /most bands/);
+    assert.doesNotMatch(renderReport({ meta: {}, qsos: single }), /most bands/);
+  });
+
+  it('does not count dupes or QTCs toward Q, and caps the list at 25', () => {
+    const extra = [
+      qso({ call: 'K3LR', band: '14', n1mm_timestamp: t(30) }),                    // dupe of the 20m CW QSO
+      qso({ call: 'K3LR', band: '7', exchange1: 'SQTC', n1mm_timestamp: t(31) }),  // QTC
+    ];
+    const txt = renderReportText({ meta: {}, qsos: [...qsos, ...extra] });
+    assert.match(txt, /\nK3LR +3 +3 +80m, 40m, 20m\n/);
+
+    const many = [];
+    for (let i = 0; i < 30; i += 1) {
+      many.push(qso({ call: `K${i}AA`, band: '14', n1mm_timestamp: t(i) }));
+      many.push(qso({ call: `K${i}AA`, band: '7', n1mm_timestamp: t(i) }));
+    }
+    const rows = renderReportText({ meta: {}, qsos: many })
+      .split('\nCallsigns worked on the most bands\n')[1].split('\n\n')[0].split('\n');
+    assert.equal(rows.length - 2, 25); // header + rule + 25 rows
+  });
+});

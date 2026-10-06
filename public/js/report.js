@@ -5,7 +5,7 @@
 //                                       text, for pasting into an email or a
 //                                       contest-score reflector post.
 // Both are built from the same aggregation helpers (summaryTiles /
-// bandModeData / hourlyData / dxccData / sectionsData) so the HTML and the
+// bandModeData / hourlyData / dxccData / multiBandData / sectionsData) so the HTML and the
 // text never drift apart. Loaded by analyze.js as a plain global (browser)
 // and exported for tests (node). No dependencies.
 
@@ -66,6 +66,8 @@ ${hourlyTable(qsos)}
 <h2>Top DXCC entities</h2>
 ${dxccTable(qsos)}
 
+${multiBandBlock(qsos)}
+
 ${sectionsBlock(qsos)}
 
 <footer>ContestPulse analyzer report</footer>
@@ -124,6 +126,13 @@ function renderReportText(data) {
     out.push('');
     out.push('Top DXCC entities');
     out.push(...textTable(dx.head, dx.rows, dx.totalRow));
+  }
+
+  const mb = multiBandData(qsos);
+  if (mb) {
+    out.push('');
+    out.push('Callsigns worked on the most bands');
+    out.push(...textTable(mb.head, mb.rows, mb.totalRow, mb.textCols));
   }
 
   const sec = sectionsData(qsos);
@@ -332,6 +341,39 @@ function dxccData(qsos) {
   return { worked: by.size, head: [`DXCC (${by.size} worked)`, 'Q', 'Bands'], rows, totalRow: null };
 }
 
+// "Callsigns Worked on the Most Bands" -- mirrors stats.js's
+// multiBandCallsCard (calls on more than one band, most bands first, ties
+// by Q, top 25). Rows are dedupeQsos'd like every other count here, and
+// QTCs are excluded: a QTC shares its parent QSO's band, so it can't add a
+// band, but left in it would inflate the Q column. Bands are grouped by
+// bandLabel() (so "14" and "14.0" are one band) and listed low to high.
+function multiBandData(qsos) {
+  const real = dedupeQsos(qsos.filter((q) => !isQtc(q)));
+  const by = new Map(); // call -> { bands: Map<label, sortKey>, q }
+  for (const q of real) {
+    const call = (q.call || '').toUpperCase();
+    if (!call) continue;
+    const e = by.get(call) || { bands: new Map(), q: 0 };
+    if (q.band) e.bands.set(bandLabel(q.band), bandSortKey(q.band));
+    e.q += 1;
+    by.set(call, e);
+  }
+
+  const rows = [...by.entries()]
+    .filter(([, e]) => e.bands.size > 1)
+    .sort((a, b) => b[1].bands.size - a[1].bands.size || b[1].q - a[1].q)
+    .slice(0, 25)
+    .map(([call, e]) => [
+      call,
+      e.bands.size,
+      e.q,
+      [...e.bands.entries()].sort((x, y) => x[1] - y[1]).map(([l]) => l).join(', '),
+    ]);
+  if (!rows.length) return null;
+  // Last column is a band list, not a number: rendered left-aligned.
+  return { head: ['Call', 'Bands', 'Q', 'Which Bands'], rows, totalRow: null, textCols: [3] };
+}
+
 // QTCs excluded: same reasoning as dxccData above -- a WAE QTC repeats the
 // parent QSO's section/exchange, not a new one.
 function sectionsData(qsos) {
@@ -372,6 +414,12 @@ function dxccTable(qsos) {
   return htmlTable(d.head, d.rows, d.totalRow);
 }
 
+function multiBandBlock(qsos) {
+  const d = multiBandData(qsos);
+  if (!d) return '';
+  return `<h2>Callsigns worked on the most bands</h2>\n${htmlTable(d.head, d.rows, d.totalRow, d.textCols)}`;
+}
+
 function sectionsBlock(qsos) {
   const d = sectionsData(qsos);
   if (!d) return '';
@@ -381,13 +429,16 @@ function sectionsBlock(qsos) {
   return `<h2>Sections / exchanges worked — ${d.count}</h2><div class="chips">${chips}</div>`;
 }
 
-function htmlTable(head, rows, totalRow) {
-  const th = head.map((h, i) => `<th${i ? ' class="n"' : ''}>${esc(h)}</th>`).join('');
+// textCols: indices (beyond the first) that hold text, not numbers, and so
+// stay left-aligned instead of getting the numeric td.n class.
+function htmlTable(head, rows, totalRow, textCols = []) {
+  const n = (i) => (i && !textCols.includes(i) ? ' class="n"' : '');
+  const th = head.map((h, i) => `<th${n(i)}>${esc(h)}</th>`).join('');
   const body = rows.map((r) => `<tr>${
-    r.map((c, i) => `<td${i ? ' class="n"' : ''}>${esc(typeof c === 'number' ? c.toLocaleString() : c)}</td>`).join('')
+    r.map((c, i) => `<td${n(i)}>${esc(typeof c === 'number' ? c.toLocaleString() : c)}</td>`).join('')
   }</tr>`).join('');
   const tot = totalRow ? `<tr class="total">${
-    totalRow.map((c, i) => `<td${i ? ' class="n"' : ''}>${esc(typeof c === 'number' ? c.toLocaleString() : c)}</td>`).join('')
+    totalRow.map((c, i) => `<td${n(i)}>${esc(typeof c === 'number' ? c.toLocaleString() : c)}</td>`).join('')
   }</tr>` : '';
   return `<table><thead><tr>${th}</tr></thead><tbody>${body}${tot}</tbody></table>`;
 }
@@ -395,8 +446,10 @@ function htmlTable(head, rows, totalRow) {
 // --- plain-text rendering ----------------------------------------------------
 
 // Fixed-width table: first column left-aligned, the rest right-aligned
-// (they mirror the HTML's td.n numeric columns). Returns an array of lines.
-function textTable(head, rows, totalRow) {
+// (they mirror the HTML's td.n numeric columns) except any listed in
+// textCols, which stay left-aligned like htmlTable's. Returns an array of
+// lines.
+function textTable(head, rows, totalRow, textCols = []) {
   const fmt = (c) => (typeof c === 'number' ? c.toLocaleString() : String(c == null ? '' : c));
   const body = [head, ...rows, ...(totalRow ? [totalRow] : [])].map((r) => r.map(fmt));
   const cols = head.length;
@@ -404,7 +457,7 @@ function textTable(head, rows, totalRow) {
   for (let i = 0; i < cols; i += 1) w[i] = Math.max(...body.map((r) => (r[i] || '').length));
 
   const line = (r) => r
-    .map((c, i) => (i === 0 ? (c || '').padEnd(w[i]) : (c || '').padStart(w[i])))
+    .map((c, i) => (i === 0 || textCols.includes(i) ? (c || '').padEnd(w[i]) : (c || '').padStart(w[i])))
     .join('  ')
     .replace(/\s+$/, '');
   const rule = '-'.repeat(w.reduce((s, x) => s + x, 0) + 2 * (cols - 1));

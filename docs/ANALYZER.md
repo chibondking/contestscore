@@ -167,11 +167,12 @@ keep the newest `ANALYZE_KEEP` (default 200) and drop anything older than
 
 `public/js/report.js` renders a saved analysis two ways, both from the same
 aggregation helpers (`summaryTiles` / `bandModeData` / `hourlyData` /
-`dxccData` / `sectionsData`) so they can't drift:
+`dxccData` / `multiBandData` / `sectionsData`) so they can't drift:
 
 - `renderReport({ meta, qsos })` → one self-contained HTML string: inline
   CSS, no external references, every meta field escaped — headline tiles,
-  band × mode matrix, hourly table, top-20 DXCC, sections worked. The
+  band × mode matrix, hourly table, top-20 DXCC, callsigns worked on the
+  most bands (top 25, mirroring the Stats page card), sections worked. The
   result page's **Download report** button re-fetches the analysis and
   saves it as `<call>-<contest>.html`, so an analysis can be archived
   independent of the server and its retention window.
@@ -180,8 +181,8 @@ aggregation helpers (`summaryTiles` / `bandModeData` / `hourlyData` /
   `key ..... value` blocks (the same numbers as those two cards on the
   Stats page — `glanceRows` / `rateRecordRows` mirror `stats.js`'s
   `headline` / `rateRecords`, and `bestWindow` is kept byte-identical
-  between the two files), then fixed-width band/mode + hourly + DXCC
-  tables and a wrapped sections list. The **Copy summary (email)** button
+  between the two files), then fixed-width band/mode + hourly + DXCC +
+  most-bands tables and a wrapped sections list. The **Copy summary (email)** button
   puts it on the clipboard for pasting into a contest-score reflector post
   or an email. Clipboard write falls back from `navigator.clipboard` to a
   hidden-`<textarea>` + `execCommand('copy')` because the LAN deployment is
