@@ -7,7 +7,7 @@ const {
   getCachedLocation,
 } = require('../db/queries');
 const { freqToBand } = require('../parsers/util');
-const { enrichGeo, resolveLatLonEnriched } = require('../analyze/geo');
+const { enrichGeo, gridToLatLon, resolveLatLonEnriched } = require('../analyze/geo');
 const { createLookupService, stripSuffix } = require('../lookup');
 const config = require('../../config/default.json');
 
@@ -122,7 +122,17 @@ function startListeners(io) {
   // (source 'n1mm') and by the HamQTH lookup service (source 'hamqth').
   emitter.on('lookup:result', (data) => {
     safely('lookup:result', () => { if (data.call) cacheCallsign(data.call, data, data.source || 'n1mm'); });
-    io.emit('lookup:result', data);
+    // The world-map location this result implies, so the dashboard can move
+    // the dots already plotted for this call. contact:new is emitted BEFORE
+    // the call is ever enqueued for lookup, so a first-time call's dot goes
+    // out on the country-file estimate; without this the better grid only
+    // reached the map on a page reload (GET /api/qsos reads the cache).
+    // Same rule as resolveLatLonEnriched: only a found result's grid
+    // counts, and the client still lets a QSO's own exchange grid win.
+    const loc = data.found ? gridToLatLon(data.grid) : null;
+    io.emit('lookup:result', loc
+      ? { ...data, base: stripSuffix(data.call), lat: loc.lat, lon: loc.lon, locSource: data.source || 'lookup' }
+      : data);
   });
 
   // Back-fill lookups for QSOs already logged (server restarted mid-contest).

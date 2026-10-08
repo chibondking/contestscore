@@ -143,6 +143,28 @@ function gridToLatLon(grid) {
   return { lat: lat + latSpan / 2, lon: lon + lonSpan / 2 };
 }
 
+// "W1AW/4", "OK2CQR/P" -> the base call. Mirrors src/lookup/index.js's
+// stripSuffix() exactly (kept in sync by hand, like gridToLatLon above) --
+// lookup:result's `base` is the server's version, so the two must agree for
+// a portable call's dot to be matched.
+function stripSuffix(raw) {
+  const c = String(raw || '').trim().toUpperCase();
+  if (!c || !c.includes('/')) return c;
+
+  const parts = c.split('/').filter(Boolean);
+  if (parts.length === 1) return parts[0];
+
+  const tail = parts[parts.length - 1];
+  if (/^(P|M|MM|AM|A|R|QRP|LH|\d{1,2})$/.test(tail)) parts.pop();
+  if (parts.length === 1) return parts[0];
+
+  const looksLikeCall = (t) => /\d/.test(t) && t.length >= 3;
+  const [a, b] = parts;
+  if (looksLikeCall(a) && !looksLikeCall(b)) return a;
+  if (looksLikeCall(b) && !looksLikeCall(a)) return b;
+  return a.length >= b.length ? a : b;
+}
+
 function dashboard() {
   // Chart.js instances live here, in a plain closure variable -- NOT as
   // Alpine data properties. Same reactivity trap as charts.js: Alpine
@@ -252,6 +274,20 @@ function dashboard() {
       // (band/mode/op) from the lookup payload, which doesn't carry it.
       socket.on('lookup:result', (data) => {
         if (data && data.found === false) this.fetchBusts();
+        // A found result with a usable grid carries lat/lon (src/udp/
+        // index.js). Move this call's already-plotted dots there -- their
+        // contact:new went out before the lookup ran, so they're sitting on
+        // the country-file estimate. A QSO's own exchange grid still wins,
+        // same as resolveLatLonEnriched on the server.
+        if (data && data.lat != null && data.lon != null && data.base) {
+          let moved = false;
+          const qsos = this.qsos.map((q) => {
+            if (q.locSource === 'exchange' || stripSuffix(q.call) !== data.base) return q;
+            moved = true;
+            return { ...q, lat: data.lat, lon: data.lon, locSource: data.locSource };
+          });
+          if (moved) this.qsos = qsos;
+        }
       });
 
       socket.on('solar:update', (data) => {

@@ -295,6 +295,25 @@ describe('contact pipeline', () => {
     assert.equal(evt.payload.call, 'DL1ABC');
   });
 
+  // contact:new goes out before the lookup runs, so the dashboard moves
+  // already-plotted dots off this event -- it must carry the grid's lat/lon
+  // and the suffix-stripped call to match QSOs by.
+  it('a found lookup:result with a grid carries lat/lon + base call', () => {
+    emitter.emit('lookup:result', { call: 'W1AW/4', grid: 'FN31pr', found: true, source: 'hamqth' });
+    const evt = io.events.find((e) => e.name === 'lookup:result');
+    assert.equal(evt.payload.base, 'W1AW');
+    assert.equal(evt.payload.locSource, 'hamqth');
+    assert.ok(Math.abs(evt.payload.lat - 41.73) < 0.05);
+    assert.ok(Math.abs(evt.payload.lon - -72.71) < 0.05);
+  });
+
+  it('a not-found lookup:result carries no location', () => {
+    emitter.emit('lookup:result', { call: 'XX9XXX', grid: 'FN31pr', found: false, source: 'hamqth' });
+    const evt = io.events.find((e) => e.name === 'lookup:result');
+    assert.equal(evt.payload.lat, undefined);
+    assert.equal(evt.payload.base, undefined);
+  });
+
   // DX cluster/RBN spot display is permanently out of scope (see CLAUDE.md's
   // Prime Directive) -- N1MM's <spot> broadcasts on this same port must be
   // silently ignored, not logged as "unexpected", since they're expected,
