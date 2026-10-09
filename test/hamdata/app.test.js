@@ -102,3 +102,11 @@ describe('hamdata cache + global stop over HTTP', () => {
     assert.equal(typeof (await ok.json()).cleared, 'number');
   });
 });
+
+describe('hamdata cache count', () => {
+  it('GET /lookup/status carries the shared cache counts', async () => {
+    const body = await (await fetch(`${base}/lookup/status`)).json();
+    assert.equal(typeof body.cache.total, 'number');
+    assert.equal(body.cache.total, body.cache.found + body.cache.not_found);
+  });
+});

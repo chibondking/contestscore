@@ -5,7 +5,7 @@
 //   GET  /health                 liveness + solar/lookup diagnostics
 //   GET  /solar                  latest reading (same shape as contestscore's /api/solar)
 //   GET  /solar/since?after=     solar_snapshots rows newer than `after`, oldest first
-//   GET  /lookup/status
+//   GET  /lookup/status         broker state + `cache` counts of the shared cache
 //   GET  /lookup/:call           cached-or-fetched record, see broker.js
 //   POST /lookup/pause|resume    bearer HAMDATA_TOKEN (503 if unset -- fail closed):
 //                                stop/start ALL outgoing HamQTH lookups (persisted)
@@ -14,7 +14,7 @@
 
 const express = require('express');
 const { getDb } = require('../src/db');
-const { getSolarSince, clearCallsignCache } = require('../src/db/queries');
+const { getSolarSince, clearCallsignCache, countCallsignCache } = require('../src/db/queries');
 const { latestSolar } = require('../src/solar');
 const { stripSuffix } = require('../src/lookup');
 
@@ -55,7 +55,7 @@ function createApp({ broker, solar, env = process.env }) {
     res.json(getSolarSince(String(req.query.after || '')));
   });
 
-  app.get('/lookup/status', (req, res) => res.json(broker.getStatus()));
+  app.get('/lookup/status', (req, res) => res.json({ ...broker.getStatus(), cache: countCallsignCache() }));
 
   app.post('/lookup/pause', requireToken, (req, res) => { broker.pause(); res.json(broker.getStatus()); });
   app.post('/lookup/resume', requireToken, (req, res) => { broker.resume(); res.json(broker.getStatus()); });

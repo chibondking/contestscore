@@ -142,6 +142,22 @@
         Possible Busts list -- and they're looked up afresh as they're
         worked. Contest data and space-weather history are not affected.
       </p>
+      <div class="score-row" style="margin-bottom:1rem">
+        <div class="metric">
+          <span class="metric__value" x-text="lookupStatus.cache ? lookupStatus.cache.total : '—'"></span>
+          <span class="metric__label" x-text="'Callsigns cached' + (lookupStatus.cache ? ' · ' + lookupStatus.cache.not_found + ' not found' : '')"></span>
+        </div>
+        <!-- Only with a shared hamdata: its cache serves every scoreboard on
+             this server, and Clear below doesn't touch it. -->
+        <div class="metric" x-show="lookupStatus.upstream_cache">
+          <span class="metric__value" x-text="lookupStatus.upstream_cache ? lookupStatus.upstream_cache.total : '—'"></span>
+          <span class="metric__label">Shared server cache</span>
+        </div>
+      </div>
+      <p class="empty" x-show="lookupStatus.upstream_cache" style="margin-bottom:1rem">
+        The shared server cache holds lookups for every scoreboard on this
+        server. Clearing this scoreboard's cache doesn't empty it.
+      </p>
       <button
         @click="clearCache()"
         :disabled="!token || cacheBusy"
@@ -154,6 +170,24 @@
       <p x-show="cacheMessage" :style="'margin-top:1rem; color:' + (cacheMessageIsError ? 'var(--red)' : 'var(--green)')" x-text="cacheMessage"></p>
     </section>
 
+    <section class="card card--wide" id="cty">
+      <h2>Country File</h2>
+      <p class="empty" style="margin-bottom:1rem">
+        Continent, DXCC entity and CQ zone for each worked call come from the
+        country file (cty.csv, country-files.com). It's refreshed monthly and
+        a new one is in use after the next deploy.
+      </p>
+      <div class="score-row">
+        <div class="metric">
+          <span class="metric__value" x-text="cty.loaded ? (cty.date || 'unknown') : (cty.loaded === false ? 'Not loaded' : '—')"></span>
+          <span class="metric__label" x-text="'Version' + (cty.version ? ' · VER' + cty.version : '')"></span>
+        </div>
+        <div class="metric">
+          <span class="metric__value" x-text="cty.loaded ? cty.entities : '—'"></span>
+          <span class="metric__label">Entities</span>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer class="footer"></footer>

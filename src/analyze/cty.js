@@ -32,6 +32,11 @@
 // just enough for aggregate contest stats. A portable op's zone can still
 // be wrong; that's acceptable for a breakdown.
 
+// country-files.com stamps each release into the file as a fake exact call,
+// "=VER20260915" (YYYYMMDD) -- in Canada's alias list, currently. That's
+// the only version marker cty.csv carries.
+const VERSION_RE = /^=VER(\d{8})$/;
+
 const OVERRIDE_RE = /\((\d+)\)|\[(\d+)\]|\{([A-Za-z]{2})\}|<[^>]*>|~[^~]*~/g;
 
 // Suffixes that don't change the DXCC entity (they may change zone, which
@@ -46,6 +51,8 @@ function parseCty(text) {
   const exact = new Map();     // "N2NL/MM" -> record
   const prefixes = new Map();  // "AA0" -> record   (longest match wins at lookup)
   let maxPrefixLen = 1;
+  let version = null;
+  let entities = 0;
 
   for (const rawLine of String(text).split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -54,6 +61,7 @@ function parseCty(text) {
     const parts = line.split(',');
     if (parts.length < 10) continue;
 
+    entities += 1;
     const rawLat = Number(parts[6]);
     const rawLon = Number(parts[7]);
     const base = {
@@ -86,6 +94,8 @@ function parseCty(text) {
       }
       const clean = token.replace(OVERRIDE_RE, '').toUpperCase();
       if (!clean) continue;
+      const ver = VERSION_RE.exec(clean);
+      if (ver) { version = ver[1]; continue; }
 
       const rec = {
         ...base,
@@ -102,7 +112,7 @@ function parseCty(text) {
     }
   }
 
-  return { exact, prefixes, maxPrefixLen };
+  return { exact, prefixes, maxPrefixLen, version, entities };
 }
 
 // First writer wins: cty.csv lists the more specific entity's alias before
@@ -133,7 +143,7 @@ function locationToken(call) {
 function makeResolver(parsed) {
   const { exact, prefixes, maxPrefixLen } = parsed;
 
-  return function resolve(callRaw) {
+  const resolve = function resolve(callRaw) {
     if (!callRaw) return null;
     const call = String(callRaw).toUpperCase().trim();
     if (!call) return null;
@@ -150,6 +160,9 @@ function makeResolver(parsed) {
     }
     return null;
   };
+  // Which country file this is (admin page): "20260915" or null.
+  resolve.info = { version: parsed.version || null, entities: parsed.entities || 0 };
+  return resolve;
 }
 
 // Convenience: text -> resolve()

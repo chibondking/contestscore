@@ -251,6 +251,14 @@ function prepare() {
     // Base calls the HamQTH lookup marked not-found -- raw material for the
     // dashboard's possible-busts panel. json_extract is SQLite's JSON1,
     // bundled with better-sqlite3.
+    // How many callsigns the cache holds (admin page). Expired rows count
+    // too -- they stay until the call is looked up again or the cache is
+    // cleared. json_valid guards json_extract against a malformed row.
+    countCallsignCache: db.prepare(`
+      SELECT COUNT(*) AS total,
+             COALESCE(SUM(CASE WHEN json_valid(data) THEN json_extract(data, '$.found') = 0 END), 0) AS not_found
+      FROM callsign_cache
+    `),
     getNotFoundCalls: db.prepare(
       "SELECT call FROM callsign_cache WHERE source = 'hamqth' AND json_extract(data, '$.found') = 0"
     ),
@@ -456,6 +464,10 @@ function getCachedLocation(call) {
   if (!row) return null;
   try { return { ...JSON.parse(row.data), source: row.source }; } catch { return null; }
 }
+function countCallsignCache() {
+  const { total, not_found: notFound } = prepare().countCallsignCache.get();
+  return { total, found: total - notFound, not_found: notFound };
+}
 function getNotFoundCalls() { return prepare().getNotFoundCalls.all().map((r) => r.call); }
 
 function insertSolarSnapshot(r = {}) {
@@ -540,7 +552,7 @@ module.exports = {
   upsertRadio, getRadios,
   insertScoreBreakdown, getLatestScore, getScoreHistory, getScoreBreakdown,
   getSetting, setSetting,
-  getCachedCallsign, getCachedLocation, cacheCallsign, getNotFoundCalls,
+  getCachedCallsign, getCachedLocation, cacheCallsign, getNotFoundCalls, countCallsignCache,
   insertSolarSnapshot, getLatestSolar, getSolarInRange, getSolarForSession,
   getSolarSince,
   insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,

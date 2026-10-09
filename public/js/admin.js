@@ -15,6 +15,9 @@ function admin() {
     lookupMessage: '',
     lookupMessageIsError: false,
 
+    // GET /api/cty: the country file this server resolves continents with.
+    cty: {},
+
     cacheBusy: false,
     cacheMessage: '',
     cacheMessageIsError: false,
@@ -27,6 +30,15 @@ function admin() {
       }
       this.fetchCounts();
       this.fetchLookupStatus();
+      this.fetchCty();
+    },
+
+    async fetchCty() {
+      try {
+        this.cty = await fetch('/api/cty').then((r) => r.json());
+      } catch (err) {
+        console.error('Failed to load country file info:', err);
+      }
     },
 
     saveToken() {
@@ -127,6 +139,7 @@ function admin() {
         if (res.ok) {
           this.cacheMessage = `Cache cleared -- ${body.cleared ?? 0} callsign(s) forgotten.`;
           this.cacheMessageIsError = false;
+          this.fetchLookupStatus(); // the count should drop to 0 now
         } else {
           this.cacheMessage = `Clear failed: ${body.error || res.status}`;
           this.cacheMessageIsError = true;

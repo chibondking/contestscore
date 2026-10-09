@@ -34,6 +34,22 @@ function resolver() {
   return _resolver;
 }
 
+// The country file in use: { loaded, version: "20260915" | null, date:
+// "2026-09-15" | null, entities }. Loaded once per process, so this is the
+// file the running server read at startup (a deploy restarts it).
+function ctyInfo() {
+  const r = resolver();
+  if (!r) return { loaded: false, version: null, date: null, entities: 0 };
+  const info = r.info || {};
+  const v = info.version || null;
+  return {
+    loaded: true,
+    version: v,
+    date: v ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}` : null,
+    entities: info.entities || 0,
+  };
+}
+
 // Test hook -- inject a resolver (or null) instead of reading disk.
 function _setResolver(r) { _resolver = r; }
 
@@ -229,5 +245,5 @@ function resolveLatLonEnriched(qso, cached) {
 }
 
 module.exports = {
-  enrichGeo, resolveCall, gridToLatLon, usCallAreaLatLon, resolveLatLon, resolveLatLonEnriched, _setResolver,
+  enrichGeo, resolveCall, gridToLatLon, usCallAreaLatLon, resolveLatLon, resolveLatLonEnriched, ctyInfo, _setResolver,
 };

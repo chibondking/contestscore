@@ -86,3 +86,24 @@ describe('cty resolver', () => {
     });
   });
 });
+
+describe('cty version', () => {
+  it('reads the =VERyyyymmdd marker and counts entities', () => {
+    const p = parseCty(CTY);
+    assert.match(p.version, /^20\d{6}$/);
+    assert.ok(p.entities > 300);
+    assert.deepEqual(resolve.info, { version: p.version, entities: p.entities });
+  });
+
+  it('does not treat the marker as a callsign', () => {
+    const p = parseCty('VE,Canada,1,NA,5,9,44.35,78.75,5.0,VE =VER20261003 =VE2EM/M;\n');
+    assert.equal(p.version, '20261003');
+    assert.equal(p.exact.has('VER20261003'), false);
+    assert.equal(p.exact.has('VE2EM/M'), true);
+    assert.equal(p.entities, 1);
+  });
+
+  it('is null for a file with no marker', () => {
+    assert.equal(parseCty('K,United States,291,NA,5,8,37.60,91.87,5.0,K W;\n').version, null);
+  });
+});

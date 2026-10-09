@@ -3,7 +3,7 @@ const {
   getQsos, clearQsos, getQsoRate,
   getRadios,
   getLatestScore, getScoreHistory,
-  getNotFoundCalls, clearCallsignCache,
+  getNotFoundCalls, clearCallsignCache, countCallsignCache,
   getSolarForSession,
   getCachedLocation,
 } = require('../db/queries');
@@ -14,7 +14,7 @@ const { getLookupService, getUdpListeners } = require('../udp');
 const { resolveSolarConfig, latestSolar } = require('../solar');
 const { freqToBand } = require('../parsers/util');
 const { getDb } = require('../db');
-const { resolveLatLonEnriched } = require('../analyze/geo');
+const { resolveLatLonEnriched, ctyInfo } = require('../analyze/geo');
 const { getTenant } = require('../tenant');
 const { createHamdataClient } = require('../hamdata/client');
 
@@ -123,9 +123,12 @@ function checkToken(req, res) {
 // With a shared hamdata, also reports whether the box operator has stopped
 // outgoing HamQTH lookups for everyone (`upstream_paused`) -- cached
 // callsigns still resolve then, new ones don't.
+// `cache` counts this scoreboard's own callsign_cache; `upstream_cache` the
+// shared hamdata one (null when unreachable or an older hamdata).
 router.get('/lookup/status', async (req, res) => {
   const svc = getLookupService();
   const status = svc ? svc.getStatus() : { provider: 'none', enabled: false, paused: false };
+  status.cache = countCallsignCache();
   const lk = resolveLookupConfig();
   if (lk.provider === 'hamdata') {
     try {
@@ -133,12 +136,22 @@ router.get('/lookup/status', async (req, res) => {
       status.upstream_paused = Boolean(up.paused);
       // false = hamdata has no HamQTH account, so nothing new can be looked up
       status.upstream_enabled = up.enabled !== false;
+      status.upstream_cache = up.cache || null;
     } catch {
       status.upstream_paused = null; // hamdata unreachable -- unknown
       status.upstream_enabled = null;
+      status.upstream_cache = null;
     }
   }
   res.json(status);
+});
+
+// GET /api/cty -- which country file (cty.csv, country-files.com) this
+// server resolves continent / DXCC / zone with: its release version, as
+// stamped in the file, and how many entities it has. Public, like
+// /api/version.
+router.get('/cty', (req, res) => {
+  res.json(ctyInfo());
 });
 
 // DELETE /api/lookup/cache -- forget every cached callsign lookup (busts

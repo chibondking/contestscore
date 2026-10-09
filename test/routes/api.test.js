@@ -357,7 +357,23 @@ describe('GET /api/solar', () => {
 describe('GET/POST /api/lookup/*', () => {
   it('status is a quiet "off" with no live lookup service', async () => {
     const body = await (await fetch(`${baseUrl}/api/lookup/status`)).json();
-    assert.deepEqual(body, { provider: 'none', enabled: false, paused: false });
+    const { cache, ...rest } = body;
+    assert.deepEqual(rest, { provider: 'none', enabled: false, paused: false });
+    assert.equal(typeof cache.total, 'number');
+  });
+
+  it('status counts the callsign cache, found and not found', async () => {
+    await fetch(`${baseUrl}/api/lookup/cache`, { method: 'DELETE', headers: { 'X-Confirm': 'yes' } });
+    cacheCallsign('K1AA', { found: true, grid: 'FN42' }, 'hamqth');
+    cacheCallsign('K2BB', { found: true }, 'hamqth');
+    cacheCallsign('X9QQ', { found: false }, 'hamqth');
+    cacheCallsign('W3CC', { name: 'N1MM lookupinfo, no found field' }, 'n1mm');
+    const body = await (await fetch(`${baseUrl}/api/lookup/status`)).json();
+    assert.deepEqual(body.cache, { total: 4, found: 3, not_found: 1 });
+
+    await fetch(`${baseUrl}/api/lookup/cache`, { method: 'DELETE', headers: { 'X-Confirm': 'yes' } });
+    const after = await (await fetch(`${baseUrl}/api/lookup/status`)).json();
+    assert.deepEqual(after.cache, { total: 0, found: 0, not_found: 0 });
   });
 
   it('pause/resume are a no-op 200 with no live service, and no token required', async () => {
@@ -416,5 +432,15 @@ describe('GET /api/solar/history', () => {
       `${baseUrl}/api/solar/history?from=${encodeURIComponent('1990-01-01 00:00:00')}&to=${encodeURIComponent('1990-01-02 00:00:00')}`,
     )).json();
     assert.deepEqual(body, []);
+  });
+});
+
+describe('GET /api/cty', () => {
+  it('reports the bundled country file version and entity count', async () => {
+    const body = await (await fetch(`${baseUrl}/api/cty`)).json();
+    assert.equal(body.loaded, true);
+    assert.match(body.version, /^\d{8}$/);
+    assert.equal(body.date, `${body.version.slice(0, 4)}-${body.version.slice(4, 6)}-${body.version.slice(6)}`);
+    assert.ok(body.entities > 300);
   });
 });
