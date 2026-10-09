@@ -1,0 +1,49 @@
+#!/bin/bash
+# contestscore-tenant-agent -- the ONLY way the ops dashboard's agent touches
+# tenants (ops repo CLAUDE.md Section 23, Phase E). The agent's sudoers grant
+# is for this script, not for contestscore-tenant itself: contestscore-tenant
+# also takes file paths (--import-db, --adopt-env, export <out>), and a
+# grant on it with free arguments would let the dashboard read or write any
+# file as root. Here every argument has a fixed shape and is validated
+# before anything runs.
+#
+#   contestscore-tenant-agent list                    JSON, read-only
+#   contestscore-tenant-agent create <id> <name>      JSON {id,port,url,token}
+#   contestscore-tenant-agent suspend|resume|restart <id>
+#   contestscore-tenant-agent delete <id>             (data moved aside, not rm)
+#
+# Writes run through `systemd-run --wait --pipe`: the agent's unit is
+# ProtectSystem=strict, and that read-only view of /opt and /etc is
+# inherited by anything it sudo's -- so contestscore-tenant runs as a
+# transient unit of PID 1 instead, outside the agent's sandbox, and its
+# output and exit status come back through the pipe.
+
+set -euo pipefail
+TOOL=/usr/local/sbin/contestscore-tenant
+die() { echo "contestscore-tenant-agent: $*" >&2; exit 2; }
+[[ $EUID -eq 0 ]] || die "run via sudo"
+id_ok() { [[ "${1:-}" =~ ^[a-z0-9]{3,10}$ ]] || die "invalid tenant id '${1:-}'"; }
+# Fixed unit-name prefix so the ops agent knows these short-lived units
+# are expected (node.yaml security.expected_unit_prefixes: cstenant-op-).
+run() { exec systemd-run --quiet --wait --pipe --collect --service-type=exec --unit="cstenant-op-$(date +%s%N)" "$TOOL" "$@"; }
+
+case "${1:-}" in
+  list)
+    (($# == 1)) || die "list takes no arguments"
+    exec "$TOOL" list --json ;;  # read-only: fine inside the sandbox
+  create)
+    (($# == 3)) || die "usage: create <id> <name>"
+    id_ok "$2"
+    name="$3"
+    [[ -n "$name" && ${#name} -le 60 && "$name" != *[$'\n\r\t']* && "$name" != -* ]] || die "name must be 1-60 characters, one line, not starting with -"
+    run create "$2" --name "$name" --json ;;
+  suspend|resume|restart)
+    (($# == 2)) || die "usage: $1 <id>"
+    id_ok "$2"
+    run "$1" "$2" ;;
+  delete)
+    (($# == 2)) || die "usage: delete <id>"
+    id_ok "$2"
+    run delete "$2" --confirm "$2" ;;
+  *) die "unknown command '${1:-}' (list|create|suspend|resume|restart|delete)" ;;
+esac

@@ -40,6 +40,9 @@ sudo install -o root -g root -m 755 \
 sudo install -o root -g root -m 755 \
   /opt/contestscore/app/deploy/hamdata-ctl \
   /usr/local/sbin/hamdata-ctl
+sudo install -o root -g root -m 755 \
+  /opt/contestscore/app/deploy/contestscore-tenant-agent \
+  /usr/local/sbin/contestscore-tenant-agent
 if ! sudo cmp -s /opt/contestscore/app/deploy/contestscore@.service /etc/systemd/system/contestscore@.service; then
   sudo install -o root -g root -m 644 \
     /opt/contestscore/app/deploy/contestscore@.service \

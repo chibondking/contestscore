@@ -7,8 +7,11 @@
 #
 #   contestscore-tenant create <id> [--name "Display Name"] [--port N]
 #                                   [--adopt-env FILE] [--import-db FILE] [--json]
-#   contestscore-tenant list
+#   contestscore-tenant list [--json]
 #   contestscore-tenant show <id>              (token redacted)
+#   contestscore-tenant token <id>             print the tenant's token (root only;
+#                                              for when the one-time display was missed)
+#   contestscore-tenant restart <id>
 #   contestscore-tenant suspend <id>           stop + disable, data kept
 #   contestscore-tenant resume <id>
 #   contestscore-tenant export <id> <out.db>   consistent SQLite snapshot
@@ -161,7 +164,28 @@ cmd_create() {
 }
 
 cmd_list() {
-  local f id
+  local f id json=0 first=1 state enabled
+  [[ "${1:-}" == "--json" ]] && json=1
+  if ((json)); then
+    # One object per tenant: what the ops agent needs to monitor them
+    # (no token). name is JSON-escaped by node, the rest is validated.
+    printf '['
+    for f in "$ROOT"/*/tenant.env; do
+      [[ -f "$f" ]] || continue
+      id=$(env_get "$f" CONTESTSCORE_TENANT)
+      valid_id "$id" || continue
+      state=$(systemctl is-active "$(unit "$id")" 2>/dev/null || true)
+      enabled=$(systemctl is-enabled "$(unit "$id")" 2>/dev/null || true)
+      ((first)) || printf ','
+      first=0
+      printf '{"id":"%s","port":%s,"state":"%s","enabled":%s,"name":%s}' "$id" \
+        "$(env_get "$f" HTTP_PORT | tr -cd 0-9)" "$state" \
+        "$([[ "$enabled" == enabled ]] && echo true || echo false)" \
+        "$(env_get "$f" CONTESTSCORE_TENANT_NAME | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(JSON.stringify(s.trim())))')"
+    done
+    printf ']\n'
+    return
+  fi
   printf '%-10s %-6s %-9s %s\n' ID PORT STATE NAME
   for f in "$ROOT"/*/tenant.env; do
     [[ -f "$f" ]] || continue
@@ -176,6 +200,20 @@ cmd_show() {
   [[ -f "$ROOT/$id/tenant.env" ]] || die "no tenant $id"
   sed -E 's/^(CONTESTSCORE_API_TOKEN=).+/\1<redacted>/' "$ROOT/$id/tenant.env"
   echo "state: $(systemctl is-active "$(unit "$id")" 2>/dev/null || true)"
+}
+
+cmd_token() {
+  local id; id=$(need_id "${1:-}")
+  [[ -f "$ROOT/$id/tenant.env" ]] || die "no tenant $id"
+  env_get "$ROOT/$id/tenant.env" CONTESTSCORE_API_TOKEN
+}
+
+cmd_restart() {
+  local id; id=$(need_id "${1:-}")
+  [[ -d "$ROOT/$id" ]] || die "no tenant $id"
+  systemctl restart "$(unit "$id")"
+  wait_healthy "$(env_get "$ROOT/$id/tenant.env" HTTP_PORT)" || die "tenant $id did not come back healthy"
+  echo "tenant $id restarted"
 }
 
 cmd_suspend() { local id; id=$(need_id "${1:-}"); [[ -d "$ROOT/$id" ]] || die "no tenant $id"; systemctl disable --now "$(unit "$id")"; echo "tenant $id suspended (data kept)"; }
@@ -204,8 +242,10 @@ cmd_delete() {
 
 case "${1:-}" in
   create)  shift; cmd_create "$@" ;;
-  list)    cmd_list ;;
+  list)    shift; cmd_list "$@" ;;
   show)    shift; cmd_show "$@" ;;
+  token)   shift; cmd_token "$@" ;;
+  restart) shift; cmd_restart "$@" ;;
   suspend) shift; cmd_suspend "$@" ;;
   resume)  shift; cmd_resume "$@" ;;
   export)  shift; cmd_export "$@" ;;
