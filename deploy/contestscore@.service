@@ -1,0 +1,32 @@
+# One hosted contestscore scoreboard per tenant (ops repo CLAUDE.md Section
+# 23). %i is the tenant id (lower-case callsign-like, e.g. wt2p, k9ct). All
+# instances run the same code checkout; each has its own env + SQLite under
+# /opt/contestscore/tenants/<id>/. Created/managed by contestscore-tenant
+# (deploy/contestscore-tenant) -- don't hand-edit instances into existence.
+# contestscore-deploy.sh installs this file and restarts every running
+# instance on deploy.
+
+[Unit]
+Description=contestscore scoreboard (tenant %i)
+After=network.target hamdata.service
+Wants=hamdata.service
+
+[Service]
+Type=simple
+User=contestscore
+Group=contestscore
+WorkingDirectory=/opt/contestscore/app
+EnvironmentFile=/opt/contestscore/tenants/%i/tenant.env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/contestscore/tenants/%i/data
+
+[Install]
+WantedBy=multi-user.target

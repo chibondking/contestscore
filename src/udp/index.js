@@ -9,6 +9,7 @@ const {
 const { freqToBand } = require('../parsers/util');
 const { enrichGeo, gridToLatLon, resolveLatLonEnriched } = require('../analyze/geo');
 const { createLookupService, stripSuffix } = require('../lookup');
+const { getTenant } = require('../tenant');
 const config = require('../../config/default.json');
 
 const emitter = new EventEmitter();
@@ -137,6 +138,20 @@ function startListeners(io) {
 
   // Back-fill lookups for QSOs already logged (server restarted mid-contest).
   lookup.prime();
+
+  // A hosted (tenant) scoreboard only ever receives data over authenticated
+  // HTTPS from ContestPulse (/api/ingest/*, which feeds this same emitter).
+  // N1MM's UDP broadcasts never reach a VPS, and an open UDP socket there
+  // is an unauthenticated way to inject QSOs -- and several tenants would
+  // fight over the same three ports. So: handlers above, no sockets.
+  // getUdpListeners() stays null, which /api/health reads as "no UDP to
+  // check", not as a failure.
+  let tenant = null;
+  try { tenant = getTenant(); } catch { tenant = null; }
+  if (tenant) {
+    udpListeners = null;
+    return [];
+  }
 
   const radioPort = Number(process.env.UDP_RADIO_PORT) || config.udp.radioPort;
   const contactPort = Number(process.env.UDP_CONTACT_PORT) || config.udp.contactPort;

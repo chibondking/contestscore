@@ -1,0 +1,214 @@
+#!/bin/bash
+# contestscore-tenant -- create and manage hosted club scoreboards
+# (contestscore@<id>.service instances) on a shared VPS. Ops repo CLAUDE.md
+# Section 23, Phase C. Installed to /usr/local/sbin/contestscore-tenant by
+# contestscore-deploy.sh; run as root. The ops dashboard (Phase E) will
+# call this same script through an allowlisted agent action.
+#
+#   contestscore-tenant create <id> [--name "Display Name"] [--port N]
+#                                   [--adopt-env FILE] [--import-db FILE] [--json]
+#   contestscore-tenant list
+#   contestscore-tenant show <id>              (token redacted)
+#   contestscore-tenant suspend <id>           stop + disable, data kept
+#   contestscore-tenant resume <id>
+#   contestscore-tenant export <id> <out.db>   consistent SQLite snapshot
+#   contestscore-tenant delete <id> --confirm <id>
+#                                              stop, disable, move the dir to
+#                                              tenants/.deleted/<id>-<ts> (not rm)
+#
+# <id>: 3-10 lower-case letters/digits (a callsign, usually). Each tenant
+# gets /opt/contestscore/tenants/<id>/{tenant.env,data/}, a loopback HTTP
+# port (3200-3299 unless --port), its own ingest/analyzer token, and
+# CONTESTSCORE_TENANT=<id> (src/tenant.js: admin routes off, no UDP,
+# hamdata required).
+#
+# --adopt-env FILE   carry an existing install's token and tuning
+#                    (CONTESTSCORE_API_TOKEN, BRIDGE_*, ANALYZE_*, SOLAR_*)
+#                    over -- for migrating a standalone install to a tenant,
+#                    so its ContestPulse configs keep working unchanged.
+# --import-db FILE   start from a copy of an existing qsos.db (SQLite online
+#                    backup, so a live WAL is handled; stop the old service
+#                    first anyway so nothing is written after the copy).
+
+set -euo pipefail
+
+ROOT=/opt/contestscore/tenants
+APP=/opt/contestscore/app
+HAMDATA_URL_DEFAULT=http://127.0.0.1:3100
+PORT_MIN=3200
+PORT_MAX=3299
+DOMAIN="${TENANT_DOMAIN:-wt2p.us}"
+
+die() { echo "contestscore-tenant: $*" >&2; exit 1; }
+[[ $EUID -eq 0 ]] || die "run as root (sudo)"
+
+valid_id() { [[ "$1" =~ ^[a-z0-9]{3,10}$ ]]; }
+need_id() {
+  local id="${1:-}"
+  valid_id "$id" || die "invalid tenant id '${id}' (3-10 lower-case letters/digits)"
+  printf '%s' "$id"
+}
+unit() { printf 'contestscore@%s.service' "$1"; }
+env_get() { sed -n "s/^$2=//p" "$1" | tail -1; }
+
+# Consistent copy of a (possibly live) SQLite file via better-sqlite3's
+# online backup -- the same thing vps-backup does with python's sqlite3.
+snapshot() {
+  local src="$1" dst="$2"
+  sudo -u contestscore node -e '
+    const D = require(process.argv[1] + "/node_modules/better-sqlite3");
+    const db = new D(process.argv[2], { readonly: true, fileMustExist: true });
+    db.backup(process.argv[3]).then(() => {
+      const c = new D(process.argv[3], { readonly: true });
+      const ok = c.pragma("integrity_check", { simple: true });
+      c.close(); db.close();
+      if (ok !== "ok") { console.error("integrity_check: " + ok); process.exit(1); }
+    }).catch((e) => { console.error(e.message); process.exit(1); });
+  ' "$APP" "$src" "$dst"
+}
+
+used_ports() {
+  local f
+  for f in "$ROOT"/*/tenant.env; do [[ -f "$f" ]] && env_get "$f" HTTP_PORT; done
+}
+
+pick_port() {
+  local p used
+  used=" $(used_ports | tr '\n' ' ') "
+  for ((p = PORT_MIN; p <= PORT_MAX; p++)); do
+    [[ "$used" == *" $p "* ]] && continue
+    ss -Hltn "sport = :$p" | grep -q . && continue
+    echo "$p"; return
+  done
+  die "no free port in $PORT_MIN-$PORT_MAX"
+}
+
+wait_healthy() {
+  local port="$1" i
+  for ((i = 0; i < 30; i++)); do
+    curl -fsS -o /dev/null "http://127.0.0.1:$port/api/health" 2>/dev/null && return 0
+    sleep 1
+  done
+  return 1
+}
+
+cmd_create() {
+  local id name="" port="" adopt="" import="" json=0
+  id=$(need_id "${1:-}"); shift || true
+  while (($#)); do
+    case "$1" in
+      --name) name="$2"; shift 2 ;;
+      --port) port="$2"; shift 2 ;;
+      --adopt-env) adopt="$2"; shift 2 ;;
+      --import-db) import="$2"; shift 2 ;;
+      --json) json=1; shift ;;
+      *) die "create: unknown option $1" ;;
+    esac
+  done
+  local dir="$ROOT/$id"
+  [[ ! -e "$dir" ]] || die "tenant $id already exists ($dir)"
+  [[ -z "$adopt" || -r "$adopt" ]] || die "--adopt-env: can't read $adopt"
+  [[ -z "$import" || -r "$import" ]] || die "--import-db: can't read $import"
+  [[ "$name" != *$'\n'* ]] || die "--name must be one line"
+  if [[ -n "$port" ]]; then
+    [[ "$port" =~ ^[0-9]+$ ]] || die "--port must be a number"
+    used_ports | grep -qx "$port" && die "port $port is already used by another tenant"
+    ss -Hltn "sport = :$port" | grep -q . && die "port $port is in use"
+  else
+    port=$(pick_port)
+  fi
+
+  local token=""
+  [[ -n "$adopt" ]] && token=$(env_get "$adopt" CONTESTSCORE_API_TOKEN)
+  [[ -n "$token" ]] || token=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+
+  install -d -o contestscore -g contestscore -m 750 "$ROOT" "$dir"
+  install -d -o contestscore -g contestscore -m 750 "$dir/data"
+  {
+    echo "# contestscore tenant $id -- created $(date -u +%FT%TZ) by contestscore-tenant"
+    echo "CONTESTSCORE_TENANT=$id"
+    echo "CONTESTSCORE_TENANT_NAME=${name:-${id^^}}"
+    echo "HTTP_HOST=127.0.0.1"
+    echo "HTTP_PORT=$port"
+    echo "DB_PATH=$dir/data/qsos.db"
+    echo "HAMDATA_URL=$HAMDATA_URL_DEFAULT"
+    echo "CONTESTSCORE_API_TOKEN=$token"
+    if [[ -n "$adopt" ]]; then
+      echo "# carried over from $adopt"
+      grep -E '^(BRIDGE_[A-Z_]+|ANALYZE_[A-Z_]+|SOLAR_[A-Z_]+)=' "$adopt" || true
+    fi
+  } | install -o contestscore -g contestscore -m 600 /dev/stdin "$dir/tenant.env"
+
+  if [[ -n "$import" ]]; then
+    snapshot "$import" "$dir/data/qsos.db" || { rm -rf "$dir"; die "--import-db: snapshot of $import failed"; }
+  fi
+
+  systemctl enable --now "$(unit "$id")" >/dev/null 2>&1 || true
+  if ! wait_healthy "$port"; then
+    journalctl -u "$(unit "$id")" -n 20 --no-pager -o cat >&2 || true
+    die "tenant $id did not become healthy on :$port (left in place for debugging; see above)"
+  fi
+
+  local url="https://$id-score.$DOMAIN"
+  if ((json)); then
+    printf '{"id":"%s","port":%s,"url":"%s","token":"%s"}\n' "$id" "$port" "$url" "$token"
+  else
+    echo "tenant $id is up on 127.0.0.1:$port"
+    echo "  ContestPulse server_url: $url   (route: ops cfroutes, Section 23 Phase D)"
+    echo "  ContestPulse api_token:  $token"
+    echo "  shown once -- it's only stored in $dir/tenant.env"
+  fi
+}
+
+cmd_list() {
+  local f id
+  printf '%-10s %-6s %-9s %s\n' ID PORT STATE NAME
+  for f in "$ROOT"/*/tenant.env; do
+    [[ -f "$f" ]] || continue
+    id=$(env_get "$f" CONTESTSCORE_TENANT)
+    printf '%-10s %-6s %-9s %s\n' "$id" "$(env_get "$f" HTTP_PORT)" \
+      "$(systemctl is-active "$(unit "$id")" 2>/dev/null || true)" "$(env_get "$f" CONTESTSCORE_TENANT_NAME)"
+  done
+}
+
+cmd_show() {
+  local id; id=$(need_id "${1:-}")
+  [[ -f "$ROOT/$id/tenant.env" ]] || die "no tenant $id"
+  sed -E 's/^(CONTESTSCORE_API_TOKEN=).+/\1<redacted>/' "$ROOT/$id/tenant.env"
+  echo "state: $(systemctl is-active "$(unit "$id")" 2>/dev/null || true)"
+}
+
+cmd_suspend() { local id; id=$(need_id "${1:-}"); [[ -d "$ROOT/$id" ]] || die "no tenant $id"; systemctl disable --now "$(unit "$id")"; echo "tenant $id suspended (data kept)"; }
+cmd_resume()  { local id; id=$(need_id "${1:-}"); [[ -d "$ROOT/$id" ]] || die "no tenant $id"; systemctl enable --now "$(unit "$id")"; echo "tenant $id resumed"; }
+
+cmd_export() {
+  local id out; id=$(need_id "${1:-}"); out="${2:-}"
+  [[ -n "$out" ]] || die "export: need an output path"
+  [[ -f "$ROOT/$id/data/qsos.db" ]] || die "no database for tenant $id"
+  local tmp; tmp=$(sudo -u contestscore mktemp -p /tmp contestscore-export.XXXXXX)
+  snapshot "$ROOT/$id/data/qsos.db" "$tmp"
+  install -m 600 "$tmp" "$out"; rm -f "$tmp"
+  echo "exported tenant $id to $out"
+}
+
+cmd_delete() {
+  local id; id=$(need_id "${1:-}")
+  [[ "${2:-}" == "--confirm" && "${3:-}" == "$id" ]] || die "delete: repeat the id: delete $id --confirm $id"
+  [[ -d "$ROOT/$id" ]] || die "no tenant $id"
+  systemctl disable --now "$(unit "$id")" 2>/dev/null || true
+  install -d -o contestscore -g contestscore -m 750 "$ROOT/.deleted"
+  local dest="$ROOT/.deleted/$id-$(date -u +%Y%m%dT%H%M%SZ)"
+  mv "$ROOT/$id" "$dest"
+  echo "tenant $id deleted; data moved to $dest (remove it by hand when sure)"
+}
+
+case "${1:-}" in
+  create)  shift; cmd_create "$@" ;;
+  list)    cmd_list ;;
+  show)    shift; cmd_show "$@" ;;
+  suspend) shift; cmd_suspend "$@" ;;
+  resume)  shift; cmd_resume "$@" ;;
+  export)  shift; cmd_export "$@" ;;
+  delete)  shift; cmd_delete "$@" ;;
+  *) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

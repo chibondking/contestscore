@@ -605,6 +605,15 @@ push` to `main` is the entire release process for a deployment set up this
 way; `scripts/deploy.sh` triggers the same script manually, for deploying
 from a machine other than CI.
 
+**Hosting several clubs on one VPS.** Each club gets its own instance
+(`contestscore@<id>.service`, own database, port and token) in tenant mode,
+sharing one code checkout and one [hamdata](#hamdata-several-instances-on-one-box).
+Manage them with `sudo contestscore-tenant create <id> --name "..."` /
+`list` / `show` / `suspend` / `resume` / `export` / `delete` (installed by
+the deploy script from `deploy/contestscore-tenant`; run it with no
+arguments for help). Tenants open no UDP ports — data arrives only from
+ContestPulse over HTTPS.
+
 ## Admin page
 
 `public/admin.html` (linked from the dashboard footer) is a small UI for

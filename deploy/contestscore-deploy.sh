@@ -32,6 +32,18 @@ sudo install -o root -g root -m 755 \
   /opt/contestscore/app/deploy/contestscore-deploy.sh \
   /usr/local/bin/contestscore-deploy.sh
 
+# Hosted tenants (ops CLAUDE.md Section 23): the instance template and the
+# tool that manages them ship from the repo the same way this script does.
+sudo install -o root -g root -m 755 \
+  /opt/contestscore/app/deploy/contestscore-tenant \
+  /usr/local/sbin/contestscore-tenant
+if ! sudo cmp -s /opt/contestscore/app/deploy/contestscore@.service /etc/systemd/system/contestscore@.service; then
+  sudo install -o root -g root -m 644 \
+    /opt/contestscore/app/deploy/contestscore@.service \
+    /etc/systemd/system/contestscore@.service
+  sudo systemctl daemon-reload
+fi
+
 sudo -u contestscore bash -c '
   set -euo pipefail
   cd /opt/contestscore/app
@@ -55,8 +67,26 @@ if systemctl is-enabled --quiet hamdata 2>/dev/null; then
   sudo systemctl is-active --quiet hamdata
 fi
 
-sudo systemctl restart contestscore
-sleep 1
-sudo systemctl is-active --quiet contestscore
+# The single-install unit (a box that hasn't moved to tenants, or a Pi-style
+# setup) -- only if it's still enabled.
+if systemctl is-enabled --quiet contestscore 2>/dev/null; then
+  sudo systemctl restart contestscore
+  sleep 1
+  sudo systemctl is-active --quiet contestscore
+fi
+
+# Every RUNNING tenant instance. Suspended ones (stopped + disabled by
+# contestscore-tenant) stay down.
+mapfile -t tenants < <(systemctl list-units 'contestscore@*.service' --state=active --plain --no-legend | awk '{print $1}')
+for u in "${tenants[@]}"; do
+  sudo systemctl restart "$u"
+done
+if ((${#tenants[@]})); then
+  sleep 2
+  for u in "${tenants[@]}"; do
+    sudo systemctl is-active --quiet "$u" || { echo "deploy: $u failed to come back" >&2; exit 1; }
+  done
+  echo "Restarted ${#tenants[@]} tenant instance(s): ${tenants[*]}"
+fi
 
 echo "Deployed $(sudo -u contestscore git -C /opt/contestscore/app rev-parse --short HEAD)"

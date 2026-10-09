@@ -694,6 +694,18 @@ Everything about it lives there and is read from env per request:
   `HAMDATA_URL`, or with a malformed id.
 - The analyzer and ingest are unchanged: both gated by this instance's own
   `CONTESTSCORE_API_TOKEN`, which in tenant mode is the club's token.
+- **No UDP sockets** (`src/udp/index.js`): a tenant only receives
+  ContestPulse's authenticated HTTPS ingest. The handlers are still wired,
+  so ingest works; `getUdpListeners()` is null, which `/api/health` reads
+  as nothing-to-check. (An open UDP port on a VPS is an unauthenticated
+  way to inject QSOs, and tenants would collide on the same ports.)
+
+On the box, tenants are `contestscore@<id>.service` instances
+(`deploy/contestscore@.service`) of the one code checkout, each with
+`/opt/contestscore/tenants/<id>/{tenant.env,data/}`, managed only through
+`deploy/contestscore-tenant` (create/list/show/suspend/resume/export/
+delete; installed to `/usr/local/sbin` by the deploy script, which also
+restarts every running instance).
 
 ## hamdata (shared solar + lookup)
 
