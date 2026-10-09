@@ -205,6 +205,7 @@ contestscore/
       ingest.js             # POST /api/ingest/* (ContestPulse HTTP transport)
       analyze.js            # POST/GET/DELETE /api/analyze* (the log analyzer)
     app.js                  # Express setup, mounts routes, serves /analyze + /compare shells
+    env.js                  # loads <root>/.env at startup (never overrides the real env)
     server.js               # entry point: starts HTTP + UDP
   public/
     index.html              # dashboard shell
@@ -233,6 +234,8 @@ contestscore/
   migrations/               # numbered SQL migration files, run on startup
   deploy/                   # DEPLOY.md + the production deploy script + nginx/systemd units
   docs/
+    SETUP.md                # user-facing install guide (LAN / single VPS)
+    MULTI-TENANT.md         # user-facing guide: several clubs on one VPS, by hand
     ANALYZER.md             # the log analyzer, in full
   test/
     parsers/                # unit tests for parser logic
@@ -349,11 +352,13 @@ Core tables:
   wrong for any multi-band contest.
 - `settings` -- key/value config (contest name, operator, etc.)
 - `callsign_cache` -- lookup results (N1MM `<lookupinfo>` or HamQTH), keyed
-  by the suffix-stripped call; `source` says which. Wiped by `DELETE /api/db`.
+  by the suffix-stripped call; `source` says which. Kept ~6 months
+  (`src/lookup/ttl.js`); **not** wiped by `DELETE /api/db` -- cleared on its
+  own by `DELETE /api/lookup/cache`.
 - `solar_snapshots` -- one row per hamqsl.com fetch (~2-hourly): SFI / A /
   K / sunspots + `fetched_at`. Append-only, and **NOT** wiped by
   `DELETE /api/db` -- it's ambient data, and the history is what a future
-  rate-vs-conditions view of a from-live analysis will join against. Slow
+  rate-vs-conditions view of a from-live analysis will join against.
   **Never deleted** -- no age prune, no reset (CJ, 2026-10-09; enforced by
   `test/db/solarNeverDeleted.test.js`). A brand-new table, so
   `schema.sql` alone covers fresh + existing DBs; no migration file.
@@ -380,7 +385,13 @@ Schema lives in `src/db/schema.sql`. Migrations are numbered files in
 - Space weather (`solar`): `enabled`, `refreshMinutes` (default 120),
   no retention setting: solar history is kept forever -- see `src/solar/`
 
-Environment variables override config file. See `.env.example`.
+Environment variables override config file. See `.env.example`. A `.env`
+in the repo root is loaded at startup by `src/env.js` and never overrides
+a variable that's already set (systemd `EnvironmentFile`s win).
+
+**User docs**: `docs/SETUP.md` (LAN / single VPS) and `docs/MULTI-TENANT.md`
+(several clubs, by hand) are the user-facing guides. When you change
+setup, ports, paths or a tenant/hamdata command, update them too.
 
 ## Socket.io Events (server -> client)
 

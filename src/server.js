@@ -1,3 +1,5 @@
+// .env first: src/db reads DB_PATH as soon as it's required.
+const loadedFromEnvFile = require('./env').loadEnvFile();
 const { createServer } = require('http');
 const app = require('./app');
 const { initDb } = require('./db');
@@ -23,6 +25,7 @@ if (tenant && !process.env.CONTESTSCORE_API_TOKEN) {
   process.exit(1);
 }
 if (tenant) console.log(`tenant mode: ${tenant.call} (${tenant.name})`);
+if (loadedFromEnvFile.length) console.log(`.env: set ${loadedFromEnvFile.join(', ')}`);
 
 const port = process.env.HTTP_PORT || config.http.port;
 // Default 0.0.0.0 suits a LAN/Pi install reached directly by hostname; a

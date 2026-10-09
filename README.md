@@ -19,6 +19,22 @@ original Node-RED dashboard is still not a goal (no DX-cluster/RBN spot map,
 no streaming overlay). See `CLAUDE.md` for the full reasoning and the
 current N1MM wire-format notes.
 
+## Getting started
+
+**→ [docs/SETUP.md](docs/SETUP.md)** — step-by-step, two ways:
+
+- **On your LAN** (~10 min): a Raspberry Pi or any always-on machine in the
+  shack; loggers broadcast to it, everyone on the network watches. No
+  internet, no accounts, nothing else to run.
+- **Public, on a VPS** (~45 min): a scoreboard anyone can open, fed from
+  the shack by the small **ContestPulse bridge** over HTTPS.
+
+Hosting scoreboards for **several clubs** on one server is a separate,
+optional setup: [docs/MULTI-TENANT.md](docs/MULTI-TENANT.md).
+
+The rest of this README is reference: every page, setting, API and the
+logger-specific details.
+
 ## Screenshots
 
 Dashboard, Charts, and Stats, rendered with synthetic test data (`scripts/
@@ -36,7 +52,9 @@ sendTestPacket.js`), not a real contest:
 - N1MM+, [not1mm](https://github.com/mbridak/not1mm), or TR4W configured to
   broadcast UDP on the local network
 
-## Quick start
+## Quick start (development)
+
+New install? Use [docs/SETUP.md](docs/SETUP.md). For hacking on it:
 
 ```bash
 npm install
@@ -486,7 +504,10 @@ curl -X DELETE http://localhost:3000/api/db -H "X-Confirm: yes"
 | `CONTESTSCORE_TENANT`      | — (unset = normal install). A callsign-like id (`k9ct`) makes this a hosted club scoreboard: no UDP, and it refuses to start without `HAMDATA_URL` and `CONTESTSCORE_API_TOKEN` (the club's token, which guards its Admin page). |
 | `CONTESTSCORE_TENANT_NAME` | — display name for operators' tooling (`contestscore-tenant list`, the ops dashboard); the page header stays "ContestPulse" |
 
-Copy `.env.example` to `.env` and fill in any values you want to override.
+Copy `.env.example` to `.env` (next to `package.json`) and fill in any
+values you want to override; it's read at startup (`src/env.js`). Anything
+already set in the environment — e.g. a systemd `EnvironmentFile`, which
+VPS installs and hosted tenants use — wins over `.env`.
 
 ## Callsign lookup
 
@@ -527,7 +548,8 @@ chart contest rate against conditions for a from-live analysis. Set
 
 ## hamdata (several instances on one box)
 
-If you run **one** contestscore, skip this. hamdata is an optional shared
+If you run **one** contestscore, skip this (setup steps for the
+multi-club case: [docs/MULTI-TENANT.md](docs/MULTI-TENANT.md)). hamdata is an optional shared
 service for a server hosting several instances (one per club/callsign): it
 polls hamqsl.com once and does every callsign lookup with one set of HamQTH
 credentials and one shared cache, instead of each instance doing both
@@ -611,7 +633,8 @@ push` to `main` is the entire release process for a deployment set up this
 way; `scripts/deploy.sh` triggers the same script manually, for deploying
 from a machine other than CI.
 
-**Hosting several clubs on one VPS.** Each club gets its own instance
+**Hosting several clubs on one VPS** — full guide:
+[docs/MULTI-TENANT.md](docs/MULTI-TENANT.md). Each club gets its own instance
 (`contestscore@<id>.service`, own database, port and token) in tenant mode,
 sharing one code checkout and one [hamdata](#hamdata-several-instances-on-one-box).
 Manage them with `sudo contestscore-tenant create <id> --name "..."` /
