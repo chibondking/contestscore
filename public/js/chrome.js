@@ -60,6 +60,24 @@ const THEME_KEY = 'contestpulse_theme';
         <span class="theme-toggle__track" aria-hidden="true"><span class="theme-toggle__thumb"></span></span>
         <span>Light Mode</span>
       </label>`);
+    // Hosted (tenant) scoreboard: show whose it is and drop the Admin link
+    // (the server 404s it anyway -- src/tenant.js). Async on purpose: this
+    // file runs synchronously before Alpine, so it can't wait on a fetch;
+    // the brief default header is fine, and a standalone install (no
+    // `tenant` in /api/features) never changes at all.
+    fetch('/api/features')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((f) => {
+        const t = f && f.tenant;
+        if (!t) return;
+        const h1 = header.querySelector('h1');
+        if (h1) h1.textContent = t.name;
+        const admin = header.querySelector('a.nav__link[href="/admin.html"]');
+        if (admin) admin.remove();
+        document.title = document.title.replace(/^ContestPulse/, t.name);
+      })
+      .catch(() => { /* keep the default header */ });
+
     header.querySelector('.theme-toggle__input').addEventListener('change', (e) => {
       try { localStorage.setItem(THEME_KEY, e.target.checked ? 'light' : 'dark'); } catch { /* ignore */ }
       // Chart.js canvases (charts.js/dashboard.js) pick their tick/grid

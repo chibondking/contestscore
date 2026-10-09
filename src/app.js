@@ -3,9 +3,13 @@ const path = require('path');
 const apiRouter = require('./routes/api');
 const ingestRouter = require('./routes/ingest');
 const analyzeRouter = require('./routes/analyze');
+const { tenantGuard } = require('./tenant');
 
 const app = express();
 
+// Tenant mode's 404s (src/tenant.js) -- first, so neither express.static
+// (admin.html) nor a router can answer a blocked path.
+app.use(tenantGuard);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 

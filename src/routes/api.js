@@ -15,6 +15,7 @@ const { resolveSolarConfig, latestSolar } = require('../solar');
 const { freqToBand } = require('../parsers/util');
 const { getDb } = require('../db');
 const { resolveLatLonEnriched } = require('../analyze/geo');
+const { getTenant } = require('../tenant');
 
 const router = Router();
 
@@ -90,6 +91,7 @@ router.get('/features', (req, res) => {
   res.json({
     lookup: { provider: lk.enabled ? lk.provider : 'none', enabled: lk.enabled },
     solar: { enabled: resolveSolarConfig().enabled },
+    tenant: (() => { try { return getTenant(); } catch { return null; } })(),
   });
 });
 

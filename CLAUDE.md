@@ -678,6 +678,23 @@ an arbitrary past date.
 Dashboard header only; `SOLAR_ENABLED=false` disables the poll and the
 chip. The analyzer never triggers a fetch.
 
+## Tenant mode (hosted club scoreboards)
+
+`CONTESTSCORE_TENANT=<call>` (+ optional `CONTESTSCORE_TENANT_NAME`) marks
+an instance as one club's scoreboard on a shared VPS -- see `src/tenant.js`.
+Everything about it lives there and is read from env per request:
+- `tenantGuard` (first middleware in `app.js`, ahead of `express.static`)
+  404s the admin page (`/admin.html`, `/admin`, `/js/admin.js`),
+  `DELETE /api/db` and `POST /api/lookup/{pause,resume}`. Add a route to
+  `BLOCKED` there, never by sprinkling checks through the routers.
+- `GET /api/features` gains `tenant: { call, name }` (null standalone);
+  `public/js/chrome.js` uses it to retitle the header/tab and drop the
+  Admin nav link -- asynchronously, so a standalone page never changes.
+- `server.js` exits at startup if tenant mode is set without
+  `HAMDATA_URL`, or with a malformed id.
+- The analyzer and ingest are unchanged: both gated by this instance's own
+  `CONTESTSCORE_API_TOKEN`, which in tenant mode is the club's token.
+
 ## hamdata (shared solar + lookup)
 
 `hamdata/` is a small Express service for a box running **several**
