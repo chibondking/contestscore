@@ -87,11 +87,16 @@
 
       <div class="score-row" style="margin-bottom:1rem">
         <div class="metric">
-          <span class="metric__value" x-text="!lookupStatus.enabled ? 'Off' : (lookupStatus.paused ? 'Paused' : (lookupStatus.upstream_paused ? 'Stopped' : 'Running'))"></span>
+          <span class="metric__value" x-text="!lookupStatus.enabled || lookupStatus.upstream_enabled === false ? 'Off' : (lookupStatus.paused ? 'Paused' : (lookupStatus.upstream_paused ? 'Stopped' : 'Running'))"></span>
           <span class="metric__label" x-text="'Status · ' + (lookupStatus.provider || 'none')"></span>
         </div>
       </div>
 
+      <p class="empty" x-show="lookupStatus.upstream_enabled === false" style="margin-bottom:1rem">
+        This server has no callsign-lookup account configured, so new
+        callsigns aren't looked up. Ask the server operator if you'd like
+        lookups.
+      </p>
       <p class="empty" x-show="lookupStatus.upstream_paused" style="margin-bottom:1rem">
         Lookups are stopped by the server operator for every scoreboard on
         this server. Callsigns already in the cache still resolve; new ones

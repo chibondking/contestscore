@@ -722,6 +722,9 @@ Everything about it lives there and is read from env per request:
   as nothing-to-check. (An open UDP port on a VPS is an unauthenticated
   way to inject QSOs, and tenants would collide on the same ports.)
 
+`src/env.js` loads **no** `.env` in tenant mode -- every tenant shares the
+checkout, so a stray `.env` would otherwise apply to all of them.
+
 On the box, tenants are `contestscore@<id>.service` instances
 (`deploy/contestscore@.service`) of the one code checkout, each with
 `/opt/contestscore/tenants/<id>/{tenant.env,data/}`, managed only through
@@ -765,7 +768,12 @@ can't drift:
 
 Instance side (`src/hamdata/client.js`), all switched on by `HAMDATA_URL`:
 - **Lookup**: `resolveLookupConfig` returns provider `hamdata` (wins over
-  HamQTH creds). The client has the same `lookup(call)` shape as the HamQTH
+  HamQTH creds) -- unless the *environment* says `LOOKUP_PROVIDER=none`,
+  which turns one tenant's lookups off (config/default.json's `none` is
+  only a default and doesn't count). A hamdata with no HamQTH account
+  answers misses `503 {code:'disabled'}` -> `HAMDATA_DISABLED`, logged
+  once like `HAMDATA_PAUSED`; `/api/lookup/status` reports
+  `upstream_enabled: false` and the Admin page shows Off. The client has the same `lookup(call)` shape as the HamQTH
   client, so the queue / pacing / backoff / pause in `src/lookup/index.js`
   is untouched. Results keep hamdata's `source: 'hamqth'`, so the
   instance's own `callsign_cache` and the busts panel behave identically.

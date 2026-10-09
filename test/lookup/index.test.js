@@ -313,3 +313,35 @@ describe('lookup cache freshness + persisted pause', () => {
     assert.equal(c.getStatus().paused, false);
   });
 });
+
+describe('lookup provider resolution with hamdata (v1.6.1)', () => {
+  it('an explicit LOOKUP_PROVIDER=none turns lookups off even with HAMDATA_URL', () => {
+    const r = resolveLookupConfig({ HAMDATA_URL: 'http://127.0.0.1:3100', LOOKUP_PROVIDER: 'none' }, { lookup: { provider: 'none' } });
+    assert.equal(r.enabled, false);
+    assert.equal(r.provider, 'none');
+  });
+
+  it("config's default 'none' does not override hamdata", () => {
+    const r = resolveLookupConfig({ HAMDATA_URL: 'http://127.0.0.1:3100' }, { lookup: { provider: 'none' } });
+    assert.equal(r.provider, 'hamdata');
+  });
+
+  it('a hamdata with no account is logged once, not once per call', async () => {
+    const warn = console.warn; const error = console.error;
+    const warns = []; const errors = [];
+    console.warn = (m) => warns.push(m); console.error = (m) => errors.push(m);
+    try {
+      const client = { lookup: async () => { throw Object.assign(new Error('503'), { code: 'HAMDATA_DISABLED' }); } };
+      const svc = createLookupService({
+        emitter: new EventEmitter(), env: { HAMDATA_URL: 'http://127.0.0.1:3100' }, config: { lookup: {} },
+        deps: { ...NOOP_DEPS, client },
+      });
+      for (const c of ['K1AAA', 'K1BBB', 'K1CCC']) svc.enqueue(c);
+      await svc.idle();
+    } finally {
+      console.warn = warn; console.error = error;
+    }
+    assert.equal(errors.length, 0);
+    assert.equal(warns.filter((m) => /no lookup account/.test(m)).length, 1);
+  });
+});

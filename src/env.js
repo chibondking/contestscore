@@ -33,7 +33,13 @@ function parseEnv(text) {
 }
 
 // Returns the names it set (for a startup log line).
+//
+// Skipped entirely in tenant mode (CONTESTSCORE_TENANT, set by the tenant's
+// systemd EnvironmentFile before node starts): every tenant shares one
+// checkout, and tenant.env only sets a handful of variables -- anything
+// else in a stray .env would silently apply to every hosted club.
 function loadEnvFile(file = DEFAULT_PATH, env = process.env) {
+  if (env.CONTESTSCORE_TENANT) return [];
   let text;
   try { text = fs.readFileSync(file, 'utf8'); } catch { return []; }
   const set = [];

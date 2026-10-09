@@ -87,7 +87,9 @@ EOF
 sudo chmod 600 /opt/contestscore/hamdata/hamdata.env
 ```
 
-(Leave out the three lookup lines if you don't want callsign lookups.)
+(Leave out the three lookup lines if you don't want callsign lookups:
+every club's Admin page then shows lookups as **Off**, and nothing is
+looked up.)
 
 ```bash
 sudo cp /opt/contestscore/app/deploy/hamdata.service /etc/systemd/system/
@@ -98,8 +100,16 @@ sudo hamdata-ctl status          # "status": "ok", solar.updated filled in withi
 
 ## 3. Create a club
 
+Tell the tool your domain once, so it can print each club's address:
+
 ```bash
-sudo TENANT_DOMAIN=example.org contestscore-tenant create k9ct --name "K9CT Contest Club"
+echo example.org | sudo tee /opt/contestscore/tenants/.domain
+```
+
+(or prefix a single command with `TENANT_DOMAIN=example.org`). Then:
+
+```bash
+sudo contestscore-tenant create K9CT --name "K9CT Contest Club"
 ```
 
 ```
@@ -109,7 +119,9 @@ tenant k9ct is up on 127.0.0.1:3200
   shown once -- it's only stored in /opt/contestscore/tenants/k9ct/tenant.env
 ```
 
-- The id is 3–10 lower-case letters/digits, usually the callsign.
+- The id is 3–10 letters/digits, usually the callsign. Capitals are fine;
+  it's stored lower-case (`k9ct`), which is what every other command and
+  the hostname use.
 - The port comes from 3200–3299 automatically (`--port N` to choose).
 - `TENANT_DOMAIN` only affects the URL it prints for you.
 - Lost the token? `sudo contestscore-tenant token k9ct`.
@@ -175,6 +187,11 @@ that folder yourself when you're sure, and remove the club's hostname from
 your reverse proxy.
 
 ### Your controls over lookups
+
+A club that doesn't want lookups at all can switch them off on its own
+Admin page. To turn them off for one club from the server side instead,
+add `LOOKUP_PROVIDER=none` to its `tenant.env` and
+`sudo contestscore-tenant restart <id>`.
 
 Callsign lookups go out under **your** HamQTH account, so you can stop them
 for every club at once:

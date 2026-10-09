@@ -71,7 +71,7 @@ function createApp({ broker, solar, env = process.env }) {
     try {
       res.json(await broker.get(call));
     } catch (err) {
-      res.status(err.status || 502).json({ error: err.message, ...(err.code === 'paused' ? { code: 'paused' } : {}) });
+      res.status(err.status || 502).json({ error: err.message, ...(err.code === 'paused' || err.code === 'disabled' ? { code: err.code } : {}) });
     }
   });
 

@@ -63,7 +63,7 @@ function createLookupBroker({
     const hit = fresh(call);
     if (hit) { stats.hits += 1; return { ...hit, call, source: SOURCE }; }
 
-    if (!client) throw Object.assign(new Error('lookup not configured'), { status: 503 });
+    if (!client) throw Object.assign(new Error('lookup not configured (no HamQTH account on this server)'), { status: 503, code: 'disabled' });
     if (paused) throw Object.assign(new Error('lookups stopped by the server operator (cached calls only)'), { status: 503, code: 'paused' });
 
     if (inFlight.has(call)) return inFlight.get(call);

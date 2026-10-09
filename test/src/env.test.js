@@ -28,3 +28,14 @@ describe('.env loader', () => {
     assert.deepEqual(loadEnvFile('/nonexistent/.env', {}), []);
   });
 });
+
+describe('.env loader in tenant mode', () => {
+  it('loads nothing for a hosted tenant (shared checkout)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'envtest-'));
+    const f = path.join(dir, '.env');
+    fs.writeFileSync(f, 'SOLAR_ENABLED=false\n');
+    const env = { CONTESTSCORE_TENANT: 'k9ct' };
+    assert.deepEqual(loadEnvFile(f, env), []);
+    assert.equal(env.SOLAR_ENABLED, undefined);
+  });
+});

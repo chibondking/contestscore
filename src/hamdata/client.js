@@ -31,6 +31,7 @@ function createHamdataClient({ url, fetchImpl, timeoutMs = TIMEOUT_MS } = {}) {
       // The box operator stopped all outgoing HamQTH lookups (hamdata-ctl
       // stop-lookups): not a fault, so callers can say so instead of erroring.
       if (body.code === 'paused') err.code = 'HAMDATA_PAUSED';
+      if (body.code === 'disabled') err.code = 'HAMDATA_DISABLED'; // no HamQTH account configured
       throw err;
     }
     return res.json();

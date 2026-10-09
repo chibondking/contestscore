@@ -19,7 +19,8 @@
 #                                              stop, disable, move the dir to
 #                                              tenants/.deleted/<id>-<ts> (not rm)
 #
-# <id>: 3-10 lower-case letters/digits (a callsign, usually). Each tenant
+# <id>: 3-10 letters/digits (a callsign, usually; upper case is fine, it's
+# lower-cased). Each tenant
 # gets /opt/contestscore/tenants/<id>/{tenant.env,data/}, a loopback HTTP
 # port (3200-3299 unless --port), its own ingest/analyzer token, and
 # CONTESTSCORE_TENANT=<id> (src/tenant.js: admin routes off, no UDP,
@@ -40,15 +41,27 @@ APP=/opt/contestscore/app
 HAMDATA_URL_DEFAULT=http://127.0.0.1:3100
 PORT_MIN=3200
 PORT_MAX=3299
-DOMAIN="${TENANT_DOMAIN:-wt2p.us}"
+# The domain the printed ContestPulse URL uses (<id>-score.<domain>): the
+# TENANT_DOMAIN environment variable, else the one line in $ROOT/.domain.
+# Read here rather than passed in, because sudo and systemd-run (the ops
+# agent's path, contestscore-tenant-agent) both drop the caller's env.
+# (Careful with set -e here: a failing command substitution in an
+# assignment would end the whole script -- hence the explicit checks.)
+DOMAIN="${TENANT_DOMAIN:-}"
+if [[ -z "$DOMAIN" && -r "$ROOT/.domain" ]]; then
+  DOMAIN=$(tr -d '[:space:]' < "$ROOT/.domain") || DOMAIN=""
+fi
 
 die() { echo "contestscore-tenant: $*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || die "run as root (sudo)"
 
 valid_id() { [[ "$1" =~ ^[a-z0-9]{3,10}$ ]]; }
 need_id() {
+  # Callsigns are usually typed in capitals; ids (unit names, hostnames,
+  # directories) are always lower-case, so normalize instead of refusing.
   local id="${1:-}"
-  valid_id "$id" || die "invalid tenant id '${id}' (3-10 lower-case letters/digits)"
+  id="${id,,}"
+  valid_id "$id" || die "invalid tenant id '${1:-}' (3-10 letters/digits)"
   printf '%s' "$id"
 }
 unit() { printf 'contestscore@%s.service' "$1"; }
@@ -152,12 +165,17 @@ cmd_create() {
     die "tenant $id did not become healthy on :$port (left in place for debugging; see above)"
   fi
 
-  local url="https://$id-score.$DOMAIN"
+  local url=""
+  [[ -n "$DOMAIN" ]] && url="https://$id-score.$DOMAIN"
   if ((json)); then
     printf '{"id":"%s","port":%s,"url":"%s","token":"%s"}\n' "$id" "$port" "$url" "$token"
   else
     echo "tenant $id is up on 127.0.0.1:$port"
-    echo "  ContestPulse server_url: $url   (route: ops cfroutes, Section 23 Phase D)"
+    if [[ -n "$url" ]]; then
+      echo "  ContestPulse server_url: $url   (once that hostname routes to 127.0.0.1:$port)"
+    else
+      echo "  ContestPulse server_url: https://$id-score.<your domain>   (set TENANT_DOMAIN, or put the domain in $ROOT/.domain, to print it)"
+    fi
     echo "  ContestPulse api_token:  $token"
     echo "  shown once -- it's only stored in $dir/tenant.env"
   fi
@@ -224,7 +242,10 @@ cmd_export() {
   [[ -n "$out" ]] || die "export: need an output path"
   [[ -f "$ROOT/$id/data/qsos.db" ]] || die "no database for tenant $id"
   local tmp; tmp=$(sudo -u contestscore mktemp -p /tmp contestscore-export.XXXXXX)
-  snapshot "$ROOT/$id/data/qsos.db" "$tmp"
+  if ! snapshot "$ROOT/$id/data/qsos.db" "$tmp"; then
+    rm -f "$tmp"
+    die "export of tenant $id failed (nothing written to $out)"
+  fi
   install -m 600 "$tmp" "$out"; rm -f "$tmp"
   echo "exported tenant $id to $out"
 }

@@ -93,7 +93,7 @@ describe('hamdata lookup broker', () => {
     await broker.get('NW8S');
 
     const off = setup({ lookup: null }).broker;
-    await assert.rejects(off.get('K9CT'), (e) => e.status === 503);
+    await assert.rejects(off.get('K9CT'), (e) => e.status === 503 && e.code === 'disabled');
     assert.equal(off.getStatus().enabled, false);
   });
 

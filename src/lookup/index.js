@@ -52,6 +52,10 @@ function stripSuffix(raw) {
 function resolveLookupConfig(env = process.env, config = defaultConfig) {
   const lk = config.lookup || {};
   const prg = lk.prg || 'contestscore';
+  // An explicit LOOKUP_PROVIDER=none in the environment turns lookups off
+  // even with hamdata (a hosted club that doesn't want them). Only the env
+  // var counts here -- config/default.json's 'none' is just the default.
+  if (String(env.LOOKUP_PROVIDER || '').toLowerCase() === 'none') return { provider: 'none', enabled: false, prg };
   const hamdataUrl = resolveHamdataUrl(env, config);
   if (hamdataUrl) return { provider: 'hamdata', enabled: true, prg, url: hamdataUrl };
 
@@ -133,10 +137,19 @@ function createLookupService({ emitter, env, config, deps = {} } = {}) {
         backoffUntil = 0;
         saidUpstreamPaused = false;
       } catch (err) {
-        // The box operator stopping lookups for everyone isn't a fault --
-        // say so once, not once per call.
-        if (err.code !== 'HAMDATA_PAUSED') console.error(`lookup ${call}: ${err.message}`);
-        else if (!saidUpstreamPaused) { console.warn('lookup: stopped upstream by the server operator -- cached calls only'); saidUpstreamPaused = true; }
+        // The box operator stopping lookups for everyone, or hamdata having
+        // no HamQTH account at all, isn't a fault -- say so once, not once
+        // per call.
+        if (err.code === 'HAMDATA_PAUSED' || err.code === 'HAMDATA_DISABLED') {
+          if (!saidUpstreamPaused) {
+            console.warn(err.code === 'HAMDATA_PAUSED'
+              ? 'lookup: stopped upstream by the server operator -- cached calls only'
+              : 'lookup: the shared hamdata service has no lookup account -- cached calls only');
+            saidUpstreamPaused = true;
+          }
+        } else {
+          console.error(`lookup ${call}: ${err.message}`);
+        }
         backoffMs = backoffMs ? Math.min(backoffMs * 2, BACKOFF_MAX_MS) : BACKOFF_START_MS;
         backoffUntil = Date.now() + backoffMs;
         // Drop the call; a later contactreplace / re-log re-enqueues it.

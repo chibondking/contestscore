@@ -131,8 +131,11 @@ router.get('/lookup/status', async (req, res) => {
     try {
       const up = await createHamdataClient({ url: lk.url, timeoutMs: 2000 }).lookupStatus();
       status.upstream_paused = Boolean(up.paused);
+      // false = hamdata has no HamQTH account, so nothing new can be looked up
+      status.upstream_enabled = up.enabled !== false;
     } catch {
       status.upstream_paused = null; // hamdata unreachable -- unknown
+      status.upstream_enabled = null;
     }
   }
   res.json(status);

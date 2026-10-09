@@ -49,6 +49,15 @@ if ! sudo cmp -s /opt/contestscore/app/deploy/contestscore@.service /etc/systemd
     /etc/systemd/system/contestscore@.service
   sudo systemctl daemon-reload
 fi
+# Same for hamdata's unit -- but only once hamdata is installed at all: a
+# box that never set it up must not suddenly grow one.
+if [[ -f /etc/systemd/system/hamdata.service ]] \
+   && ! sudo cmp -s /opt/contestscore/app/deploy/hamdata.service /etc/systemd/system/hamdata.service; then
+  sudo install -o root -g root -m 644 \
+    /opt/contestscore/app/deploy/hamdata.service \
+    /etc/systemd/system/hamdata.service
+  sudo systemctl daemon-reload
+fi
 
 sudo -u contestscore bash -c '
   set -euo pipefail
@@ -70,7 +79,8 @@ sudo -u contestscore bash -c '
 if systemctl is-enabled --quiet hamdata 2>/dev/null; then
   sudo systemctl restart hamdata
   sleep 1
-  sudo systemctl is-active --quiet hamdata
+  sudo systemctl is-active --quiet hamdata \
+    || { echo "deploy: hamdata failed to come back -- see: journalctl -u hamdata -n 50" >&2; exit 1; }
 fi
 
 # The single-install unit (a box that hasn't moved to tenants, or a Pi-style
@@ -78,7 +88,8 @@ fi
 if systemctl is-enabled --quiet contestscore 2>/dev/null; then
   sudo systemctl restart contestscore
   sleep 1
-  sudo systemctl is-active --quiet contestscore
+  sudo systemctl is-active --quiet contestscore \
+    || { echo "deploy: contestscore failed to come back -- see: journalctl -u contestscore -n 50" >&2; exit 1; }
 fi
 
 # Every RUNNING tenant instance. Suspended ones (stopped + disabled by
