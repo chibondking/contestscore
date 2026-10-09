@@ -687,6 +687,16 @@ exactly the traffic worth watching. Handy for confirming N1MM is actually
 broadcasting something for a given log entry at all — a WAE QTC, say —
 not just whether an already-received packet made it upstream.
 
+**QSOs aren't lost when the server blips.** If the scoreboard server is
+restarting or unreachable (a deploy, a VPS reboot, a network drop),
+ContestPulse holds every contact packet — QSOs, edits, deletes — in memory,
+in order, and keeps retrying until the server is back, then sends the
+backlog. Its window says so (`holding QSOs in memory…`, then `server
+reachable again … sending N held packet(s)`). Radio and score aren't held:
+each is a snapshot the next broadcast replaces. Held packets live in memory
+only, so restarting ContestPulse itself during an outage loses them; the
+hold is capped at 20,000 packets (~10,000 QSOs).
+
 Its HTTP client (`contestpulse/httpclient.go`) uses a short
 `IdleConnTimeout` and retries once on a fresh connection after any
 transport error, so a keep-alive connection the reverse-proxy/tunnel

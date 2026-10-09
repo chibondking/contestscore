@@ -50,7 +50,10 @@ func main() {
 	}
 
 	base := strings.TrimRight(cfg.ServerURL, "/") + "/api/ingest"
-	contactRelay := newRelay("contact", cfg.ContactPort, base+"/contact", cfg.APIToken)
+	// Contact traffic (QSOs, edits, deletes) is held until the server
+	// takes it, so a server restart or a network blip doesn't lose QSOs --
+	// see hold.go. Radio/score are snapshots and don't need it.
+	contactRelay := newRelay("contact", cfg.ContactPort, base+"/contact", cfg.APIToken).holdPackets()
 	contactRelay.logPackets = *cfg.LogContactPackets
 	relays := []*relay{
 		newRelay("radio", cfg.RadioPort, base+"/radio", cfg.APIToken),

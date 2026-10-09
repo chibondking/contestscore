@@ -124,6 +124,17 @@ server-side, in `src/parsers/`, via the same functions the UDP listener path
 uses. contestscore's ingest API never accepts unauthenticated UDP-shaped
 traffic directly; the VPS never talks raw UDP to the internet.
 
+The **contact relay holds** (`contestpulse/hold.go`, v1.8.0): every
+contact-port packet goes into an in-memory FIFO and the oldest is retried
+with backoff (1s doubling to 30s) until the server accepts it -- through
+transport errors, 5xx (Cloudflare answers 502 while the origin restarts),
+408/429 and 401/403 (a token mismatch mid-redeploy). Other 4xx (a packet
+the server will never take) is dropped so it can't block the line. Order is
+preserved, so an edit/delete never overtakes its QSO, and resending is safe
+because the server upserts by N1MM's `<ID>`. Radio/score keep the old
+16-deep drop-oldest queue (snapshots; replaying stale ones is noise).
+Memory only; capped at 20,000 packets.
+
 ContestPulse also sends a heartbeat (`POST /api/ingest/heartbeat`, default
 every 10s, configurable) independent of whatever N1MM traffic is or isn't
 flowing -- Contact/Score packets only happen when the contest produces

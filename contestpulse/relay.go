@@ -63,6 +63,13 @@ type relay struct {
 	// per forwardQueueDepth; run() never blocks writing to it.
 	packets chan []byte
 
+	// hold, when set (the contact relay -- see hold.go), replaces packets:
+	// every datagram is held in memory, in order, until the server accepts
+	// it, instead of being dropped after one failed try. nil = the
+	// snapshot-style relays (radio, score), which keep the small
+	// drop-oldest queue above.
+	hold *heldQueue
+
 	mu   sync.Mutex
 	conn net.PacketConn
 }
@@ -78,15 +85,24 @@ func newRelay(label string, port int, targetURL, apiToken string) *relay {
 	}
 }
 
+// holdPackets switches this relay to hold-until-delivered (hold.go). Call
+// before run().
+func (r *relay) holdPackets() *relay {
+	r.hold = newHeldQueue()
+	return r
+}
+
 // forward posts one datagram's bytes upstream. Split out from run() so a
 // test can drive it directly against an httptest.Server, without a real UDP
 // socket in the loop.
 //
 // A transport error (no HTTP response came back at all -- timeout, reset,
-// connection refused) gets one retry after dropping idle connections, so a
-// single half-open keep-alive socket heals itself instead of wedging every
-// subsequent post. An actual HTTP response, even a 4xx/5xx, is not retried:
-// the pipe works, the server just said no.
+// connection refused) gets one immediate retry after dropping idle
+// connections, so a single half-open keep-alive socket heals itself
+// instead of wedging every subsequent post. An actual HTTP response, even
+// a 4xx/5xx, is not retried here: the pipe works, the server just said no.
+// Whether to try again *later* is the caller's call -- the contact relay's
+// holdForwarder keeps retrying (hold.go); radio/score don't.
 //
 // Wrapped in watchDo (httpclient.go) so a call that runs unexpectedly long
 // -- past what the client's own timeout budget should ever allow -- leaves
@@ -118,7 +134,7 @@ func (r *relay) postOnce(packet []byte) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("%s rejected: HTTP %d", r.targetURL, resp.StatusCode)
+		return &httpStatusError{url: r.targetURL, code: resp.StatusCode}
 	}
 	return nil
 }
@@ -165,12 +181,24 @@ func (r *relay) run() {
 	r.conn = conn
 	r.mu.Unlock()
 
-	go r.forwarder()
+	if r.hold != nil {
+		go r.holdForwarder()
+	} else {
+		go r.forwarder()
+	}
 
-	log.Printf("[%s :%d] relaying to %s", r.label, r.port, r.targetURL)
+	held := ""
+	if r.hold != nil {
+		held = " (holds QSOs in memory if the server is unreachable)"
+	}
+	log.Printf("[%s :%d] relaying to %s%s", r.label, r.port, r.targetURL, held)
 	r.readLoop(conn)
 	conn.Close()
-	close(r.packets) // lets forwarder() drain the rest and exit
+	if r.hold != nil {
+		r.hold.close()
+	} else {
+		close(r.packets) // lets forwarder() drain the rest and exit
+	}
 }
 
 // readLoop reads datagrams off conn and queues them for forwarder() until
@@ -224,6 +252,10 @@ func (r *relay) readLoop(conn net.PacketConn) {
 // another goroutine between them; worst case is one extra retry of the
 // same drop-and-insert, never a block.
 func (r *relay) enqueue(packet []byte) {
+	if r.hold != nil {
+		r.hold.push(packet) // never blocks; see hold.go
+		return
+	}
 	select {
 	case r.packets <- packet:
 		return

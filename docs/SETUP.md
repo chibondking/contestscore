@@ -208,7 +208,9 @@ serve HTTPS (steps below cover Caddy, nginx, or a Cloudflare Tunnel).
    N1MM at the bridge's machine exactly as in [section A, step 2](#a-on-your-lan).
 
    The dashboard shows the bridge as **realtime**, **stale** or
-   **offline**, so you can tell a quiet band from a dead link.
+   **offline**, so you can tell a quiet band from a dead link. If the
+   server is briefly unreachable (a restart, a network drop), the bridge
+   holds your QSOs and sends them as soon as it's back — leave it running.
 
 ### Keeping it updated
 
