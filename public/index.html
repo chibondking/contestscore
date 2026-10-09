@@ -349,7 +349,7 @@
   </main>
 
   <footer class="footer">
-    <span x-show="version.deployedAt" x-text="'deployed ' + formatDeployTime(version.deployedAt) + (version.commit ? ' (' + version.commit + ')' : '')"></span>
+    <span x-show="version.deployedAt" x-text="'deployed ' + formatDeployTime(version.deployedAt) + (version.commit ? ' (' + version.commit + ')' : '') + (tenantLabel() ? ' · ' + tenantLabel() : '')"></span>
   </footer>
 
   <!-- Not type="module": dashboard() must land on the global scope for

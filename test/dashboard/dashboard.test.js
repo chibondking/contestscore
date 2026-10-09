@@ -314,3 +314,25 @@ describe('Score card: delayed score source (DXLog)', () => {
   });
 });
 
+
+describe('tenantLabel (footer)', () => {
+  it('is empty on a standalone install', () => {
+    const d = dashboard();
+    d.features = { lookup: {}, solar: {}, tenant: null };
+    assert.equal(d.tenantLabel('scoreboard.example.org'), '');
+    d.features = {};
+    assert.equal(d.tenantLabel('k9ct-score.wt2p.us'), '');
+  });
+
+  it("is the hostname's first label on the club's own hostname", () => {
+    const d = dashboard();
+    d.features = { tenant: { call: 'K9CT', name: 'K9CT Club' } };
+    assert.equal(d.tenantLabel('k9ct-score.wt2p.us'), 'k9ct-score');
+  });
+
+  it('names the tenant on an alias hostname', () => {
+    const d = dashboard();
+    d.features = { tenant: { call: 'WT2P', name: 'WT2P' } };
+    assert.equal(d.tenantLabel('scoreboard.wt2p.us'), 'tenant wt2p');
+  });
+});

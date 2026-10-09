@@ -436,6 +436,20 @@ function dashboard() {
       return iso ? new Date(iso).toLocaleString() : '';
     },
 
+    // Footer label for a hosted (tenant) scoreboard, next to the deploy
+    // info -- '' on a standalone install, so nothing shows there. On the
+    // club's own hostname it's that hostname's first label ("k9ct-score");
+    // on an alias like scoreboard.wt2p.us it's "tenant wt2p". The app
+    // doesn't know the hostname suffix (routing config), so it reads the
+    // label rather than building one.
+    tenantLabel(hostname = (typeof location !== 'undefined' ? location.hostname : '')) {
+      const t = this.features && this.features.tenant;
+      if (!t || !t.call) return '';
+      const id = String(t.call).toLowerCase();
+      const label = String(hostname || '').toLowerCase().split('.')[0];
+      return label.startsWith(id) ? label : `tenant ${id}`;
+    },
+
     // Tally of qsos by continent (N1MM's own 2-letter codes: NA/SA/EU/AS/
     // AF/OC/AN). Computed client-side from the already-loaded qsos array
     // rather than a new backend endpoint -- the full log is already in
