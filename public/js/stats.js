@@ -24,6 +24,11 @@ function stats() {
     // all the socket/poll wiring since an uploaded log never changes.
     logId: null,
     logMeta: null,
+    // The station's total score for the At a Glance card (what goes on
+    // 3830): N1MM's own latest Score broadcast when live, the log's claimed
+    // score (Cabrillo CLAIMED-SCORE, or the N1MM score captured by a
+    // from-live snapshot) for a saved analysis. null = not known.
+    scoreTotal: null,
 
     async init() {
       this.logId = new URLSearchParams(location.search).get('log');
@@ -34,6 +39,7 @@ function stats() {
       socket.on('contact:new', refresh);
       socket.on('contact:delete', refresh);
       socket.on('db:cleared', refresh);
+      socket.on('score:update', (s) => { this.scoreTotal = s && s.total != null ? s.total : this.scoreTotal; });
       setInterval(() => this.fetchData(), 30000);
     },
 
@@ -45,9 +51,15 @@ function stats() {
           const body = await r.json();
           this.qsos = body.qsos || [];
           this.logMeta = body.meta || null;
+          this.scoreTotal = this.logMeta ? this.logMeta.claimed_score : null;
           return;
         }
-        this.qsos = (await fetch('/api/qsos').then((r) => r.json())).filter(isCountedQso);
+        const [qsos, score] = await Promise.all([
+          fetch('/api/qsos').then((r) => r.json()),
+          fetch('/api/score').then((r) => r.json()).catch(() => ({})),
+        ]);
+        this.qsos = qsos.filter(isCountedQso);
+        this.scoreTotal = score && score.total != null ? score.total : null;
       } catch (err) {
         console.error('Failed to load stats data:', err);
       }
@@ -191,7 +203,9 @@ function stats() {
       const mults = sum(qs, multCount);
       const elapsedMs = times.length > 1 ? times[times.length - 1] - times[0] : 0;
       const elapsedHrs = elapsedMs / 3600000;
+      const score = scoreTile(this.scoreTotal, this.selectedOp, Boolean(this.logId));
       const tiles = [
+        ...(score ? [score] : []),
         { label: 'QSOs', value: qs.length.toLocaleString() },
         { label: 'Points', value: pts.toLocaleString(), need: 'points' },
         { label: 'Mults', value: mults.toLocaleString(), need: 'mults' },
@@ -982,10 +996,20 @@ function isCountedQso(q) {
   return q.is_claimed_qso == null || Number(q.is_claimed_qso) !== 0;
 }
 
+// At a Glance's score tile -- the number to copy onto 3830. Whole-station,
+// so only with the operator filter on ALL (it can't be split per op).
+// null when unknown (no Score broadcast yet / a log with no claimed score).
+function scoreTile(total, selectedOp, isSavedLog) {
+  if (selectedOp !== 'ALL') return null;
+  const n = Number(total);
+  if (total == null || total === '' || !Number.isFinite(n)) return null;
+  return { label: isSavedLog ? 'Claimed Score' : 'Score', value: n.toLocaleString() };
+}
+
 // Same guard as manual.js/report.js: this file is loaded as a plain
 // (non-module) script in the browser, but exporting the pure helpers this
 // way lets Node's test runner exercise them directly, with no jsdom/DOM
 // stand-in needed -- see stats.test.js.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { isQtc, modeGroup, dedupeForScoring, presentModeGroups };
+  module.exports = { isQtc, modeGroup, dedupeForScoring, presentModeGroups, scoreTile };
 }

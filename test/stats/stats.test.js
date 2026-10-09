@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { isQtc, modeGroup, dedupeForScoring } = require('../../public/js/stats.js');
+const { isQtc, modeGroup, dedupeForScoring, scoreTile } = require('../../public/js/stats.js');
 
 function qso(overrides) {
   return {
@@ -81,5 +81,23 @@ describe('dedupeForScoring', () => {
     const dupeOfNothing = qso({ logged_at: '', n1mm_timestamp: undefined });
     const out = dedupeForScoring([noTime, dupeOfNothing]);
     assert.equal(out.length, 2);
+  });
+});
+
+describe('scoreTile (At a Glance, for 3830)', () => {
+  it('shows the live score with the operator filter on ALL', () => {
+    assert.deepEqual(scoreTile(123456, 'ALL', false), { label: 'Score', value: (123456).toLocaleString() });
+  });
+  it('labels a saved log\'s score as claimed', () => {
+    assert.equal(scoreTile(9876, 'ALL', true).label, 'Claimed Score');
+  });
+  it('is hidden when narrowed to one operator (a station total can\'t be split)', () => {
+    assert.equal(scoreTile(123456, 'WT2P', false), null);
+  });
+  it('is hidden when the score is unknown, but shows a real 0', () => {
+    assert.equal(scoreTile(null, 'ALL', false), null);
+    assert.equal(scoreTile(undefined, 'ALL', false), null);
+    assert.equal(scoreTile('', 'ALL', false), null);
+    assert.equal(scoreTile(0, 'ALL', false).value, '0');
   });
 });
