@@ -688,8 +688,10 @@ Everything about it lives there and is read from env per request:
   `DELETE /api/db` and `POST /api/lookup/{pause,resume}`. Add a route to
   `BLOCKED` there, never by sprinkling checks through the routers.
 - `GET /api/features` gains `tenant: { call, name }` (null standalone);
-  `public/js/chrome.js` uses it to retitle the header/tab and drop the
-  Admin nav link -- asynchronously, so a standalone page never changes.
+  `public/js/chrome.js` uses it only to drop the Admin nav link --
+  asynchronously, so a standalone page never changes. The header and tab
+  title stay "ContestPulse" (CJ, 2026-10-08): the station call already
+  shows in the score panel once a logger sends score data.
 - `server.js` exits at startup if tenant mode is set without
   `HAMDATA_URL`, or with a malformed id.
 - The analyzer and ingest are unchanged: both gated by this instance's own

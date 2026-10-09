@@ -2,7 +2,9 @@
 // (ops repo CLAUDE.md Section 23), not a station's own install.
 //
 // CONTESTSCORE_TENANT=<call> switches it on; CONTESTSCORE_TENANT_NAME is an
-// optional display name ("K9CT Contest Club"). Read from env on every call,
+// optional display name ("K9CT Contest Club") for operators' tooling
+// (contestscore-tenant list, the ops dashboard) -- the public page header
+// stays "ContestPulse"; the station call already shows in the score panel. Read from env on every call,
 // same as /api/features, so tests can flip it per request.
 //
 // What changes in tenant mode (and nothing else):
@@ -10,7 +12,7 @@
 //    it. Tenant dashboards are public; wiping the contest DB or pausing a
 //    lookup service the whole box shares has no place there.
 //  * GET /api/features carries { tenant: { call, name } } so the shared
-//    page chrome can show whose scoreboard this is and drop the Admin link.
+//    page chrome can drop the Admin link.
 //  * server.js refuses to start without HAMDATA_URL (a tenant never talks
 //    to hamqsl/HamQTH itself).
 // The analyzer stays on: uploads are gated by this tenant's own

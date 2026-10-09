@@ -483,8 +483,8 @@ curl -X DELETE http://localhost:3000/api/db -H "X-Confirm: yes"
 | `ANALYZE_TTL_DAYS`         | `1826` (5 years) — max age of a saved analysis (0 disables) |
 | `ANALYZE_MAX_BYTES`       | `5242880` — max upload size |
 | `HAMDATA_URL`              | — (unset = solar + lookup in-process; set = use a shared hamdata, see below) |
-| `CONTESTSCORE_TENANT`      | — (unset = normal install). A callsign-like id (`k9ct`) makes this a hosted club scoreboard: the Admin page, `DELETE /api/db` and lookup pause/resume return 404, and the header shows the club. Requires `HAMDATA_URL`. |
-| `CONTESTSCORE_TENANT_NAME` | — display name for the header/tab in tenant mode (defaults to the upper-cased id) |
+| `CONTESTSCORE_TENANT`      | — (unset = normal install). A callsign-like id (`k9ct`) makes this a hosted club scoreboard: the Admin page, `DELETE /api/db` and lookup pause/resume return 404 and the Admin link is hidden. Requires `HAMDATA_URL`. |
+| `CONTESTSCORE_TENANT_NAME` | — display name for operators' tooling (`contestscore-tenant list`, the ops dashboard); the page header stays "ContestPulse" |
 
 Copy `.env.example` to `.env` and fill in any values you want to override.
 
