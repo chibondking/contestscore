@@ -27,6 +27,15 @@ passed that test so far:
   panel it feeds -- a live data-quality signal on the log;
 - **space-weather indices** (SFI / A / K, `src/solar/`) in the header --
   propagation context for the operator;
+- the **mult bell** (2026-10-09) -- an optional desk-bell ding on the
+  dashboard when a new multiplier is logged (N1MM's `is_mult1/2/3`). Per
+  viewer (localStorage `contestpulse_multbell`), **off by default**, with a
+  "only after N mults" threshold so the early hours of a contest, when
+  nearly every QSO is a mult, stay quiet. Synthesized with Web Audio (no
+  sound file); edits, X-QSOs, QTCs and replayed backlogs (N1MM timestamp
+  over 15 min old) don't ring, and a burst rings once (2s cooldown).
+  Browsers block audio until a click on the page, so a reloaded wall
+  display needs one click before it can ding -- the popover says so;
 - **hamdata** (`hamdata/`, 2026-10-08) -- not a feature, plumbing: one
   shared process doing solar + callsign lookup for several contestscore
   instances on one VPS (the multi-tenant plan lives in the ops repo's

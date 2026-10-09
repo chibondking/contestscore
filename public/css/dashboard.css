@@ -627,6 +627,62 @@ body {
 }
 .card-toggle:hover { color: var(--text); border-color: var(--muted); }
 
+/* Mult bell (header): a small toggle-looking button that opens a settings
+   popover. Lit in --accent when the bell is on, so a glance at the header
+   says whether this screen will ding. */
+.multbell { position: relative; flex: 0 0 auto; }
+.multbell__btn {
+  font: inherit;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.15em 0.7em;
+  cursor: pointer;
+}
+.multbell__btn:hover { color: var(--text); border-color: var(--muted); }
+.multbell__btn--on { color: var(--accent); border-color: var(--accent); }
+.multbell__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.multbell__panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 20;
+  width: min(17rem, calc(100vw - 2rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  font-size: 0.8rem;
+}
+.multbell__row { display: flex; align-items: center; gap: 0.5rem; }
+.multbell__row input[type="range"] { flex: 1 1 auto; accent-color: var(--accent); }
+.multbell__row input[type="checkbox"] { accent-color: var(--accent); }
+.multbell__num {
+  font: inherit;
+  width: 4.5rem;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+}
+.multbell__test { margin-left: 0; align-self: flex-start; }
+.multbell__hint { color: var(--muted); font-size: 0.72rem; }
+.multbell__hint--warn { color: var(--run); }
+[x-cloak] { display: none !important; }
+
 /* Map band filter (mapBands()/mapBand): same look as .card-toggle, with
    the picked band filled in --accent. */
 .map-bands {

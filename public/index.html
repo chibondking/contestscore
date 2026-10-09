@@ -55,6 +55,37 @@
     <template x-for="b in bridges" :key="b.station_id">
       <span class="bridge-badge" :class="'bridge-badge--' + b.status" x-text="b.station_id + ': ' + b.status"></span>
     </template>
+    <!-- Mult bell: a desk-bell ding on each new multiplier, per viewer and
+         off by default (dashboard.js, MULTBELL_KEY). -->
+    <div class="multbell" @click.outside="multBellOpen = false" @keydown.escape="multBellOpen = false">
+      <button type="button" class="multbell__btn" :class="{ 'multbell__btn--on': multBell.enabled }"
+              @click="multBellOpen = !multBellOpen" :title="multBellTitle()" :aria-expanded="multBellOpen"
+              aria-label="Mult bell settings">
+        <span aria-hidden="true">🔔</span>
+        <span x-text="multBell.enabled ? 'on' : 'off'"></span>
+      </button>
+      <div class="multbell__panel" x-show="multBellOpen" x-cloak>
+        <label class="multbell__row">
+          <input type="checkbox" x-model="multBell.enabled" @change="saveMultBell()">
+          <span>Ding on new mults</span>
+        </label>
+        <label class="multbell__row">
+          <span>Only after</span>
+          <input type="number" min="0" step="1" class="multbell__num" x-model.number="multBell.after" @change="saveMultBell()">
+          <span>mults</span>
+        </label>
+        <p class="multbell__hint" x-text="'Mults so far: ' + multCount() + (multBell.after > 0 ? ' — quiet until ' + (multBell.after + 1) : '')"></p>
+        <label class="multbell__row">
+          <span>Volume</span>
+          <input type="range" min="0" max="1" step="0.05" x-model.number="multBell.volume" @change="saveMultBell()">
+        </label>
+        <button type="button" class="card-toggle multbell__test" @click="ding()">Test ding</button>
+        <p class="multbell__hint multbell__hint--warn" x-show="multBell.enabled && audioBlocked">
+          The browser is holding sound back -- click anywhere on this page once to allow it.
+        </p>
+        <p class="multbell__hint">Saved in this browser only.</p>
+      </div>
+    </div>
     <span class="updated" x-text="'updated ' + secondsSinceUpdate() + 's ago'"></span>
     <span class="status" :class="connected ? 'status--ok' : 'status--err'">
       <span x-text="connected ? 'live' : 'disconnected'"></span>

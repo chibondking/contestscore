@@ -336,3 +336,70 @@ describe('tenantLabel (footer)', () => {
     assert.equal(d.tenantLabel('scoreboard.wt2p.us'), 'tenant wt2p');
   });
 });
+
+describe('mult bell', () => {
+  const { normalizeMultBell, multBellShouldRing, n1mmTimestampMs } = sandbox;
+  const on = { enabled: true, after: 0, volume: 0.6 };
+  const base = { settings: on, isNew: true, isMult: true, counted: true, multCount: 5, n1mmAgeMs: 1000, msSinceLastDing: null };
+
+  it('is off by default, for missing or garbled storage', () => {
+    for (const raw of [null, undefined, '', 'not json', '[]', '{}', 42]) {
+      const s = normalizeMultBell(raw);
+      assert.equal(s.enabled, false, String(raw));
+      assert.equal(s.after, 0);
+      assert.equal(s.volume, 0.6);
+    }
+  });
+
+  it('only enables on a literal true, and clamps the numbers', () => {
+    assert.equal(normalizeMultBell('{"enabled":"true"}').enabled, false);
+    assert.equal(normalizeMultBell('{"enabled":true}').enabled, true);
+    assert.equal(normalizeMultBell({ after: -3 }).after, 0);
+    assert.equal(normalizeMultBell({ after: '150' }).after, 150);
+    assert.equal(normalizeMultBell({ after: 12.9 }).after, 12);
+    assert.equal(normalizeMultBell({ volume: 7 }).volume, 1);
+    assert.equal(normalizeMultBell({ volume: -1 }).volume, 0);
+    assert.equal(normalizeMultBell({ volume: 0 }).volume, 0);
+  });
+
+  it('rings for a new, counted mult when enabled', () => {
+    assert.equal(multBellShouldRing(base), true);
+  });
+
+  it('stays quiet when off, for edits, non-mults and X-QSOs', () => {
+    assert.equal(multBellShouldRing({ ...base, settings: { ...on, enabled: false } }), false);
+    assert.equal(multBellShouldRing({ ...base, isNew: false }), false);
+    assert.equal(multBellShouldRing({ ...base, isMult: false }), false);
+    assert.equal(multBellShouldRing({ ...base, counted: false }), false);
+  });
+
+  it('stays quiet until the mult count passes the threshold', () => {
+    const s = { ...on, after: 100 };
+    assert.equal(multBellShouldRing({ ...base, settings: s, multCount: 99 }), false);
+    assert.equal(multBellShouldRing({ ...base, settings: s, multCount: 100 }), false);
+    assert.equal(multBellShouldRing({ ...base, settings: s, multCount: 101 }), true);
+  });
+
+  it('ignores a replayed backlog and rings once per burst', () => {
+    assert.equal(multBellShouldRing({ ...base, n1mmAgeMs: 20 * 60 * 1000 }), false);
+    assert.equal(multBellShouldRing({ ...base, n1mmAgeMs: null }), true);
+    assert.equal(multBellShouldRing({ ...base, msSinceLastDing: 500 }), false);
+    assert.equal(multBellShouldRing({ ...base, msSinceLastDing: 5000 }), true);
+  });
+
+  it('parses N1MM timestamps as UTC', () => {
+    assert.equal(n1mmTimestampMs('2026-09-16 14:23:05'), Date.UTC(2026, 8, 16, 14, 23, 5));
+    assert.equal(n1mmTimestampMs(''), null);
+    assert.equal(n1mmTimestampMs('garbage'), null);
+  });
+
+  it('counts mults from the log or the Score total, whichever is higher', () => {
+    const d = dashboard();
+    d.qsos = [qso({ is_mult1: 1 }), qso({ is_mult2: 1 }), qso(), qso({ is_mult1: 1, is_claimed_qso: 0 }), qso({ exchange1: 'SQTC', is_mult1: 1 })];
+    assert.equal(d.multCount(), 2);
+    d.score = { mults: 40 };
+    assert.equal(d.multCount(), 40);
+    d.score = { mults: null };
+    assert.equal(d.multCount(), 2);
+  });
+});
