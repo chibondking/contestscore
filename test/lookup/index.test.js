@@ -248,3 +248,28 @@ describe('createLookupService', () => {
     assert.deepEqual([...client.seen].sort(), ['K3LR', 'N5DX', 'W1AW']);
   });
 });
+
+describe('lookup via hamdata', () => {
+  it('HAMDATA_URL wins over HamQTH credentials', () => {
+    const r = resolveLookupConfig(
+      { HAMDATA_URL: 'http://127.0.0.1:3100/', LOOKUP_PROVIDER: 'hamqth', HAMQTH_USERNAME: 'u', HAMQTH_PASSWORD: 'p' },
+      { lookup: {} },
+    );
+    assert.deepEqual(r, { provider: 'hamdata', enabled: true, prg: 'contestscore', url: 'http://127.0.0.1:3100' });
+  });
+
+  it('keeps the record\'s own source so cache rows and busts match a direct lookup', async () => {
+    const emitter = new EventEmitter();
+    const hits = [];
+    emitter.on('lookup:result', (d) => hits.push(d));
+    const client = { lookup: async (call) => ({ call, found: false, source: 'hamqth' }) };
+    const svc = createLookupService({
+      emitter, env: { HAMDATA_URL: 'http://127.0.0.1:3100' }, config: { lookup: {} }, deps: { ...NOOP_DEPS, client },
+    });
+    assert.equal(svc.getStatus().provider, 'hamdata');
+    svc.enqueue('X1XX');
+    await svc.idle();
+    assert.equal(hits[0].source, 'hamqth');
+    assert.equal(hits[0].found, false);
+  });
+});

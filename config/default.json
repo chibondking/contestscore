@@ -23,6 +23,9 @@
       "password": ""
     }
   },
+  "hamdata": {
+    "url": ""
+  },
   "solar": {
     "enabled": true,
     "refreshMinutes": 120,

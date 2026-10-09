@@ -482,6 +482,7 @@ curl -X DELETE http://localhost:3000/api/db -H "X-Confirm: yes"
 | `ANALYZE_KEEP`             | `0` — newest saved analyses to keep (0 = no count cap) |
 | `ANALYZE_TTL_DAYS`         | `1826` (5 years) — max age of a saved analysis (0 disables) |
 | `ANALYZE_MAX_BYTES`       | `5242880` — max upload size |
+| `HAMDATA_URL`              | — (unset = solar + lookup in-process; set = use a shared hamdata, see below) |
 
 Copy `.env.example` to `.env` and fill in any values you want to override.
 
@@ -519,6 +520,24 @@ over the `solar:update` event. The history is retained (`SOLAR_RETENTION_DAYS`,
 default 1826, 5 years) and is **not** wiped by `DELETE /api/db` — a later feature will
 chart contest rate against conditions for a from-live analysis. Set
 `SOLAR_ENABLED=false` to turn the poll and the header chip off.
+
+## hamdata (several instances on one box)
+
+If you run **one** contestscore, skip this. hamdata is an optional shared
+service for a server hosting several instances (one per club/callsign): it
+polls hamqsl.com once and does every callsign lookup with one set of HamQTH
+credentials and one shared cache, instead of each instance doing both
+itself.
+
+- Run it from the same checkout: `npm run start:hamdata` (or
+  `deploy/hamdata.service`). Env: `HAMDATA_DB_PATH`, `HAMDATA_PORT`
+  (3100), `HAMDATA_HOST` (127.0.0.1), `HAMDATA_TOKEN` (for pause/resume),
+  plus the usual `LOOKUP_PROVIDER=hamqth` / `HAMQTH_*` / `SOLAR_*`.
+- Point each instance at it with `HAMDATA_URL=http://127.0.0.1:3100`. Each
+  instance still keeps its own copy of the solar history and its own lookup
+  cache; a new instance back-fills the solar history on first start.
+- Seed hamdata with an existing instance's solar history once:
+  `HAMDATA_DB_PATH=... node hamdata/import-solar.js path/to/qsos.db`.
 
 ## Database
 

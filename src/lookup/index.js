@@ -15,6 +15,7 @@
 const defaultConfig = require('../../config/default.json');
 const { getCachedCallsign, getQsos } = require('../db/queries');
 const { createHamqthClient } = require('./hamqth');
+const { createHamdataClient, resolveHamdataUrl } = require('../hamdata/client');
 
 const KNOWN_PROVIDERS = new Set(['hamqth']);
 const BETWEEN_MS = 350;          // spacing between upstream requests
@@ -44,11 +45,16 @@ function stripSuffix(raw) {
 }
 
 // Resolve provider + credentials from env (wins) then config. `enabled` is
-// true only for a known provider that actually has credentials.
+// true only for a known provider that actually has credentials. A hamdata
+// URL wins over everything: the shared service holds the credentials and
+// this instance just asks it.
 function resolveLookupConfig(env = process.env, config = defaultConfig) {
   const lk = config.lookup || {};
-  const provider = String(env.LOOKUP_PROVIDER || lk.provider || 'none').toLowerCase();
   const prg = lk.prg || 'contestscore';
+  const hamdataUrl = resolveHamdataUrl(env, config);
+  if (hamdataUrl) return { provider: 'hamdata', enabled: true, prg, url: hamdataUrl };
+
+  const provider = String(env.LOOKUP_PROVIDER || lk.provider || 'none').toLowerCase();
   if (!KNOWN_PROVIDERS.has(provider)) return { provider: 'none', enabled: false, prg };
 
   const creds = lk[provider] || {};
@@ -65,7 +71,9 @@ function createLookupService({ emitter, env, config, deps = {} } = {}) {
   const betweenMs = deps.betweenMs != null ? deps.betweenMs : BETWEEN_MS;
 
   let client = null;
-  if (cfg.enabled && cfg.provider === 'hamqth') {
+  if (cfg.provider === 'hamdata') {
+    client = deps.client || createHamdataClient({ url: cfg.url, fetchImpl: deps.fetchImpl });
+  } else if (cfg.enabled && cfg.provider === 'hamqth') {
     client = deps.client || createHamqthClient({
       username: cfg.username, password: cfg.password, prg: cfg.prg, fetchImpl: deps.fetchImpl,
     });
@@ -108,7 +116,9 @@ function createLookupService({ emitter, env, config, deps = {} } = {}) {
       const call = queue.shift();
       try {
         const rec = await client.lookup(call);
-        if (emitter) emitter.emit('lookup:result', { ...rec, call, source: cfg.provider, found: rec.found });
+        // A hamdata result says where it really came from ('hamqth'); keep
+        // that so cache rows and the busts panel match a direct lookup.
+        if (emitter) emitter.emit('lookup:result', { ...rec, call, source: rec.source || cfg.provider, found: rec.found });
         backoffMs = 0;
         backoffUntil = 0;
       } catch (err) {

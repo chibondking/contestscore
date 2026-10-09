@@ -16,9 +16,13 @@
 const xml2js = require('xml2js');
 const config = require('../../config/default.json');
 const { insertSolarSnapshot, getLatestSolar, pruneSolarSnapshots } = require('../db/queries');
+const { createHamdataClient, resolveHamdataUrl } = require('../hamdata/client');
 
 const HAMQSL_URL = 'https://www.hamqsl.com/solarxml.php';
 const PARSE_OPTS = { explicitArray: false, trim: true };
+// hamdata mode polls a local service, not hamqsl, so it can afford to look
+// often -- a new reading shows up within minutes of hamdata fetching it.
+const HAMDATA_POLL_MS = 10 * 60000;
 
 function intOrNull(v) {
   const n = parseInt(String(v == null ? '' : v).trim(), 10);
@@ -64,11 +68,16 @@ function resolveSolarConfig(env = process.env, cfgRoot = config) {
     enabled: String(env.SOLAR_ENABLED ?? cfg.enabled ?? true) !== 'false',
     refreshMs: (Number(env.SOLAR_REFRESH_MINUTES) || cfg.refreshMinutes || 120) * 60000,
     retentionDays: Number(env.SOLAR_RETENTION_DAYS) || cfg.retentionDays || 1826, // 5 years
+    hamdataUrl: resolveHamdataUrl(env, cfgRoot),
   };
 }
 
 function createSolarService({ io, env = process.env, deps = {} } = {}) {
-  const { enabled, refreshMs, retentionDays } = resolveSolarConfig(env);
+  const { enabled, refreshMs: hamqslRefreshMs, retentionDays, hamdataUrl } = resolveSolarConfig(env);
+  const refreshMs = hamdataUrl ? HAMDATA_POLL_MS : hamqslRefreshMs;
+  const hamdata = hamdataUrl
+    ? (deps.hamdataClient || createHamdataClient({ url: hamdataUrl, fetchImpl: deps.fetchImpl }))
+    : null;
 
   const doFetch = deps.fetchImpl || globalThis.fetch;
   const insert = deps.insertSolarSnapshot || insertSolarSnapshot;
@@ -79,8 +88,42 @@ function createSolarService({ io, env = process.env, deps = {} } = {}) {
   let current = null;
   try { current = latest(); } catch { current = null; } // seed from last stored reading
 
+  // hamdata mode: copy every reading hamdata has that this instance
+  // doesn't yet, keeping hamdata's own fetched_at. The local table stays the
+  // single source for /api/solar, /api/solar/history and the analyzer, so
+  // none of them change -- and a brand-new instance back-fills the whole
+  // history on its first poll (paged, see getSolarSince).
+  async function refreshFromHamdata() {
+    try {
+      let added = 0;
+      for (;;) {
+        const last = latest();
+        const rows = await hamdata.solarSince(last ? last.fetched_at : '');
+        if (!Array.isArray(rows) || !rows.length) break;
+        for (const r of rows) {
+          insert({
+            sfi: r.sfi, a: r.a_index, k: r.k_index, sunspots: r.sunspots,
+            xray: r.xray, geomag: r.geomag, source_updated: r.source_updated,
+            fetched_at: r.fetched_at,
+          });
+        }
+        added += rows.length;
+        if (rows.length < 1000) break; // hamdata's page size; a short page is the last
+      }
+      if (!added) return current;
+      try { prune({ ttlDays: retentionDays }); } catch (e) { console.warn(`solar prune: ${e.message}`); }
+      current = latest();
+      if (io) io.emit('solar:update', publicView(current));
+      return current;
+    } catch (err) {
+      console.error(`solar refresh (hamdata) failed: ${err.message}`);
+      return null;
+    }
+  }
+
   async function refresh() {
     if (!enabled) return null;
+    if (hamdata) return refreshFromHamdata();
     try {
       const res = await doFetch(HAMQSL_URL);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -115,6 +158,7 @@ function createSolarService({ io, env = process.env, deps = {} } = {}) {
     stop,
     refresh,
     enabled,
+    source: hamdata ? 'hamdata' : 'hamqsl',
     getCurrent: () => publicView(current),
   };
 }

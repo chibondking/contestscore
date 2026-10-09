@@ -26,7 +26,11 @@ passed that test so far:
 - **callsign lookup** (`src/lookup/`, HamQTH) and the **Possible Busts**
   panel it feeds -- a live data-quality signal on the log;
 - **space-weather indices** (SFI / A / K, `src/solar/`) in the header --
-  propagation context for the operator.
+  propagation context for the operator;
+- **hamdata** (`hamdata/`, 2026-10-08) -- not a feature, plumbing: one
+  shared process doing solar + callsign lookup for several contestscore
+  instances on one VPS (the multi-tenant plan lives in the ops repo's
+  CLAUDE.md Section 23). Optional; a standalone install never runs it.
 
 An earlier version of this section said "realtime results and nothing
 else," with a long list of things "permanently out of scope." That was
@@ -673,6 +677,43 @@ an arbitrary past date.
 
 Dashboard header only; `SOLAR_ENABLED=false` disables the poll and the
 chip. The analyzer never triggers a fetch.
+
+## hamdata (shared solar + lookup)
+
+`hamdata/` is a small Express service for a box running **several**
+contestscore instances (one per club/callsign). It polls hamqsl once and
+holds the one set of HamQTH credentials; each instance sets `HAMDATA_URL`
+and asks it instead of doing either itself. **Optional by design**: with
+`HAMDATA_URL` unset (the default) nothing changes -- a Pi/LAN install never
+runs or knows about hamdata.
+
+It is built from this repo's own modules, never a copy, so the two paths
+can't drift:
+- `hamdata/server.js` -- `initDb()` on its own file (`HAMDATA_DB_PATH`,
+  same schema; only `solar_snapshots` and `callsign_cache` are written),
+  `createSolarService` exactly as an instance runs it, and a HamQTH client
+  from `src/lookup/hamqth.js`. It forces `HAMDATA_URL` empty for itself.
+- `hamdata/broker.js` -- answers one lookup at a time: shared cache (found
+  30 days, not-found 1 day, only `source = 'hamqth'` rows), collapses
+  duplicate in-flight calls, spaces upstream requests 350 ms apart across
+  *all* instances. 503 when paused/unconfigured, 502 on upstream failure.
+- `hamdata/app.js` -- `GET /health`, `/solar`, `/solar/since?after=`,
+  `/lookup/status`, `/lookup/:call`; `POST /lookup/pause|resume` need
+  `HAMDATA_TOKEN` (fail closed). Binds `127.0.0.1:3100` by default.
+- `hamdata/import-solar.js` -- one-time seed of hamdata's history from an
+  existing instance's DB.
+
+Instance side (`src/hamdata/client.js`), all switched on by `HAMDATA_URL`:
+- **Lookup**: `resolveLookupConfig` returns provider `hamdata` (wins over
+  HamQTH creds). The client has the same `lookup(call)` shape as the HamQTH
+  client, so the queue / pacing / backoff / pause in `src/lookup/index.js`
+  is untouched. Results keep hamdata's `source: 'hamqth'`, so the
+  instance's own `callsign_cache` and the busts panel behave identically.
+- **Solar**: the poller copies rows from `/solar/since` into the
+  instance's **own** `solar_snapshots` every 10 min, keeping hamdata's
+  `fetched_at`. Every reader (`/api/solar`, `/api/solar/history`, the
+  analyzer, `/api/health`) is unchanged, and a new instance back-fills the
+  whole history on its first poll (paged, 1000 rows a request).
 
 ## What Is NOT in Scope
 

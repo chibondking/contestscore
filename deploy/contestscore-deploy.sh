@@ -45,6 +45,16 @@ sudo -u contestscore bash -c '
   printf "{\"commit\":\"%s\",\"deployedAt\":\"%s\"}\n" "$commit" "$deployed_at" > deploy-info.json
 '
 
+# hamdata (shared solar + lookup) runs from this same checkout. Restart it
+# first so instances come back up against the new version -- but only once
+# it's actually installed and enabled, so this script still works on a box
+# that never set it up.
+if systemctl is-enabled --quiet hamdata 2>/dev/null; then
+  sudo systemctl restart hamdata
+  sleep 1
+  sudo systemctl is-active --quiet hamdata
+fi
+
 sudo systemctl restart contestscore
 sleep 1
 sudo systemctl is-active --quiet contestscore

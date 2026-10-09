@@ -5,6 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
+    "start:hamdata": "node hamdata/server.js",
     "dev": "nodemon src/server.js",
     "test": "node --test test/**/*.js",
     "test:send-score": "node scripts/sendTestPacket.js --type score"

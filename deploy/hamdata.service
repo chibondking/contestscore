@@ -1,0 +1,31 @@
+# hamdata -- shared solar + callsign lookup for the contestscore instances on
+# this box (see README "hamdata"). Runs from the same checkout as
+# contestscore, as the same user, with its own env file and SQLite file.
+# Install to /etc/systemd/system/hamdata.service, then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now hamdata
+# contestscore-deploy.sh restarts it on every deploy once it's enabled.
+
+[Unit]
+Description=hamdata shared solar + callsign lookup for contestscore
+After=network.target
+
+[Service]
+Type=simple
+User=contestscore
+Group=contestscore
+WorkingDirectory=/opt/contestscore/app
+EnvironmentFile=/opt/contestscore/hamdata/hamdata.env
+ExecStart=/usr/bin/node hamdata/server.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/contestscore/hamdata/data
+
+[Install]
+WantedBy=multi-user.target

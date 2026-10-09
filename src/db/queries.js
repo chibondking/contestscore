@@ -276,6 +276,15 @@ function prepare() {
     // taken before @from, as long as it's no older than @maxAge before it
     // (a reading from days earlier, say after an outage, says nothing about
     // conditions during the session).
+    // Full rows newer than @after, oldest first -- hamdata's GET
+    // /solar/since, which a contestscore instance in hamdata mode polls to
+    // copy readings into its own solar_snapshots (src/solar/). An empty
+    // @after returns everything. Capped so a cold start pages through a
+    // long history instead of pulling five years in one response.
+    getSolarSince: db.prepare(
+      'SELECT sfi, a_index, k_index, sunspots, xray, geomag, source_updated, fetched_at '
+      + 'FROM solar_snapshots WHERE fetched_at > @after ORDER BY fetched_at, id LIMIT @limit'
+    ),
     getSolarBefore: db.prepare(
       'SELECT sfi, a_index, k_index, sunspots, fetched_at FROM solar_snapshots '
       + "WHERE fetched_at < @from AND fetched_at >= datetime(@from, @maxAge) "
@@ -466,6 +475,9 @@ function pruneSolarSnapshots({ ttlDays = 1826 } = {}) {
 // analysis's own span. See the prepared statement's comment for why a
 // plain BETWEEN is safe here.
 function getSolarInRange(from, to) { return prepare().getSolarInRange.all({ from, to }); }
+function getSolarSince(after = '', limit = 1000) {
+  return prepare().getSolarSince.all({ after: after || '', limit });
+}
 
 // How far before a session's first QSO a reading may be and still count as
 // the conditions it started in. hamqsl.com updates every ~3h and the poller
@@ -529,6 +541,7 @@ module.exports = {
   getSetting, setSetting,
   getCachedCallsign, getCachedLocation, cacheCallsign, getNotFoundCalls,
   insertSolarSnapshot, getLatestSolar, pruneSolarSnapshots, getSolarInRange, getSolarForSession,
+  getSolarSince,
   insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,
   pruneAnalyzedLogs,
   resetStatements,

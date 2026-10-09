@@ -46,7 +46,7 @@ describe('parseSolarXml', () => {
 describe('resolveSolarConfig', () => {
   it('defaults to enabled, 120 min, 1826 days (5 years)', () => {
     assert.deepEqual(resolveSolarConfig({}, { solar: {} }), {
-      enabled: true, refreshMs: 120 * 60000, retentionDays: 1826,
+      enabled: true, refreshMs: 120 * 60000, retentionDays: 1826, hamdataUrl: '',
     });
   });
 
@@ -120,5 +120,72 @@ describe('createSolarService', () => {
   it('getCurrent() is { updated: null } before any reading', () => {
     const h = harness();
     assert.deepEqual(h.svc.getCurrent(), { updated: null });
+  });
+});
+
+describe('createSolarService in hamdata mode', () => {
+  const HROW = (sfi, fetched_at) => ({
+    sfi, a_index: 5, k_index: 1, sunspots: 40, xray: 'B1', geomag: 'QUIET', source_updated: 'x', fetched_at,
+  });
+
+  function harness(pages) {
+    const table = [];
+    const emits = [];
+    const asked = [];
+    const svc = createSolarService({
+      io: { emit: (ev, data) => emits.push({ ev, data }) },
+      env: { HAMDATA_URL: 'http://127.0.0.1:3100' },
+      deps: {
+        hamdataClient: { solarSince: async (after) => { asked.push(after); return pages.shift() || []; } },
+        insertSolarSnapshot: (r) => table.push({ sfi: r.sfi, a_index: r.a, fetched_at: r.fetched_at }),
+        getLatestSolar: () => table[table.length - 1] || null,
+        pruneSolarSnapshots: () => {},
+        fetchImpl: async () => { throw new Error('must not hit hamqsl in hamdata mode'); },
+      },
+    });
+    return { svc, table, emits, asked };
+  }
+
+  it('copies new rows with hamdata\'s fetched_at and emits once', async () => {
+    const h = harness([[HROW(100, '2026-10-01 00:00:00'), HROW(110, '2026-10-01 02:00:00')]]);
+    assert.equal(h.svc.source, 'hamdata');
+    await h.svc.refresh();
+    assert.deepEqual(h.table.map((r) => [r.sfi, r.a_index, r.fetched_at]), [
+      [100, 5, '2026-10-01 00:00:00'], [110, 5, '2026-10-01 02:00:00'],
+    ]);
+    assert.deepEqual(h.asked, ['']); // a short page is the last one
+    assert.equal(h.emits.length, 1);
+    assert.equal(h.emits[0].data.sfi, 110);
+  });
+
+  it('asks only for rows after its newest one and emits nothing when there are none', async () => {
+    const h = harness([[HROW(100, '2026-10-01 00:00:00')], [], []]);
+    await h.svc.refresh();
+    await h.svc.refresh();
+    assert.equal(h.asked.at(-1), '2026-10-01 00:00:00');
+    assert.equal(h.emits.length, 1);
+  });
+
+  it('pages through a long history on a cold start', async () => {
+    const big = Array.from({ length: 1000 }, (_, i) => HROW(i, `2026-01-01 00:${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}`));
+    const h = harness([big, [HROW(5000, '2026-10-01 00:00:00')]]);
+    await h.svc.refresh();
+    assert.equal(h.table.length, 1001);
+    assert.equal(h.asked.length, 2);
+  });
+
+  it('keeps the last reading when hamdata is unreachable', async () => {
+    const svc = createSolarService({
+      io: null,
+      env: { HAMDATA_URL: 'http://127.0.0.1:3100' },
+      deps: {
+        hamdataClient: { solarSince: async () => { throw new Error('ECONNREFUSED'); } },
+        insertSolarSnapshot: () => { throw new Error('no'); },
+        getLatestSolar: () => ROW,
+        pruneSolarSnapshots: () => {},
+      },
+    });
+    assert.equal(await svc.refresh(), null);
+    assert.equal(svc.getCurrent().sfi, 109);
   });
 });
