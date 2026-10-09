@@ -15,6 +15,10 @@ function admin() {
     lookupMessage: '',
     lookupMessageIsError: false,
 
+    cacheBusy: false,
+    cacheMessage: '',
+    cacheMessageIsError: false,
+
     init() {
       try {
         this.token = localStorage.getItem('contestpulse_admin_token') || '';
@@ -58,7 +62,7 @@ function admin() {
           },
         });
         if (res.ok) {
-          this.message = 'Database reset -- all QSOs and score history cleared.';
+          this.message = 'Database reset -- all QSOs and score history cleared (callsign cache and solar history kept).';
           this.messageIsError = false;
           this.confirmed = false;
           await this.fetchCounts();
@@ -106,6 +110,32 @@ function admin() {
         this.lookupMessageIsError = true;
       } finally {
         this.lookupBusy = false;
+      }
+    },
+
+    async clearCache() {
+      if (!this.token || this.cacheBusy) return;
+      if (!window.confirm('Forget every cached callsign lookup (including the Possible Busts list)?')) return;
+      this.cacheBusy = true;
+      this.cacheMessage = '';
+      try {
+        const res = await fetch('/api/lookup/cache', {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${this.token}`, 'X-Confirm': 'yes' },
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) {
+          this.cacheMessage = `Cache cleared -- ${body.cleared ?? 0} callsign(s) forgotten.`;
+          this.cacheMessageIsError = false;
+        } else {
+          this.cacheMessage = `Clear failed: ${body.error || res.status}`;
+          this.cacheMessageIsError = true;
+        }
+      } catch (err) {
+        this.cacheMessage = `Clear failed: ${err.message}`;
+        this.cacheMessageIsError = true;
+      } finally {
+        this.cacheBusy = false;
       }
     },
 

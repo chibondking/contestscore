@@ -18,6 +18,10 @@ if (tenant && !resolveHamdataUrl(process.env, config)) {
   console.error(`tenant ${tenant.call}: HAMDATA_URL is required in tenant mode -- refusing to start`);
   process.exit(1);
 }
+if (tenant && !process.env.CONTESTSCORE_API_TOKEN) {
+  console.error(`tenant ${tenant.call}: CONTESTSCORE_API_TOKEN is required in tenant mode (it guards the admin actions) -- refusing to start`);
+  process.exit(1);
+}
 if (tenant) console.log(`tenant mode: ${tenant.call} (${tenant.name})`);
 
 const port = process.env.HTTP_PORT || config.http.port;

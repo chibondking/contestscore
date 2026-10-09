@@ -154,8 +154,8 @@ CREATE TABLE IF NOT EXISTS callsign_cache (
 -- one row per fetch (~every 2h). Append-only, and deliberately NOT wiped by
 -- DELETE /api/db (clearAll) -- this is ambient data, not contest data, and
 -- the history is what a later "how did the rate track the K index" analysis
--- of a from-live snapshot will join against. Kept trimmed by a slow
--- age-based prune (src/solar/). A brand-new table, so schema.sql alone
+-- of a from-live snapshot will join against. NEVER deleted -- no prune, no
+-- reset, nothing (test/db/solarNeverDeleted.test.js). A brand-new table, so schema.sql alone
 -- covers both fresh and existing DBs -- no migration file needed.
 CREATE TABLE IF NOT EXISTS solar_snapshots (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,

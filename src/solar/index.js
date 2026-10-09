@@ -15,7 +15,7 @@
 
 const xml2js = require('xml2js');
 const config = require('../../config/default.json');
-const { insertSolarSnapshot, getLatestSolar, pruneSolarSnapshots } = require('../db/queries');
+const { insertSolarSnapshot, getLatestSolar } = require('../db/queries');
 const { createHamdataClient, resolveHamdataUrl } = require('../hamdata/client');
 
 const HAMQSL_URL = 'https://www.hamqsl.com/solarxml.php';
@@ -67,13 +67,12 @@ function resolveSolarConfig(env = process.env, cfgRoot = config) {
   return {
     enabled: String(env.SOLAR_ENABLED ?? cfg.enabled ?? true) !== 'false',
     refreshMs: (Number(env.SOLAR_REFRESH_MINUTES) || cfg.refreshMinutes || 120) * 60000,
-    retentionDays: Number(env.SOLAR_RETENTION_DAYS) || cfg.retentionDays || 1826, // 5 years
     hamdataUrl: resolveHamdataUrl(env, cfgRoot),
   };
 }
 
 function createSolarService({ io, env = process.env, deps = {} } = {}) {
-  const { enabled, refreshMs: hamqslRefreshMs, retentionDays, hamdataUrl } = resolveSolarConfig(env);
+  const { enabled, refreshMs: hamqslRefreshMs, hamdataUrl } = resolveSolarConfig(env);
   const refreshMs = hamdataUrl ? HAMDATA_POLL_MS : hamqslRefreshMs;
   const hamdata = hamdataUrl
     ? (deps.hamdataClient || createHamdataClient({ url: hamdataUrl, fetchImpl: deps.fetchImpl }))
@@ -82,7 +81,6 @@ function createSolarService({ io, env = process.env, deps = {} } = {}) {
   const doFetch = deps.fetchImpl || globalThis.fetch;
   const insert = deps.insertSolarSnapshot || insertSolarSnapshot;
   const latest = deps.getLatestSolar || getLatestSolar;
-  const prune = deps.pruneSolarSnapshots || pruneSolarSnapshots;
 
   let timer = null;
   let current = null;
@@ -111,7 +109,6 @@ function createSolarService({ io, env = process.env, deps = {} } = {}) {
         if (rows.length < 1000) break; // hamdata's page size; a short page is the last
       }
       if (!added) return current;
-      try { prune({ ttlDays: retentionDays }); } catch (e) { console.warn(`solar prune: ${e.message}`); }
       current = latest();
       if (io) io.emit('solar:update', publicView(current));
       return current;
@@ -132,7 +129,6 @@ function createSolarService({ io, env = process.env, deps = {} } = {}) {
         throw new Error('no indices in response');
       }
       insert(reading);
-      try { prune({ ttlDays: retentionDays }); } catch (e) { console.warn(`solar prune: ${e.message}`); }
       current = latest();
       if (io) io.emit('solar:update', publicView(current));
       return current;

@@ -28,7 +28,6 @@
   },
   "solar": {
     "enabled": true,
-    "refreshMinutes": 120,
-    "retentionDays": 1826
+    "refreshMinutes": 120
   }
 }

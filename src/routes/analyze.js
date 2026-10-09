@@ -108,7 +108,7 @@ router.post('/from-live', requireToken, (req, res) => {
 const SQL_UTC = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
 // The space-weather readings covering a live session, copied into the saved
-// analysis itself. solar_snapshots is pruned by age (SOLAR_RETENTION_DAYS)
+// analysis itself. solar_snapshots is never pruned (kept forever)
 // and lives in the same DB file a rebuild would lose, so relying on a
 // lookup at view time means an older snapshot eventually shows no
 // conditions to compare against. Each QSO's time is N1MM's own UTC

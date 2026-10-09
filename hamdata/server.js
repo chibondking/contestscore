@@ -13,7 +13,7 @@
 process.env.DB_PATH = process.env.HAMDATA_DB_PATH || './data/hamdata.db';
 
 const { initDb } = require('../src/db');
-const { getCachedCallsign, cacheCallsign } = require('../src/db/queries');
+const { getCachedCallsign, cacheCallsign, getSetting, setSetting } = require('../src/db/queries');
 const { createSolarService } = require('../src/solar');
 const { resolveLookupConfig } = require('../src/lookup');
 const { createHamqthClient } = require('../src/lookup/hamqth');
@@ -36,7 +36,10 @@ if (lk.enabled && lk.provider === 'hamqth') {
 } else {
   console.warn('hamdata: no HamQTH credentials (LOOKUP_PROVIDER=hamqth + HAMQTH_USERNAME/PASSWORD) -- lookups return 503');
 }
-const broker = createLookupBroker({ client, getCached: getCachedCallsign, cache: cacheCallsign });
+const broker = createLookupBroker({
+  client, getCached: getCachedCallsign, cache: cacheCallsign, getSetting, setSetting,
+});
+if (broker.getStatus().paused) console.warn('hamdata: outgoing lookups are STOPPED (hamdata-ctl start-lookups to resume)');
 
 const port = Number(process.env.HAMDATA_PORT) || 3100;
 const host = process.env.HAMDATA_HOST || '127.0.0.1';

@@ -354,7 +354,8 @@ Core tables:
   K / sunspots + `fetched_at`. Append-only, and **NOT** wiped by
   `DELETE /api/db` -- it's ambient data, and the history is what a future
   rate-vs-conditions view of a from-live analysis will join against. Slow
-  age-based prune (`SOLAR_RETENTION_DAYS`). A brand-new table, so
+  **Never deleted** -- no age prune, no reset (CJ, 2026-10-09; enforced by
+  `test/db/solarNeverDeleted.test.js`). A brand-new table, so
   `schema.sql` alone covers fresh + existing DBs; no migration file.
 - `analyzed_logs` -- one row per saved analysis (the offline log analyzer).
   The parsed QSO array lives in `parsed_json` as `{"qsos":[…],"excluded":[…]}`;
@@ -377,7 +378,7 @@ Schema lives in `src/db/schema.sql`. Migrations are numbered files in
   `qrz`/`hamdb` are in the config shape but unimplemented)
 - HamQTH / QRZ credentials (also via env vars)
 - Space weather (`solar`): `enabled`, `refreshMinutes` (default 120),
-  `retentionDays` (default 1826, 5 years) -- see `src/solar/`
+  no retention setting: solar history is kept forever -- see `src/solar/`
 
 Environment variables override config file. See `.env.example`.
 
@@ -615,7 +616,8 @@ via `config/default.json` `lookup.provider` or `LOOKUP_PROVIDER`:
 
 `src/udp/index.js` calls `lookup.enqueue(call)` on every `contact:new`
 (covers `contactreplace` too). The service strips portable suffixes
-(`stripSuffix`), skips anything already in `callsign_cache` (any source) or
+(`stripSuffix`), skips anything with a *fresh* `callsign_cache` row (any
+source; `src/lookup/ttl.js`: ~6 months found, a day not-found) or
 already queued/in-flight, then works the queue **one request at a time**
 with a ~350 ms gap and exponential backoff on error -- an upstream outage
 only slows the queue, it can't touch the dashboard. Each result is emitted
@@ -628,8 +630,12 @@ This is the first outbound HTTP the Node process makes (ContestPulse aside,
 which is a separate Go program). Keep it that way by default: nothing here
 blocks, and every failure path logs and continues.
 
-Results are cached in `callsign_cache` to avoid re-querying during a
-contest; the cache is cleared on `DELETE /api/db`.
+Results are cached in `callsign_cache` for ~6 months (CJ, 2026-10-09:
+callsigns rarely change) -- a "not found" for a day, so a new licensee
+isn't a bust for half a year. The rules live in `src/lookup/ttl.js`, shared
+with hamdata. **`DELETE /api/db` does NOT clear the cache** (a pre-contest
+reset would otherwise re-look-up every call); `DELETE /api/lookup/cache`
+(token + `X-Confirm`, the Admin page's "Clear Callsign Cache") does.
 
 **Runtime pause/resume** (`public/admin.html` "Callsign Lookup" card):
 `svc.pause()`/`svc.resume()` on the service returned by `createLookupService`
@@ -637,7 +643,12 @@ contest; the cache is cleared on `DELETE /api/db`.
 mid-contest kill switch, separate from whether a provider was configured
 at all. `GET /api/lookup/status`, `POST /api/lookup/pause` / `.../resume`
 (same optional bearer-token gate as `DELETE /api/db`, but no `X-Confirm` --
-this is instantly reversible) sit in `src/routes/api.js`. Pausing doesn't
+this is instantly reversible) sit in `src/routes/api.js`. The paused state
+is **persisted** (`settings.lookup_paused`), so it survives a restart or
+deploy. With hamdata, `GET /api/lookup/status` also reports
+`upstream_paused`: the box operator stopped outgoing lookups for everyone
+(`hamdata-ctl stop-lookups`); the hamdata client raises `HAMDATA_PAUSED`
+for those 503s and the queue logs it once instead of per call. Pausing doesn't
 just stop new `enqueue()` calls; it drops whatever's already queued too
 (clearing their `pending` entries as well, so they aren't stuck
 "already queued" forever) -- an immediate stop for a multi-op that decides
@@ -653,8 +664,8 @@ not-found `callsign_cache` rows (`json_extract(data,'$.found') = 0`,
 `features.lookup.enabled` AND a non-empty list, so it's invisible unless
 lookup is on and something is actually flagged. Deliberately not a stored
 flag table -- deriving it fresh means a correction in the logger clears it
-with no extra bookkeeping, and it's wiped by `DELETE /api/db` for free
-(the cache is). Dashboard only; the analyzer has no equivalent.
+with no extra bookkeeping. It empties when the QSOs go (`DELETE /api/db`)
+or the cache does. Dashboard only; the analyzer has no equivalent.
 
 ## Space Weather
 
@@ -683,17 +694,15 @@ chip. The analyzer never triggers a fetch.
 `CONTESTSCORE_TENANT=<call>` (+ optional `CONTESTSCORE_TENANT_NAME`) marks
 an instance as one club's scoreboard on a shared VPS -- see `src/tenant.js`.
 Everything about it lives there and is read from env per request:
-- `tenantGuard` (first middleware in `app.js`, ahead of `express.static`)
-  404s the admin page (`/admin.html`, `/admin`, `/js/admin.js`),
-  `DELETE /api/db` and `POST /api/lookup/{pause,resume}`. Add a route to
-  `BLOCKED` there, never by sprinkling checks through the routers.
-- `GET /api/features` gains `tenant: { call, name }` (null standalone);
-  `public/js/chrome.js` uses it only to drop the Admin nav link --
-  asynchronously, so a standalone page never changes. The header and tab
-  title stay "ContestPulse" (CJ, 2026-10-08): the station call already
-  shows in the score panel once a logger sends score data.
-- `server.js` exits at startup if tenant mode is set without
-  `HAMDATA_URL`, or with a malformed id.
+- The **Admin page stays available** (CJ, 2026-10-09): each club resets
+  its own contest data, switches its own lookups on/off and clears its own
+  callsign cache. Every one of those actions needs the club's token, and
+  `server.js` refuses to start in tenant mode without
+  `CONTESTSCORE_API_TOKEN` -- or without `HAMDATA_URL`, or with a
+  malformed id -- so a hosted admin page can never be open.
+- `GET /api/features` gains `tenant: { call, name }` (null standalone).
+  The header and tab title stay "ContestPulse" (CJ, 2026-10-08): the
+  station call already shows in the score panel.
 - The analyzer and ingest are unchanged: both gated by this instance's own
   `CONTESTSCORE_API_TOKEN`, which in tenant mode is the club's token.
 - **No UDP sockets** (`src/udp/index.js`): a tenant only receives
@@ -724,13 +733,22 @@ can't drift:
   same schema; only `solar_snapshots` and `callsign_cache` are written),
   `createSolarService` exactly as an instance runs it, and a HamQTH client
   from `src/lookup/hamqth.js`. It forces `HAMDATA_URL` empty for itself.
-- `hamdata/broker.js` -- answers one lookup at a time: shared cache (found
-  30 days, not-found 1 day, only `source = 'hamqth'` rows), collapses
+- `hamdata/broker.js` -- answers one lookup at a time: shared cache (same
+  TTLs as instances, `src/lookup/ttl.js`; only `source = 'hamqth'` rows),
+  collapses
   duplicate in-flight calls, spaces upstream requests 350 ms apart across
   *all* instances. 503 when paused/unconfigured, 502 on upstream failure.
 - `hamdata/app.js` -- `GET /health`, `/solar`, `/solar/since?after=`,
   `/lookup/status`, `/lookup/:call`; `POST /lookup/pause|resume` need
   `HAMDATA_TOKEN` (fail closed). Binds `127.0.0.1:3100` by default.
+  `DELETE /lookup/cache` (token + `X-Confirm`) clears the shared cache.
+- **Global stop** (CJ, 2026-10-09: HamQTH lookups use the operator's own
+  account): `POST /lookup/pause` stops ALL outgoing lookups for every
+  instance, persisted in hamdata's `settings`, so a restart never turns
+  them back on. Cache hits are still answered; misses get
+  `503 { code: 'paused' }`. Operator tool: `deploy/hamdata-ctl`
+  (`status|stop-lookups|start-lookups|clear-cache`, installed to
+  `/usr/local/sbin` by the deploy script).
 - `hamdata/import-solar.js` -- one-time seed of hamdata's history from an
   existing instance's DB.
 

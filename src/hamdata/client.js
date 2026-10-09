@@ -25,9 +25,13 @@ function createHamdataClient({ url, fetchImpl, timeoutMs = TIMEOUT_MS } = {}) {
   async function getJson(pathAndQuery) {
     const res = await doFetch(`${url}${pathAndQuery}`, { signal: AbortSignal.timeout(timeoutMs) });
     if (!res.ok) {
-      let detail = '';
-      try { detail = (await res.json()).error || ''; } catch { /* not JSON */ }
-      throw new Error(`hamdata ${pathAndQuery.split('?')[0]}: HTTP ${res.status}${detail ? ` (${detail})` : ''}`);
+      let body = {};
+      try { body = await res.json(); } catch { /* not JSON */ }
+      const err = new Error(`hamdata ${pathAndQuery.split('?')[0]}: HTTP ${res.status}${body.error ? ` (${body.error})` : ''}`);
+      // The box operator stopped all outgoing HamQTH lookups (hamdata-ctl
+      // stop-lookups): not a fault, so callers can say so instead of erroring.
+      if (body.code === 'paused') err.code = 'HAMDATA_PAUSED';
+      throw err;
     }
     return res.json();
   }
@@ -46,7 +50,13 @@ function createHamdataClient({ url, fetchImpl, timeoutMs = TIMEOUT_MS } = {}) {
     return getJson(`/solar/since?after=${encodeURIComponent(after || '')}`);
   }
 
-  return { lookup, solarSince };
+  // -> hamdata's lookup status ({ enabled, paused, ... }); paused = the box
+  // operator has stopped outgoing lookups for every instance.
+  async function lookupStatus() {
+    return getJson('/lookup/status');
+  }
+
+  return { lookup, solarSince, lookupStatus };
 }
 
 module.exports = { createHamdataClient, resolveHamdataUrl };

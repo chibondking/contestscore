@@ -219,12 +219,15 @@ function prepare() {
     getQsoByExtId: _getQsoByExtId,
     getQsoByNaturalKey: _getQsoByNaturalKey,
     getQsoCountSince: _getQsoCountSince,
+    // The contest reset (DELETE /api/db, the Admin page). Contest data only:
+    // NOT the callsign cache (kept ~6 months on purpose, cleared on its own
+    // -- clearCallsignCache) and NEVER solar_snapshots.
     clearAll: db.transaction(() => {
       _delQsos.run();
       _delScores.run();
-      _delCache.run();
       _delRadios.run();
     }),
+    clearCallsignCache: _delCache,
 
     upsertRadio: _upsertRadio,
     getRadios: _getRadios,
@@ -252,16 +255,16 @@ function prepare() {
       "SELECT call FROM callsign_cache WHERE source = 'hamqth' AND json_extract(data, '$.found') = 0"
     ),
 
-    // Space weather (src/solar/). Append-only; NOT part of clearAll.
+    // Space weather (src/solar/). Append-only and NEVER deleted -- not by
+    // clearAll, not by age, not by anything (CJ, 2026-10-09). There is
+    // deliberately no DELETE on solar_snapshots anywhere in this codebase;
+    // test/db/solarNeverDeleted.test.js enforces that.
     insertSolarSnapshot: db.prepare(`
       INSERT INTO solar_snapshots (sfi, a_index, k_index, sunspots, xray, geomag, source_updated, fetched_at)
       VALUES (@sfi, @a_index, @k_index, @sunspots, @xray, @geomag, @source_updated,
               COALESCE(@fetched_at, datetime('now')))
     `),
     getLatestSolar: db.prepare('SELECT * FROM solar_snapshots ORDER BY id DESC LIMIT 1'),
-    pruneSolarByAge: db.prepare(
-      "DELETE FROM solar_snapshots WHERE fetched_at < datetime('now', @modifier)"
-    ),
     // Readings spanning a from-live analysis's own session -- the analyzer
     // compare page's "conditions during this session" chart. Only ever
     // meaningful for a live-sourced analysis; an uploaded log from an
@@ -358,6 +361,7 @@ function getPersistedQso(qso) {
 }
 
 function clearQsos() { return prepare().clearAll(); }
+function clearCallsignCache() { return prepare().clearCallsignCache.run().changes; }
 
 // N1MM-style rate meter: QSO count in each of several trailing windows,
 // extrapolated to a QSOs/hour figure the way N1MM's own rate display does
@@ -467,9 +471,6 @@ function insertSolarSnapshot(r = {}) {
   });
 }
 function getLatestSolar() { return prepare().getLatestSolar.get() || null; }
-function pruneSolarSnapshots({ ttlDays = 1826 } = {}) {
-  if (ttlDays > 0) prepare().pruneSolarByAge.run({ modifier: `-${ttlDays} days` });
-}
 // Readings between two datetime('now')-shaped UTC strings -- the analyzer
 // compare page's "conditions during this session" chart, for a from-live
 // analysis's own span. See the prepared statement's comment for why a
@@ -535,12 +536,12 @@ function pruneAnalyzedLogs({ keep = 0, ttlDays = 1826 } = {}) {
 }
 
 module.exports = {
-  upsertQso, deleteQso, getQsos, getPersistedQso, clearQsos, getQsoRate,
+  upsertQso, deleteQso, getQsos, getPersistedQso, clearQsos, clearCallsignCache, getQsoRate,
   upsertRadio, getRadios,
   insertScoreBreakdown, getLatestScore, getScoreHistory, getScoreBreakdown,
   getSetting, setSetting,
   getCachedCallsign, getCachedLocation, cacheCallsign, getNotFoundCalls,
-  insertSolarSnapshot, getLatestSolar, pruneSolarSnapshots, getSolarInRange, getSolarForSession,
+  insertSolarSnapshot, getLatestSolar, getSolarInRange, getSolarForSession,
   getSolarSince,
   insertAnalyzedLog, getAnalyzedLog, listAnalyzedLogs, deleteAnalyzedLog,
   pruneAnalyzedLogs,

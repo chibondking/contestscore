@@ -3,7 +3,7 @@ const {
   getQsos, clearQsos, getQsoRate,
   getRadios,
   getLatestScore, getScoreHistory,
-  getNotFoundCalls,
+  getNotFoundCalls, clearCallsignCache,
   getSolarForSession,
   getCachedLocation,
 } = require('../db/queries');
@@ -16,6 +16,7 @@ const { freqToBand } = require('../parsers/util');
 const { getDb } = require('../db');
 const { resolveLatLonEnriched } = require('../analyze/geo');
 const { getTenant } = require('../tenant');
+const { createHamdataClient } = require('../hamdata/client');
 
 const router = Router();
 
@@ -119,9 +120,34 @@ function checkToken(req, res) {
 // only, read even when the UDP listeners -- and so the lookup service
 // itself -- were never started, e.g. under test): this reflects the actual
 // running queue, or a quiet { enabled: false } if there isn't one.
-router.get('/lookup/status', (req, res) => {
+// With a shared hamdata, also reports whether the box operator has stopped
+// outgoing HamQTH lookups for everyone (`upstream_paused`) -- cached
+// callsigns still resolve then, new ones don't.
+router.get('/lookup/status', async (req, res) => {
   const svc = getLookupService();
-  res.json(svc ? svc.getStatus() : { provider: 'none', enabled: false, paused: false });
+  const status = svc ? svc.getStatus() : { provider: 'none', enabled: false, paused: false };
+  const lk = resolveLookupConfig();
+  if (lk.provider === 'hamdata') {
+    try {
+      const up = await createHamdataClient({ url: lk.url, timeoutMs: 2000 }).lookupStatus();
+      status.upstream_paused = Boolean(up.paused);
+    } catch {
+      status.upstream_paused = null; // hamdata unreachable -- unknown
+    }
+  }
+  res.json(status);
+});
+
+// DELETE /api/lookup/cache -- forget every cached callsign lookup (busts
+// panel included) so they're looked up afresh. Same token + X-Confirm
+// posture as DELETE /api/db. Touches callsign_cache only -- never QSOs,
+// never solar data.
+router.delete('/lookup/cache', (req, res) => {
+  if (!checkToken(req, res)) return;
+  if (req.headers['x-confirm'] !== 'yes') {
+    return res.status(400).json({ error: 'Missing X-Confirm: yes header' });
+  }
+  res.json({ cleared: clearCallsignCache() });
 });
 
 // POST /api/lookup/pause -- immediate kill switch for HamQTH lookups,

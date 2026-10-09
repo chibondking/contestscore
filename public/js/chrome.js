@@ -60,22 +60,6 @@ const THEME_KEY = 'contestpulse_theme';
         <span class="theme-toggle__track" aria-hidden="true"><span class="theme-toggle__thumb"></span></span>
         <span>Light Mode</span>
       </label>`);
-    // Hosted (tenant) scoreboard: drop the Admin link (the server 404s it
-    // anyway -- src/tenant.js). The header stays "ContestPulse" on purpose:
-    // whose scoreboard it is already shows the moment a logger sends score
-    // data (the station call in the score panel), so naming the tenant up
-    // here would only repeat it. Async because this file runs synchronously
-    // before Alpine and can't wait on a fetch; a standalone install (no
-    // `tenant` in /api/features) never changes at all.
-    fetch('/api/features')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((f) => {
-        if (!f || !f.tenant) return;
-        const admin = header.querySelector('a.nav__link[href="/admin.html"]');
-        if (admin) admin.remove();
-      })
-      .catch(() => { /* keep the default header */ });
-
     header.querySelector('.theme-toggle__input').addEventListener('change', (e) => {
       try { localStorage.setItem(THEME_KEY, e.target.checked ? 'light' : 'dark'); } catch { /* ignore */ }
       // Chart.js canvases (charts.js/dashboard.js) pick their tick/grid

@@ -1,6 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { createLookupBroker, FOUND_TTL_MS, NOT_FOUND_TTL_MS } = require('../../hamdata/broker');
+const { createLookupBroker } = require('../../hamdata/broker');
+const { FOUND_TTL_MS, NOT_FOUND_TTL_MS } = require('../../src/lookup/ttl');
 
 // In-memory stand-in for callsign_cache: same row shape as getCachedCallsign.
 function memCache(clock) {
@@ -65,6 +66,21 @@ describe('hamdata lookup broker', () => {
     mem.cache('K1ABC', { call: 'K1ABC', found: true }, 'n1mm');
     await broker.get('K1ABC');
     assert.deepEqual(calls, ['K1ABC']);
+  });
+
+  it('the global stop is persisted, and a stopped broker says why (code: paused)', async () => {
+    const settings = {};
+    const mk = () => createLookupBroker({
+      client: { lookup: async (c) => ({ call: c, found: true }) },
+      getCached: () => undefined, cache: () => {}, betweenMs: 0, sleep: async () => {},
+      getSetting: (k) => settings[k] ?? null, setSetting: (k, v) => { settings[k] = v; },
+    });
+    mk().pause();
+    const restarted = mk();
+    assert.equal(restarted.getStatus().paused, true);
+    await assert.rejects(restarted.get('K9CT'), (e) => e.status === 503 && e.code === 'paused');
+    restarted.resume();
+    assert.equal(mk().getStatus().paused, false);
   });
 
   it('503s while paused or with no credentials, but still serves cache hits', async () => {

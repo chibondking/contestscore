@@ -37,6 +37,9 @@ sudo install -o root -g root -m 755 \
 sudo install -o root -g root -m 755 \
   /opt/contestscore/app/deploy/contestscore-tenant \
   /usr/local/sbin/contestscore-tenant
+sudo install -o root -g root -m 755 \
+  /opt/contestscore/app/deploy/hamdata-ctl \
+  /usr/local/sbin/hamdata-ctl
 if ! sudo cmp -s /opt/contestscore/app/deploy/contestscore@.service /etc/systemd/system/contestscore@.service; then
   sudo install -o root -g root -m 644 \
     /opt/contestscore/app/deploy/contestscore@.service \

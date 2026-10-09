@@ -7,7 +7,9 @@ const { describe, it, before, after, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { initDb, closeDb } = require('../../src/db/index');
 const { resetStatements } = require('../../src/db/queries');
-const { getTenant, isBlocked } = require('../../src/tenant');
+const { getTenant } = require('../../src/tenant');
+const { insertSolarSnapshot, cacheCallsign, getCachedCallsign } = require('../../src/db/queries');
+const { getDb } = require('../../src/db/index');
 
 let server;
 let base;
@@ -45,30 +47,48 @@ describe('getTenant', () => {
       assert.throws(() => getTenant({ CONTESTSCORE_TENANT: bad }), /callsign-like/);
     }
   });
-  it('treats HEAD like GET when matching blocked routes', () => {
-    assert.equal(isBlocked('HEAD', '/admin.html'), true);
-    assert.equal(isBlocked('GET', '/api/qsos'), false);
-  });
 });
 
 describe('tenant mode routes', () => {
-  const blocked = [
-    ['GET', '/admin.html'], ['GET', '/js/admin.js'],
-    ['DELETE', '/api/db'], ['POST', '/api/lookup/pause'], ['POST', '/api/lookup/resume'],
-  ];
+  const auth = { Authorization: 'Bearer club-token', 'X-Confirm': 'yes' };
 
-  it('blocked routes 404 in tenant mode', async () => {
+  it('the Admin page is available to a hosted club', async () => {
     process.env.CONTESTSCORE_TENANT = 'k9ct';
-    for (const [method, p] of blocked) {
-      const res = await fetch(`${base}${p}`, { method, headers: { 'X-Confirm': 'yes' } });
-      assert.equal(res.status, 404, `${method} ${p}`);
-    }
+    process.env.CONTESTSCORE_API_TOKEN = 'club-token';
+    assert.equal((await fetch(`${base}/admin.html`)).status, 200);
+    assert.equal((await fetch(`${base}/js/admin.js`)).status, 200);
   });
 
-  it('the same routes still work on a standalone install', async () => {
-    assert.equal((await fetch(`${base}/admin.html`)).status, 200);
-    const del = await fetch(`${base}/api/db`, { method: 'DELETE', headers: { 'X-Confirm': 'yes' } });
-    assert.equal(del.status, 200);
+  it('every admin action needs the club token', async () => {
+    process.env.CONTESTSCORE_TENANT = 'k9ct';
+    process.env.CONTESTSCORE_API_TOKEN = 'club-token';
+    for (const [method, p] of [['DELETE', '/api/db'], ['POST', '/api/lookup/pause'], ['POST', '/api/lookup/resume'], ['DELETE', '/api/lookup/cache']]) {
+      const res = await fetch(`${base}${p}`, { method, headers: { 'X-Confirm': 'yes' } });
+      assert.equal(res.status, 401, `${method} ${p} without token`);
+    }
+    assert.equal((await fetch(`${base}/api/db`, { method: 'DELETE', headers: auth })).status, 200);
+  });
+
+  it('a reset and a cache clear never touch solar data; the reset keeps the cache', async () => {
+    process.env.CONTESTSCORE_TENANT = 'k9ct';
+    process.env.CONTESTSCORE_API_TOKEN = 'club-token';
+    insertSolarSnapshot({ sfi: 111, a: 4, k: 1 });
+    cacheCallsign('W1AW', { call: 'W1AW', found: true }, 'hamqth');
+    const solar = () => getDb().prepare('SELECT COUNT(*) c FROM solar_snapshots').get().c;
+    const before = solar();
+    await fetch(`${base}/api/db`, { method: 'DELETE', headers: auth });
+    assert.ok(getCachedCallsign('W1AW'), 'reset cleared the callsign cache');
+    const res = await fetch(`${base}/api/lookup/cache`, { method: 'DELETE', headers: auth });
+    assert.equal(res.status, 200);
+    assert.ok((await res.json()).cleared >= 1);
+    assert.equal(getCachedCallsign('W1AW'), undefined);
+    assert.equal(solar(), before);
+  });
+
+  it('clearing the cache needs X-Confirm', async () => {
+    process.env.CONTESTSCORE_API_TOKEN = 'club-token';
+    const res = await fetch(`${base}/api/lookup/cache`, { method: 'DELETE', headers: { Authorization: 'Bearer club-token' } });
+    assert.equal(res.status, 400);
   });
 
   it('read routes and pages are unchanged', async () => {
@@ -79,7 +99,7 @@ describe('tenant mode routes', () => {
     }
   });
 
-  it('the analyzer stays on, gated by the tenant token (not 404)', async () => {
+  it('the analyzer stays on, gated by the tenant token', async () => {
     process.env.CONTESTSCORE_TENANT = 'k9ct';
     process.env.CONTESTSCORE_API_TOKEN = 'club-token';
     const res = await fetch(`${base}/api/analyze`, { method: 'POST', body: 'x' });
@@ -101,8 +121,14 @@ describe('server startup in tenant mode', () => {
     timeout: 5000,
   });
 
+  it('refuses to start without a token (it guards the admin actions)', () => {
+    const r = run({ CONTESTSCORE_TENANT: 'k9ct', HAMDATA_URL: 'http://127.0.0.1:1' });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /CONTESTSCORE_API_TOKEN is required/);
+  });
+
   it('refuses to start without HAMDATA_URL', () => {
-    const r = run({ CONTESTSCORE_TENANT: 'k9ct' });
+    const r = run({ CONTESTSCORE_TENANT: 'k9ct', CONTESTSCORE_API_TOKEN: 't' });
     assert.equal(r.status, 1);
     assert.match(r.stderr, /HAMDATA_URL is required/);
   });

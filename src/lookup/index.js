@@ -13,7 +13,8 @@
 // queue drains slowly (with backoff) and no lookup:result events fire.
 
 const defaultConfig = require('../../config/default.json');
-const { getCachedCallsign, getQsos } = require('../db/queries');
+const { getCachedCallsign, getQsos, getSetting, setSetting } = require('../db/queries');
+const { isFresh } = require('./ttl');
 const { createHamqthClient } = require('./hamqth');
 const { createHamdataClient, resolveHamdataUrl } = require('../hamdata/client');
 
@@ -66,6 +67,9 @@ function resolveLookupConfig(env = process.env, config = defaultConfig) {
 function createLookupService({ emitter, env, config, deps = {} } = {}) {
   const cfg = resolveLookupConfig(env, config);
   const getCached = deps.getCachedCallsign || getCachedCallsign;
+  const readSetting = deps.getSetting || getSetting;
+  const writeSetting = deps.setSetting || setSetting;
+  const now = deps.now || Date.now;
   const listQsos = deps.getQsos || getQsos;
   const sleep = deps.sleep || ((ms) => new Promise((r) => { setTimeout(r, ms); }));
   const betweenMs = deps.betweenMs != null ? deps.betweenMs : BETWEEN_MS;
@@ -87,16 +91,22 @@ function createLookupService({ emitter, env, config, deps = {} } = {}) {
   let runPromise = null;
   let backoffMs = 0;
   let backoffUntil = 0;
-  // Runtime kill switch, toggled from the admin console mid-contest (e.g. a
-  // multi-op pushing enough QSO rate that HamQTH traffic itself becomes a
-  // concern) -- separate from `enabled`, which only reflects whether a
-  // provider was configured at startup. Paused rejects new enqueues *and*
-  // drops whatever's already queued, rather than just letting the backlog
-  // drain on its own: the whole point is an immediate stop, not a slow one.
+  let saidUpstreamPaused = false;
+  // Kill switch, toggled from the admin page (e.g. a multi-op pushing enough
+  // QSO rate that lookup traffic itself becomes a concern, or a hosted club
+  // that just doesn't want lookups) -- separate from `enabled`, which only
+  // reflects whether a provider was configured at startup. Paused rejects
+  // new enqueues *and* drops whatever's already queued: the point is an
+  // immediate stop, not a slow one. Persisted in `settings` (lookup_paused)
+  // so it survives a restart or deploy.
+  const PAUSED_KEY = 'lookup_paused';
   let paused = false;
+  try { paused = readSetting(PAUSED_KEY) === '1'; } catch { paused = false; }
 
+  // Fresh = cached within the TTL (src/lookup/ttl.js: ~6 months found, a
+  // day not-found). A stale row is looked up again and replaced.
   function isCached(call) {
-    try { return Boolean(getCached(call)); } catch { return false; }
+    try { return isFresh(getCached(call), now()); } catch { return false; }
   }
 
   function enqueue(rawCall) {
@@ -121,8 +131,12 @@ function createLookupService({ emitter, env, config, deps = {} } = {}) {
         if (emitter) emitter.emit('lookup:result', { ...rec, call, source: rec.source || cfg.provider, found: rec.found });
         backoffMs = 0;
         backoffUntil = 0;
+        saidUpstreamPaused = false;
       } catch (err) {
-        console.error(`lookup ${call}: ${err.message}`);
+        // The box operator stopping lookups for everyone isn't a fault --
+        // say so once, not once per call.
+        if (err.code !== 'HAMDATA_PAUSED') console.error(`lookup ${call}: ${err.message}`);
+        else if (!saidUpstreamPaused) { console.warn('lookup: stopped upstream by the server operator -- cached calls only'); saidUpstreamPaused = true; }
         backoffMs = backoffMs ? Math.min(backoffMs * 2, BACKOFF_MAX_MS) : BACKOFF_START_MS;
         backoffUntil = Date.now() + backoffMs;
         // Drop the call; a later contactreplace / re-log re-enqueues it.
@@ -154,14 +168,20 @@ function createLookupService({ emitter, env, config, deps = {} } = {}) {
   // will run() far enough to hit that call's own `finally` otherwise --
   // left uncleared, resume() would find those calls permanently stuck
   // "already queued" and silently refuse to ever re-enqueue them.
+  function persist(value) {
+    try { writeSetting(PAUSED_KEY, value ? '1' : '0'); } catch (e) { console.warn(`lookup: couldn't save paused state: ${e.message}`); }
+  }
+
   function pause() {
     paused = true;
+    persist(true);
     for (const call of queue) pending.delete(call);
     queue.length = 0;
   }
 
   function resume() {
     paused = false;
+    persist(false);
   }
 
   return {

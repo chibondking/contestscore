@@ -4,30 +4,20 @@
 // CONTESTSCORE_TENANT=<call> switches it on; CONTESTSCORE_TENANT_NAME is an
 // optional display name ("K9CT Contest Club") for operators' tooling
 // (contestscore-tenant list, the ops dashboard) -- the public page header
-// stays "ContestPulse"; the station call already shows in the score panel. Read from env on every call,
-// same as /api/features, so tests can flip it per request.
+// stays "ContestPulse"; the station call already shows in the score panel.
+// Read from env on every call, same as /api/features.
 //
-// What changes in tenant mode (and nothing else):
-//  * BLOCKED routes 404 -- the admin page and the two admin actions behind
-//    it. Tenant dashboards are public; wiping the contest DB or pausing a
-//    lookup service the whole box shares has no place there.
-//  * GET /api/features carries { tenant: { call, name } } so the shared
-//    page chrome can drop the Admin link.
-//  * server.js refuses to start without HAMDATA_URL (a tenant never talks
-//    to hamqsl/HamQTH itself).
-// The analyzer stays on: uploads are gated by this tenant's own
-// CONTESTSCORE_API_TOKEN, like ingest.
+// What tenant mode changes (and nothing else):
+//  * server.js refuses to start without CONTESTSCORE_API_TOKEN (the club's
+//    own token) or without HAMDATA_URL. The Admin page stays available --
+//    each club resets its own contest data and switches its own lookups
+//    on/off (CJ, 2026-10-09) -- and every admin action needs that token, so
+//    a hosted instance can never run with its admin actions open.
+//  * no UDP sockets (src/udp/index.js) -- data only arrives over
+//    ContestPulse's authenticated HTTPS ingest.
+//  * GET /api/features carries { tenant: { call, name } }.
 
 const CALL_RE = /^[a-z0-9]{3,10}$/i;
-
-const BLOCKED = [
-  ['GET', '/admin.html'],
-  ['GET', '/admin'],
-  ['GET', '/js/admin.js'],
-  ['DELETE', '/api/db'],
-  ['POST', '/api/lookup/pause'],
-  ['POST', '/api/lookup/resume'],
-];
 
 function getTenant(env = process.env) {
   const raw = String(env.CONTESTSCORE_TENANT || '').trim();
@@ -38,19 +28,4 @@ function getTenant(env = process.env) {
   return { call, name };
 }
 
-function isBlocked(method, path) {
-  const m = method === 'HEAD' ? 'GET' : method;
-  return BLOCKED.some(([bm, bp]) => bm === m && bp === path);
-}
-
-// Express middleware, mounted before express.static and the routers.
-function tenantGuard(req, res, next) {
-  let tenant = null;
-  try { tenant = getTenant(); } catch { tenant = null; }
-  if (tenant && isBlocked(req.method, req.path)) {
-    return res.status(404).json({ error: 'Not available on a hosted scoreboard' });
-  }
-  return next();
-}
-
-module.exports = { getTenant, tenantGuard, isBlocked, BLOCKED };
+module.exports = { getTenant };

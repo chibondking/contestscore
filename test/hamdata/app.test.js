@@ -79,3 +79,26 @@ describe('hamdata API', () => {
     assert.equal((await client.solarSince('')).length, 2);
   });
 });
+
+describe('hamdata cache + global stop over HTTP', () => {
+  it('a stopped hamdata answers misses with code "paused", which the client turns into HAMDATA_PAUSED', async () => {
+    await fetch(`${base}/lookup/pause`, { method: 'POST', headers: { Authorization: 'Bearer sekrit' } });
+    try {
+      const res = await fetch(`${base}/lookup/ZZ1ZZ`);
+      assert.equal(res.status, 503);
+      assert.equal((await res.json()).code, 'paused');
+      await assert.rejects(createHamdataClient({ url: base }).lookup('ZZ2ZZ'), (e) => e.code === 'HAMDATA_PAUSED');
+      assert.equal((await createHamdataClient({ url: base }).lookupStatus()).paused, true);
+    } finally {
+      await fetch(`${base}/lookup/resume`, { method: 'POST', headers: { Authorization: 'Bearer sekrit' } });
+    }
+  });
+
+  it('DELETE /lookup/cache needs the token and X-Confirm', async () => {
+    assert.equal((await fetch(`${base}/lookup/cache`, { method: 'DELETE' })).status, 401);
+    assert.equal((await fetch(`${base}/lookup/cache`, { method: 'DELETE', headers: { Authorization: 'Bearer sekrit' } })).status, 400);
+    const ok = await fetch(`${base}/lookup/cache`, { method: 'DELETE', headers: { Authorization: 'Bearer sekrit', 'X-Confirm': 'yes' } });
+    assert.equal(ok.status, 200);
+    assert.equal(typeof (await ok.json()).cleared, 'number');
+  });
+});

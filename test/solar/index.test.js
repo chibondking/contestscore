@@ -46,7 +46,7 @@ describe('parseSolarXml', () => {
 describe('resolveSolarConfig', () => {
   it('defaults to enabled, 120 min, 1826 days (5 years)', () => {
     assert.deepEqual(resolveSolarConfig({}, { solar: {} }), {
-      enabled: true, refreshMs: 120 * 60000, retentionDays: 1826, hamdataUrl: '',
+      enabled: true, refreshMs: 120 * 60000, hamdataUrl: '',
     });
   });
 
@@ -55,9 +55,8 @@ describe('resolveSolarConfig', () => {
   });
 
   it('env overrides the interval and retention', () => {
-    const r = resolveSolarConfig({ SOLAR_REFRESH_MINUTES: '5', SOLAR_RETENTION_DAYS: '30' }, { solar: {} });
+    const r = resolveSolarConfig({ SOLAR_REFRESH_MINUTES: '5' }, { solar: {} });
     assert.equal(r.refreshMs, 5 * 60000);
-    assert.equal(r.retentionDays, 30);
   });
 });
 
@@ -73,7 +72,6 @@ describe('createSolarService', () => {
         fetchImpl: overrides.fetchImpl || okFetch(),
         insertSolarSnapshot: (r) => { inserts.push(r); stored = { ...ROW }; },
         getLatestSolar: () => stored,
-        pruneSolarSnapshots: () => {},
       },
     });
     return { svc, inserts, emits, current: () => stored };
@@ -139,7 +137,6 @@ describe('createSolarService in hamdata mode', () => {
         hamdataClient: { solarSince: async (after) => { asked.push(after); return pages.shift() || []; } },
         insertSolarSnapshot: (r) => table.push({ sfi: r.sfi, a_index: r.a, fetched_at: r.fetched_at }),
         getLatestSolar: () => table[table.length - 1] || null,
-        pruneSolarSnapshots: () => {},
         fetchImpl: async () => { throw new Error('must not hit hamqsl in hamdata mode'); },
       },
     });
@@ -182,7 +179,6 @@ describe('createSolarService in hamdata mode', () => {
         hamdataClient: { solarSince: async () => { throw new Error('ECONNREFUSED'); } },
         insertSolarSnapshot: () => { throw new Error('no'); },
         getLatestSolar: () => ROW,
-        pruneSolarSnapshots: () => {},
       },
     });
     assert.equal(await svc.refresh(), null);

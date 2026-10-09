@@ -1,0 +1,36 @@
+#!/bin/bash
+# hamdata-ctl -- the box operator's controls for the shared hamdata service.
+# HamQTH lookups go out under the operator's own HamQTH account, so the
+# operator can stop them for every scoreboard on the box at once (CJ,
+# 2026-10-09). Installed to /usr/local/sbin/hamdata-ctl by
+# contestscore-deploy.sh; run as root (it reads HAMDATA_TOKEN from
+# hamdata.env). The ops dashboard gets a button for the same thing later.
+#
+#   hamdata-ctl status          lookups running/stopped, cache hits, solar age
+#   hamdata-ctl stop-lookups    stop ALL outgoing HamQTH lookups (persists
+#                               across restarts); cached calls still resolve
+#   hamdata-ctl start-lookups   turn them back on
+#   hamdata-ctl clear-cache     forget the shared callsign cache (solar data
+#                               is never touched -- it is never deleted)
+
+set -euo pipefail
+ENV_FILE=/opt/contestscore/hamdata/hamdata.env
+[[ $EUID -eq 0 ]] || { echo "hamdata-ctl: run as root (sudo)" >&2; exit 1; }
+[[ -r "$ENV_FILE" ]] || { echo "hamdata-ctl: can't read $ENV_FILE" >&2; exit 1; }
+TOKEN=$(sed -n 's/^HAMDATA_TOKEN=//p' "$ENV_FILE" | tail -1)
+PORT=$(sed -n 's/^HAMDATA_PORT=//p' "$ENV_FILE" | tail -1); PORT=${PORT:-3100}
+URL="http://127.0.0.1:$PORT"
+
+call() { # method path [extra curl args] -- token via a config pipe, never argv
+  local m="$1" p="$2"; shift 2
+  curl -fsS -X "$m" -K <(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN") "$@" "$URL$p"
+}
+show() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);console.log(JSON.stringify(j,null,2))})' 2>/dev/null || cat; echo; }
+
+case "${1:-}" in
+  status)        curl -fsS "$URL/health" | show ;;
+  stop-lookups)  call POST /lookup/pause | show; echo "Outgoing HamQTH lookups STOPPED for every scoreboard (cached calls still resolve)." ;;
+  start-lookups) call POST /lookup/resume | show; echo "Outgoing HamQTH lookups running." ;;
+  clear-cache)   call DELETE /lookup/cache -H 'X-Confirm: yes' | show ;;
+  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

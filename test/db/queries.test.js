@@ -304,8 +304,13 @@ describe('callsign_cache', () => {
     assert.equal(q.getCachedCallsign('ZZ9ZZZ'), undefined);
   });
 
-  it('clearQsos also wipes the callsign cache', () => {
+  it('clearQsos (the contest reset) keeps the callsign cache', () => {
     q.clearQsos();
+    assert.equal(q.getCachedCallsign('DL1ABC').call, 'DL1ABC');
+  });
+
+  it('clearCallsignCache empties it and reports how many rows went', () => {
+    assert.ok(q.clearCallsignCache() >= 1);
     assert.equal(q.getCachedCallsign('DL1ABC'), undefined);
   });
 });

@@ -7,11 +7,14 @@
 //   GET  /solar/since?after=     solar_snapshots rows newer than `after`, oldest first
 //   GET  /lookup/status
 //   GET  /lookup/:call           cached-or-fetched record, see broker.js
-//   POST /lookup/pause|resume    bearer HAMDATA_TOKEN (503 if unset -- fail closed)
+//   POST /lookup/pause|resume    bearer HAMDATA_TOKEN (503 if unset -- fail closed):
+//                                stop/start ALL outgoing HamQTH lookups (persisted)
+//   DELETE /lookup/cache         bearer HAMDATA_TOKEN + X-Confirm: yes -- clear the
+//                                shared callsign cache (never solar data)
 
 const express = require('express');
 const { getDb } = require('../src/db');
-const { getSolarSince } = require('../src/db/queries');
+const { getSolarSince, clearCallsignCache } = require('../src/db/queries');
 const { latestSolar } = require('../src/solar');
 const { stripSuffix } = require('../src/lookup');
 
@@ -57,13 +60,18 @@ function createApp({ broker, solar, env = process.env }) {
   app.post('/lookup/pause', requireToken, (req, res) => { broker.pause(); res.json(broker.getStatus()); });
   app.post('/lookup/resume', requireToken, (req, res) => { broker.resume(); res.json(broker.getStatus()); });
 
+  app.delete('/lookup/cache', requireToken, (req, res) => {
+    if (req.headers['x-confirm'] !== 'yes') return res.status(400).json({ error: 'Missing X-Confirm: yes header' });
+    return res.json({ cleared: clearCallsignCache() });
+  });
+
   app.get('/lookup/:call', async (req, res) => {
     const call = stripSuffix(req.params.call);
     if (!CALL_RE.test(call)) return res.status(400).json({ error: 'invalid callsign' });
     try {
       res.json(await broker.get(call));
     } catch (err) {
-      res.status(err.status || 502).json({ error: err.message });
+      res.status(err.status || 502).json({ error: err.message, ...(err.code === 'paused' ? { code: 'paused' } : {}) });
     }
   });
 

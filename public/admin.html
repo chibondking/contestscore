@@ -28,9 +28,10 @@
       <h2>Reset Contest Database</h2>
       <p class="empty" style="margin-bottom:1rem">
         Permanently deletes every logged QSO and the score history for this
-        instance. Radio state and the callsign lookup cache are also
-        cleared. This cannot be undone -- do this before a contest starts,
-        not during one.
+        scoreboard, and clears radio state. The callsign lookup cache is
+        kept (clear it separately below) and space-weather history is
+        never deleted. This cannot be undone -- do this before a contest
+        starts, not during one.
       </p>
 
       <div class="score-row" style="margin-bottom:1rem">
@@ -86,10 +87,16 @@
 
       <div class="score-row" style="margin-bottom:1rem">
         <div class="metric">
-          <span class="metric__value" x-text="!lookupStatus.enabled ? 'Off' : (lookupStatus.paused ? 'Paused' : 'Running')"></span>
+          <span class="metric__value" x-text="!lookupStatus.enabled ? 'Off' : (lookupStatus.paused ? 'Paused' : (lookupStatus.upstream_paused ? 'Stopped' : 'Running'))"></span>
           <span class="metric__label" x-text="'Status · ' + (lookupStatus.provider || 'none')"></span>
         </div>
       </div>
+
+      <p class="empty" x-show="lookupStatus.upstream_paused" style="margin-bottom:1rem">
+        Lookups are stopped by the server operator for every scoreboard on
+        this server. Callsigns already in the cache still resolve; new ones
+        aren't looked up until the operator turns lookups back on.
+      </p>
 
       <p class="empty" x-show="!lookupStatus.enabled">Lookup is not configured on this server -- nothing to pause.</p>
 
@@ -118,6 +125,27 @@
 
       <p x-show="!token && lookupStatus.enabled" class="empty" style="margin-top:0.5rem">Paste the admin token above to enable this.</p>
       <p x-show="lookupMessage" :style="'margin-top:1rem; color:' + (lookupMessageIsError ? 'var(--red)' : 'var(--green)')" x-text="lookupMessage"></p>
+    </section>
+
+    <section class="card card--wide" id="cache">
+      <h2>Callsign Lookup Cache</h2>
+      <p class="empty" style="margin-bottom:1rem">
+        Looked-up callsigns are kept for about six months (a "not found"
+        result for a day) so the same calls aren't looked up again every
+        contest. Clearing the cache forgets them all -- including the
+        Possible Busts list -- and they're looked up afresh as they're
+        worked. Contest data and space-weather history are not affected.
+      </p>
+      <button
+        @click="clearCache()"
+        :disabled="!token || cacheBusy"
+        style="padding:0.6em 1.2em; border-radius:4px; border:none; font-family:inherit; font-weight:bold; cursor:pointer;"
+        :style="(!token || cacheBusy) ? 'background:var(--border); color:var(--muted); cursor:not-allowed;' : 'background:var(--red); color:#fff;'"
+      >
+        <span x-text="cacheBusy ? 'Clearing…' : 'Clear Callsign Cache'"></span>
+      </button>
+      <p x-show="!token" class="empty" style="margin-top:0.5rem">Paste the admin token above to enable this.</p>
+      <p x-show="cacheMessage" :style="'margin-top:1rem; color:' + (cacheMessageIsError ? 'var(--red)' : 'var(--green)')" x-text="cacheMessage"></p>
     </section>
 
   </main>

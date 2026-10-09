@@ -67,6 +67,10 @@ function fakeClient(answers = {}) {
   };
 }
 
+// A callsign_cache row cached just now (src/lookup/ttl.js decides freshness).
+const sqlNow = (ms = Date.now()) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+const freshRow = (call, found = true, ms) => ({ call, data: JSON.stringify({ call, found }), source: 'hamqth', cached_at: sqlNow(ms) });
+
 const NOOP_DEPS = { sleep: () => Promise.resolve(), betweenMs: 0, getCachedCallsign: () => undefined, getQsos: () => [] };
 
 describe('createLookupService', () => {
@@ -127,7 +131,7 @@ describe('createLookupService', () => {
     const svc = createLookupService({
       emitter,
       env: { LOOKUP_PROVIDER: 'hamqth', HAMQTH_USERNAME: 'u', HAMQTH_PASSWORD: 'p' },
-      deps: { ...NOOP_DEPS, client, getCachedCallsign: (c) => (cached.has(c) ? { call: c } : undefined) },
+      deps: { ...NOOP_DEPS, client, getCachedCallsign: (c) => (cached.has(c) ? freshRow(c) : undefined) },
     });
 
     svc.enqueue('W1AW');
@@ -271,5 +275,41 @@ describe('lookup via hamdata', () => {
     await svc.idle();
     assert.equal(hits[0].source, 'hamqth');
     assert.equal(hits[0].found, false);
+  });
+});
+
+describe('lookup cache freshness + persisted pause', () => {
+  const { FOUND_TTL_MS, NOT_FOUND_TTL_MS } = require('../../src/lookup/ttl');
+  const hamqthEnv = { LOOKUP_PROVIDER: 'hamqth', HAMQTH_USERNAME: 'u', HAMQTH_PASSWORD: 'p' };
+
+  it('re-looks-up a found call after ~6 months and a not-found one after a day', async () => {
+    const now = Date.parse('2026-10-09T12:00:00Z');
+    const rows = {
+      FRESH: freshRow('FRESH', true, now - FOUND_TTL_MS + 3600e3),
+      OLD: freshRow('OLD', true, now - FOUND_TTL_MS - 3600e3),
+      BUST: freshRow('BUST', false, now - NOT_FOUND_TTL_MS - 3600e3),
+      NEWBUST: freshRow('NEWBUST', false, now - 3600e3),
+    };
+    const client = fakeClient({});
+    const svc = createLookupService({
+      emitter: new EventEmitter(), env: hamqthEnv,
+      deps: { ...NOOP_DEPS, client, now: () => now, getCachedCallsign: (c) => rows[c] },
+    });
+    for (const c of Object.keys(rows)) svc.enqueue(c);
+    await svc.idle();
+    assert.deepEqual(client.seen.sort(), ['BUST', 'OLD']);
+  });
+
+  it('pause/resume is saved and restored across restarts', async () => {
+    const settings = {};
+    const deps = { ...NOOP_DEPS, getSetting: (k) => settings[k] ?? null, setSetting: (k, v) => { settings[k] = v; } };
+    const a = createLookupService({ emitter: new EventEmitter(), env: hamqthEnv, deps: { ...deps, client: fakeClient({}) } });
+    a.pause();
+    assert.equal(settings.lookup_paused, '1');
+    const b = createLookupService({ emitter: new EventEmitter(), env: hamqthEnv, deps: { ...deps, client: fakeClient({}) } });
+    assert.equal(b.getStatus().paused, true);
+    b.resume();
+    const c = createLookupService({ emitter: new EventEmitter(), env: hamqthEnv, deps: { ...deps, client: fakeClient({}) } });
+    assert.equal(c.getStatus().paused, false);
   });
 });

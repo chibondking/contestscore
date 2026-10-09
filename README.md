@@ -483,7 +483,7 @@ curl -X DELETE http://localhost:3000/api/db -H "X-Confirm: yes"
 | `ANALYZE_TTL_DAYS`         | `1826` (5 years) — max age of a saved analysis (0 disables) |
 | `ANALYZE_MAX_BYTES`       | `5242880` — max upload size |
 | `HAMDATA_URL`              | — (unset = solar + lookup in-process; set = use a shared hamdata, see below) |
-| `CONTESTSCORE_TENANT`      | — (unset = normal install). A callsign-like id (`k9ct`) makes this a hosted club scoreboard: the Admin page, `DELETE /api/db` and lookup pause/resume return 404 and the Admin link is hidden. Requires `HAMDATA_URL`. |
+| `CONTESTSCORE_TENANT`      | — (unset = normal install). A callsign-like id (`k9ct`) makes this a hosted club scoreboard: no UDP, and it refuses to start without `HAMDATA_URL` and `CONTESTSCORE_API_TOKEN` (the club's token, which guards its Admin page). |
 | `CONTESTSCORE_TENANT_NAME` | — display name for operators' tooling (`contestscore-tenant list`, the ops dashboard); the page header stays "ContestPulse" |
 
 Copy `.env.example` to `.env` and fill in any values you want to override.
@@ -501,8 +501,10 @@ With a provider enabled, every new QSO's callsign is looked up in the
 background (one request at a time, paced, de-duped against the cache) and the
 result is pushed to the dashboard as a `lookup:result` event. This is a
 **live-dashboard feature only** — the offline analyzer never makes lookup
-calls. Results are cached in SQLite for the duration of the contest and wiped
-on `DELETE /api/db`. `GET /api/features` reports whether lookup is on.
+calls. Results are cached in SQLite for about six months (a "not found" for a
+day) and survive a contest reset; the Admin page's **Clear Callsign Cache**
+forgets them. Lookups can be paused from the Admin page, and stay paused
+across restarts. `GET /api/features` reports whether lookup is on.
 
 **Possible Busts panel.** When lookup is enabled, the dashboard shows a card
 listing logged QSOs whose callsign HamQTH doesn't recognise (after stripping
@@ -518,8 +520,8 @@ The dashboard header shows current **SFI / A / K** (hover for sunspots,
 X-ray, geomagnetic field, and the reading's age). The server polls
 [hamqsl.com](https://www.hamqsl.com/) every `SOLAR_REFRESH_MINUTES`
 (default 120), keeps every reading in `solar_snapshots`, and pushes updates
-over the `solar:update` event. The history is retained (`SOLAR_RETENTION_DAYS`,
-default 1826, 5 years) and is **not** wiped by `DELETE /api/db` — a later feature will
+over the `solar:update` event. The history is kept **forever** — it is never pruned and never wiped by a
+reset or by `DELETE /api/db` — a later feature will
 chart contest rate against conditions for a from-live analysis. Set
 `SOLAR_ENABLED=false` to turn the poll and the header chip off.
 
@@ -533,11 +535,15 @@ itself.
 
 - Run it from the same checkout: `npm run start:hamdata` (or
   `deploy/hamdata.service`). Env: `HAMDATA_DB_PATH`, `HAMDATA_PORT`
-  (3100), `HAMDATA_HOST` (127.0.0.1), `HAMDATA_TOKEN` (for pause/resume),
+  (3100), `HAMDATA_HOST` (127.0.0.1), `HAMDATA_TOKEN` (for the operator controls),
   plus the usual `LOOKUP_PROVIDER=hamqth` / `HAMQTH_*` / `SOLAR_*`.
 - Point each instance at it with `HAMDATA_URL=http://127.0.0.1:3100`. Each
   instance still keeps its own copy of the solar history and its own lookup
   cache; a new instance back-fills the solar history on first start.
+- **Operator controls** (`sudo hamdata-ctl ...`, installed by the deploy
+  script): `stop-lookups` stops every outgoing HamQTH lookup for all
+  instances (it's your HamQTH account) and stays stopped across restarts —
+  cached callsigns still resolve; `start-lookups`; `clear-cache`; `status`.
 - Seed hamdata with an existing instance's solar history once:
   `HAMDATA_DB_PATH=... node hamdata/import-solar.js path/to/qsos.db`.
 
@@ -551,7 +557,7 @@ SQLite file at `./data/qsos.db` (created on first start). Schema:
 | `radio_state`     | Latest state per radio, keyed by `(station_name, radio_nr)` |
 | `score_snapshots` | Per-band/mode score breakdown, one batch per broadcast, plus a `band='total' mode='ALL'` grand-total row |
 | `settings`        | Key/value config (contest name, etc.)                 |
-| `callsign_cache`  | Lookup results, cleared on DB reset                   |
+| `callsign_cache`  | Lookup results, ~6 months; cleared on its own (Admin page), not by the DB reset |
 
 `qsos` is identified primarily by N1MM's own `ID` GUID, so an edited-in-place
 QSO (`contactreplace`) updates its existing row instead of duplicating it.
