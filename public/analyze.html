@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Applied before first paint so a viewer who chose light never sees a
-       dark flash -- dark is the default (no localStorage entry) and needs
+  <!-- Applied before first paint so a viewer who chose light (or wt2p) never
+       sees a flash of the default -- dark is the default (no localStorage entry) and needs
        no attribute at all. See chrome.js for the toggle that sets/persists
        this key. -->
   <script>
     try {
-      if (localStorage.getItem('contestpulse_theme') === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
+      var theme = localStorage.getItem('contestpulse_theme');
+      if (theme === 'light' || theme === 'wt2p') {
+        document.documentElement.setAttribute('data-theme', theme);
       }
     } catch {}
   </script>

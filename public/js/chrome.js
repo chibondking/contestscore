@@ -20,7 +20,7 @@
 // page's own HTML -- this only prepends the shared h1+nav ahead of it.
 // Dark is the site's default and is NOT remembered by prefers-color-scheme
 // -- this is a manual per-viewer choice, opt-in only. The actual
-// data-theme="light" attribute is set as early as possible by a small
+// data-theme="light"/"wt2p" attribute is set as early as possible by a small
 // inline script in each page's own <head> (before first paint, so a
 // viewer who chose light never sees a dark flash); this constant is only
 // used here to persist a *change*.
@@ -49,19 +49,19 @@ const THEME_KEY = 'contestpulse_theme';
       .join('');
     header.insertAdjacentHTML('afterbegin', `<h1>ContestPulse</h1><nav class="nav">${nav}</nav>`);
 
-    // Theme switch, always the last (so: rightmost) header control on every
-    // page. A real checkbox drives it for keyboard/AT access; the pill is
-    // drawn in CSS off :checked (see .theme-toggle* in dashboard.css) rather
-    // than this script touching any style directly.
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    // Theme picker, always the last (so: rightmost) header control on every
+    // page: Dark (default, no attribute), Light, or WT2P (matches wt2p.us).
+    // Stored under the same key the pre-paint snippet in each page's <head>
+    // reads, so the chosen theme is on <html> before anything renders.
+    const THEMES = [['dark', 'Dark'], ['light', 'Light'], ['wt2p', 'WT2P']];
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
     header.insertAdjacentHTML('beforeend', `
-      <label class="theme-toggle" title="Switch between dark and light theme">
-        <input type="checkbox" class="theme-toggle__input"${isLight ? ' checked' : ''}>
-        <span class="theme-toggle__track" aria-hidden="true"><span class="theme-toggle__thumb"></span></span>
-        <span>Light Mode</span>
+      <label class="theme-toggle" title="Colour theme">
+        <span>Theme</span>
+        <select class="theme-select">${THEMES.map(([v, l]) => `<option value="${v}"${v === current ? ' selected' : ''}>${l}</option>`).join('')}</select>
       </label>`);
-    header.querySelector('.theme-toggle__input').addEventListener('change', (e) => {
-      try { localStorage.setItem(THEME_KEY, e.target.checked ? 'light' : 'dark'); } catch { /* ignore */ }
+    header.querySelector('.theme-select').addEventListener('change', (e) => {
+      try { localStorage.setItem(THEME_KEY, e.target.value); } catch { /* ignore */ }
       // Chart.js canvases (charts.js/dashboard.js) pick their tick/grid
       // colors once, at build time, off this same attribute -- a reload is
       // the simplest way to guarantee every chart on the page (not just

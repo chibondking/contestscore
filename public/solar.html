@@ -7,8 +7,9 @@
        dark flash -- same as every other page; see chrome.js. -->
   <script>
     try {
-      if (localStorage.getItem('contestpulse_theme') === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
+      var theme = localStorage.getItem('contestpulse_theme');
+      if (theme === 'light' || theme === 'wt2p') {
+        document.documentElement.setAttribute('data-theme', theme);
       }
     } catch {}
   </script>

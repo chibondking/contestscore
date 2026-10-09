@@ -859,7 +859,9 @@ function dashboard() {
         rateSparkline.update();
         return;
       }
-      rateSparkline = new Chart(canvas, sparklineConfig(values, '#2a78d6', 'rgba(42, 120, 214, 0.15)'));
+      // Palette slot-1 blue; wt2p.us amber in the wt2p theme (charts.js primarySeries()).
+      const wt2p = document.documentElement.getAttribute('data-theme') === 'wt2p';
+      rateSparkline = new Chart(canvas, sparklineConfig(values, wt2p ? '#ff9400' : '#2a78d6', wt2p ? 'rgba(255, 148, 0, 0.15)' : 'rgba(42, 120, 214, 0.15)'));
     },
 
     async fetchVersion() {
@@ -934,7 +936,8 @@ function sparklineConfig(values, borderColor, backgroundColor) {
   // draws on canvas, invisible to CSS, so it's picked once here, the same
   // approach charts.js's themeColors() uses (a theme toggle reloads the
   // page, so this never needs to react live).
-  const ring = document.documentElement.getAttribute('data-theme') === 'light' ? '#ffffff' : '#0a0a0a';
+  const theme = document.documentElement.getAttribute('data-theme');
+  const ring = theme === 'light' ? '#ffffff' : (theme === 'wt2p' ? '#121212' : '#0a0a0a');
   const isLast = (ctx) => ctx.dataIndex === ctx.dataset.data.length - 1;
   return {
     type: 'line',

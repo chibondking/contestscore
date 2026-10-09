@@ -150,8 +150,8 @@ function charts() {
           datasets: [{
             label: 'QSOs/hr',
             data: values,
-            borderColor: '#2a78d6', // dataviz reference palette, dark-mode slot 1 (blue)
-            backgroundColor: 'rgba(42, 120, 214, 0.15)',
+            borderColor: primarySeries().line, // dataviz reference palette slot 1 (blue); wt2p.us amber in the wt2p theme
+            backgroundColor: primarySeries().fill,
             fill: true,
             tension: 0.3,
             pointRadius: 0,
@@ -454,11 +454,20 @@ function buildOperatorContribution(qsos, valueFn, seriesLabel) {
 // reloads the page (see chrome.js), so every chart is always rebuilt fresh
 // right after data-theme lands on <html>; this only ever needs to read it
 // once per build, never react to a live change.
+// The one-series charts' colour (QSO rate): the palette's slot-1 blue,
+// or wt2p.us's amber in the wt2p theme. Multi-series charts keep the
+// categorical palette in every theme -- distinct hues are the point there.
+function primarySeries() {
+  return document.documentElement.getAttribute('data-theme') === 'wt2p'
+    ? { line: '#ff9400', fill: 'rgba(255, 148, 0, 0.15)' }
+    : { line: '#2a78d6', fill: 'rgba(42, 120, 214, 0.15)' };
+}
+
 function themeColors() {
-  const light = document.documentElement.getAttribute('data-theme') === 'light';
-  return light
-    ? { muted: '#5b5a52', text: '#1a1a1a', grid: '#c7c2a8' }
-    : { muted: '#8b949e', text: '#e6edf3', grid: '#262626' };
+  const theme = document.documentElement.getAttribute('data-theme');
+  if (theme === 'light') return { muted: '#5b5a52', text: '#1a1a1a', grid: '#c7c2a8' };
+  if (theme === 'wt2p') return { muted: '#cc7a00', text: '#e8d6b8', grid: '#3a2700' }; // dashboard.css's wt2p tokens
+  return { muted: '#8b949e', text: '#e6edf3', grid: '#262626' };
 }
 
 // A categorical bar per operator, direct-labeled on the x-axis -- color

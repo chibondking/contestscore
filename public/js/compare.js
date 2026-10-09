@@ -320,10 +320,10 @@ function hexA(hex, a) {
 }
 
 function themeColors() {
-  const light = document.documentElement.getAttribute('data-theme') === 'light';
-  return light
-    ? { muted: '#5b5a52', text: '#1a1a1a', grid: '#c7c2a8' }
-    : { muted: '#8b949e', text: '#e6edf3', grid: '#262626' };
+  const theme = document.documentElement.getAttribute('data-theme');
+  if (theme === 'light') return { muted: '#5b5a52', text: '#1a1a1a', grid: '#c7c2a8' };
+  if (theme === 'wt2p') return { muted: '#cc7a00', text: '#e8d6b8', grid: '#3a2700' }; // dashboard.css's wt2p tokens
+  return { muted: '#8b949e', text: '#e6edf3', grid: '#262626' };
 }
 
 // Same detached-canvas guard as charts.js's upsertChart(): a template x-if

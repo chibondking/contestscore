@@ -106,10 +106,10 @@ function fmtUtc(ms, withTime = true) {
 // --- browser only ---------------------------------------------------------
 
 function solarThemeColors() {
-  const light = document.documentElement.getAttribute('data-theme') === 'light';
-  return light
-    ? { muted: '#5b5a52', text: '#1a1a1a', grid: '#c7c2a8', surface: '#ffffff' }
-    : { muted: '#8b949e', text: '#e6edf3', grid: '#262626', surface: '#0a0a0a' };
+  const theme = document.documentElement.getAttribute('data-theme');
+  if (theme === 'light') return { muted: '#5b5a52', text: '#1a1a1a', grid: '#c7c2a8', surface: '#ffffff' };
+  if (theme === 'wt2p') return { muted: '#cc7a00', text: '#e8d6b8', grid: '#3a2700', surface: '#121212' }; // dashboard.css's wt2p tokens
+  return { muted: '#8b949e', text: '#e6edf3', grid: '#262626', surface: '#0a0a0a' };
 }
 
 // Vertical hover line at the tooltip's position -- the crosshair half of

@@ -326,6 +326,10 @@ country-file lookup — see `enrichGeo` below). Full detail in
 
 ## Pages
 
+Every page has a **Theme** picker in the header: **Dark** (the default),
+**Light** (modeled on N1MM's classic look) or **WT2P** (the amber-on-black
+look of [wt2p.us](https://wt2p.us)). It's remembered per browser.
+
 - **`/` (Dashboard)** — live Score and Rate cards (each with a small trend
   sparkline), Radios (band only — see Privacy below — plus a red/green
   TX/RX dot per radio from N1MM's own `IsTransmitting` flag), an Operators
