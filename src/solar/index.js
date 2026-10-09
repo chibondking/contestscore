@@ -63,7 +63,7 @@ function resolveSolarConfig(env = process.env, cfgRoot = config) {
   return {
     enabled: String(env.SOLAR_ENABLED ?? cfg.enabled ?? true) !== 'false',
     refreshMs: (Number(env.SOLAR_REFRESH_MINUTES) || cfg.refreshMinutes || 120) * 60000,
-    retentionDays: Number(env.SOLAR_RETENTION_DAYS) || cfg.retentionDays || 365,
+    retentionDays: Number(env.SOLAR_RETENTION_DAYS) || cfg.retentionDays || 1826, // 5 years
   };
 }
 

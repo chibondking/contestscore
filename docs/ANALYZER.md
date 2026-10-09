@@ -160,8 +160,9 @@ Body handling mirrors `routes/ingest.js` — the POST routes read their own
 raw body; the global `express.json()` only touches `application/json`.
 
 **Retention**, enforced on every successful write (`pruneAnalyzedLogs`):
-keep the newest `ANALYZE_KEEP` (default 200) and drop anything older than
-`ANALYZE_TTL_DAYS` (default 365); either bound is disabled with `0`.
+keep the newest `ANALYZE_KEEP` (default 0, no count cap) and drop anything
+older than `ANALYZE_TTL_DAYS` (default 1826, 5 years); either bound is
+disabled with `0`.
 
 ## Report export
 

@@ -31,8 +31,8 @@ The analyzer needs nothing extra at deploy time -- the `analyzed_logs`
 table is created by `src/db/schema.sql` on startup, and the country file it
 resolves calls against is bundled at `src/analyze/cty.csv` (kept current by
 `.github/workflows/cty-refresh.yml`, which opens a monthly PR). Optional
-env knobs, all with sane defaults: `ANALYZE_KEEP` (200 newest kept),
-`ANALYZE_TTL_DAYS` (365), `ANALYZE_MAX_BYTES` (5 MB per upload). Uploaded
+env knobs, all with sane defaults: `ANALYZE_KEEP` (0, no count cap),
+`ANALYZE_TTL_DAYS` (1826, 5 years), `ANALYZE_MAX_BYTES` (5 MB per upload). Uploaded
 logs live in the same SQLite file as the contest but in their own table,
 so `DELETE /api/db` / the Admin reset does **not** remove them.
 

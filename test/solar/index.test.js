@@ -44,9 +44,9 @@ describe('parseSolarXml', () => {
 });
 
 describe('resolveSolarConfig', () => {
-  it('defaults to enabled, 120 min, 365 days', () => {
+  it('defaults to enabled, 120 min, 1826 days (5 years)', () => {
     assert.deepEqual(resolveSolarConfig({}, { solar: {} }), {
-      enabled: true, refreshMs: 120 * 60000, retentionDays: 365,
+      enabled: true, refreshMs: 120 * 60000, retentionDays: 1826,
     });
   });
 

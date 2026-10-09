@@ -373,7 +373,7 @@ Schema lives in `src/db/schema.sql`. Migrations are numbered files in
   `qrz`/`hamdb` are in the config shape but unimplemented)
 - HamQTH / QRZ credentials (also via env vars)
 - Space weather (`solar`): `enabled`, `refreshMinutes` (default 120),
-  `retentionDays` (default 365) -- see `src/solar/`
+  `retentionDays` (default 1826, 5 years) -- see `src/solar/`
 
 Environment variables override config file. See `.env.example`.
 

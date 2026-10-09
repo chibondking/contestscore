@@ -26,6 +26,6 @@
   "solar": {
     "enabled": true,
     "refreshMinutes": 120,
-    "retentionDays": 365
+    "retentionDays": 1826
   }
 }

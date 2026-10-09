@@ -388,8 +388,9 @@ country-file lookup — see `enrichGeo` below). Full detail in
   Cabrillo doesn't, so those sections are hidden for it. Upload is gated by
   `CONTESTSCORE_API_TOKEN` (paste it on the page, same as Admin); viewing a
   saved analysis is public. Stored separately from the live `qsos` table —
-  a pre-contest reset never touches it. Retention: newest `ANALYZE_KEEP`
-  (200) and younger than `ANALYZE_TTL_DAYS` (365). See `docs/ANALYZER.md`.
+  a pre-contest reset never touches it. Retention: younger than
+  `ANALYZE_TTL_DAYS` (1826, 5 years), with no count cap unless
+  `ANALYZE_KEEP` is set. See `docs/ANALYZER.md`.
 - **`/admin.html` (Admin)** — reset the contest database before a contest
   starts. Shows the current QSO count and score total, requires the admin
   bearer token plus a confirmation checkbox, and is otherwise the only
@@ -478,8 +479,8 @@ curl -X DELETE http://localhost:3000/api/db -H "X-Confirm: yes"
 | `CONTESTSCORE_API_TOKEN`   | — (unset = no auth required; required for `/api/ingest/*` and analyzer writes, optional but recommended for `DELETE /api/db`) |
 | `BRIDGE_STALE_AFTER_MS`    | `30000` (ContestPulse heartbeat default is 10s) |
 | `BRIDGE_OFFLINE_AFTER_MS`  | — (see `src/state/bridgeStatus.js`) |
-| `ANALYZE_KEEP`             | `200` — newest saved analyses to keep |
-| `ANALYZE_TTL_DAYS`         | `365` — max age of a saved analysis (0 disables) |
+| `ANALYZE_KEEP`             | `0` — newest saved analyses to keep (0 = no count cap) |
+| `ANALYZE_TTL_DAYS`         | `1826` (5 years) — max age of a saved analysis (0 disables) |
 | `ANALYZE_MAX_BYTES`       | `5242880` — max upload size |
 
 Copy `.env.example` to `.env` and fill in any values you want to override.
@@ -515,7 +516,7 @@ X-ray, geomagnetic field, and the reading's age). The server polls
 [hamqsl.com](https://www.hamqsl.com/) every `SOLAR_REFRESH_MINUTES`
 (default 120), keeps every reading in `solar_snapshots`, and pushes updates
 over the `solar:update` event. The history is retained (`SOLAR_RETENTION_DAYS`,
-default 365) and is **not** wiped by `DELETE /api/db` — a later feature will
+default 1826, 5 years) and is **not** wiped by `DELETE /api/db` — a later feature will
 chart contest rate against conditions for a from-live analysis. Set
 `SOLAR_ENABLED=false` to turn the poll and the header chip off.
 

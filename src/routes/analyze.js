@@ -9,8 +9,10 @@ const { analyzeLog, analyzeLiveQsos, newId } = require('../analyze');
 const router = Router();
 
 const MAX_BYTES = Number(process.env.ANALYZE_MAX_BYTES) || 5 * 1024 * 1024;
-const KEEP = process.env.ANALYZE_KEEP != null ? Number(process.env.ANALYZE_KEEP) : 200;
-const TTL_DAYS = process.env.ANALYZE_TTL_DAYS != null ? Number(process.env.ANALYZE_TTL_DAYS) : 365;
+// Defaults keep saved analyses for 5 years with no count cap -- they're
+// small, and a club's history is the point of saving them.
+const KEEP = process.env.ANALYZE_KEEP != null ? Number(process.env.ANALYZE_KEEP) : 0;
+const TTL_DAYS = process.env.ANALYZE_TTL_DAYS != null ? Number(process.env.ANALYZE_TTL_DAYS) : 1826;
 
 // Same fail-closed posture as /api/ingest: uploading a log is a write, and
 // this instance is reachable from the public internet, so an unset token

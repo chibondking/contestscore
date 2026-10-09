@@ -458,7 +458,7 @@ function insertSolarSnapshot(r = {}) {
   });
 }
 function getLatestSolar() { return prepare().getLatestSolar.get() || null; }
-function pruneSolarSnapshots({ ttlDays = 365 } = {}) {
+function pruneSolarSnapshots({ ttlDays = 1826 } = {}) {
   if (ttlDays > 0) prepare().pruneSolarByAge.run({ modifier: `-${ttlDays} days` });
 }
 // Readings between two datetime('now')-shaped UTC strings -- the analyzer
@@ -516,7 +516,7 @@ function deleteAnalyzedLog(id)       { return prepare().deleteAnalyzedLog.run(id
 
 // Enforce retention: drop anything older than ttlDays, then anything beyond
 // the newest `keep`. Both bounds are opt-out with 0.
-function pruneAnalyzedLogs({ keep = 200, ttlDays = 365 } = {}) {
+function pruneAnalyzedLogs({ keep = 0, ttlDays = 1826 } = {}) {
   const q = prepare();
   if (ttlDays > 0) q.pruneAnalyzedByAge.run({ modifier: `-${ttlDays} days` });
   if (keep > 0) q.pruneAnalyzedByCount.run({ keep });
