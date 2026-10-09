@@ -24,10 +24,10 @@ jobs:
   test:
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'  # match production (wt2p-vpserver-chi runs 22)
       - run: npm install
       - run: npm test
 

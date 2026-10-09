@@ -34,8 +34,8 @@ jobs:
   test:
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: contestpulse/go.mod
       - run: go vet ./...
@@ -53,8 +53,8 @@ jobs:
           - { goos: linux,   goarch: arm64, name: contestpulse-linux-arm64 }
           - { goos: linux,   goarch: arm, goarm: '7', name: contestpulse-linux-armv7 }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: contestpulse/go.mod
       - name: Build ${{ matrix.name }}
@@ -68,7 +68,7 @@ jobs:
           version="$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' ../package.json | head -n1)"
           go build -trimpath -ldflags "-X main.version=${version}+${GITHUB_SHA::7}" -o "build/${{ matrix.name }}" .
           ls -la "build/${{ matrix.name }}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.name }}
           path: contestpulse/build/${{ matrix.name }}
@@ -83,19 +83,19 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Roll the contestpulse-latest tag to this commit
         # softprops/action-gh-release won't move an existing published tag,
         # so a rolling "latest" needs the tag repointed by hand first.
         run: |
           git tag -f contestpulse-latest
           git push -f origin contestpulse-latest
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: dist
           merge-multiple: true
       - name: Refresh rolling "contestpulse-latest" pre-release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: contestpulse-latest
           name: ContestPulse binaries (latest main)
