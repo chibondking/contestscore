@@ -18,8 +18,32 @@ directory is `750`, and looks the port up from the tenant's own
 ```
  q   quit
  b   toggle the mult bell (off at startup)
+ t   cycle phosphor: amber, green, white, blue
  r   force a full refresh from the REST API
 ```
+
+The screen is a single-phosphor CRT palette -- one hue read by brightness,
+so the few things that *aren't* that hue (a keyed transmitter, an X-QSO, a
+bridge that went offline) are the only things that catch the eye from
+across the room. `t` cycles through four of them, one per phosphor that
+actually shipped on a monochrome monitor:
+
+- `amber` -- P3, the default
+- `green` -- P1, good old green screen
+- `white` -- P4, the paper-white monitors (VT320, the compact Macs)
+- `blue` -- P11
+
+No multicolor theme (C64, DOS, Solarized), and that's the point rather
+than an omission: the moment a second hue carries meaning, the alert red
+stops being the only thing on the screen that isn't the background color.
+
+`--theme green` or `CONTESTSCORE_TUI_THEME=green` picks the one it starts
+in (an unrecognised name just leaves it on amber), and since `cstui`
+passes its arguments straight through, `cstui nw8s --theme green` is how a
+given wall display keeps it. There's no dotfile -- same reasoning as the
+mult bell, a view-only tool shouldn't own persistent state. A terminal
+that doesn't claim 256 colors gets the same five steps out of its one
+16-color base, so a plain tty degrades rather than breaks.
 
 Shows the same things the dashboard's results core does: score + total
 sparkline, the 10/30/60-minute rate meter, radios (band/mode/op, RUN, a red

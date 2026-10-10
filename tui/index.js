@@ -27,7 +27,7 @@
 // switch -- a destructive, token-gated surface with no business behind a
 // single keystroke in a terminal), the world map, and Possible Busts.
 //
-// Keys: q quit · b toggle mult bell · r force refresh
+// Keys: q quit · b toggle mult bell · t cycle phosphor · r force refresh
 
 const { io } = require('socket.io-client');
 
@@ -48,27 +48,71 @@ const ONCE = argv.includes('--once') || !process.stdout.isTTY;
 
 const COLOR = !process.env.NO_COLOR && process.stdout.isTTY;
 
-// An amber-CRT palette: one hue, read by brightness, the way an amber
-// terminal actually worked. The point isn't nostalgia -- it's that when
-// everything is amber, the three things that AREN'T (a keyed transmitter, an
-// X-QSO, a feed that died) are the only things on the screen that catch the
-// eye from across the room. A rainbow of chip colors fights the data for
-// attention; this doesn't.
+// A single-phosphor CRT palette: one hue, read by brightness, the way those
+// terminals actually worked. The point isn't nostalgia -- it's that when
+// everything is one color, the three things that AREN'T (a keyed
+// transmitter, an X-QSO, a feed that died) are the only things on the
+// screen that catch the eye from across the room. A rainbow of chip colors
+// fights the data for attention; this doesn't.
 //
-// Five amber steps, brightest to dimmest: hot (headline numbers, the
-// station call, a new mult), bright (values worth reading), amber (ordinary
-// table text), warm (a warning -- redder, so it leans out of the ladder
+// Five steps, brightest to dimmest: hot (headline numbers, the station
+// call, a new mult), bright (values worth reading), amber (ordinary table
+// text -- the key is named for the original palette, not the hue), warm (a
+// warning: shifted off the hue just far enough to lean out of the ladder
 // without leaving it), dusk (labels, rules, timestamps -- everything that
-// is structure rather than data). Plus alert, the one real red.
+// is structure rather than data). Plus alert, the one real red, which is
+// the same red in both themes: a transmitter is keyed or a bridge is down
+// regardless of what phosphor you picked.
 //
 // 256-color where the terminal admits to it, which over SSH is essentially
-// always; the 16-color fallback keeps the same five steps using the yellows,
-// so a plain tty degrades rather than breaks.
+// always; the 16-color fallback keeps the same five steps out of one base
+// color, so a plain tty degrades rather than breaks.
 const COLOR256 = /256color|direct/i.test(process.env.TERM || '') || !!process.env.COLORTERM;
-const PALETTE = COLOR256
-  ? { hot: '1;38;5;222', bright: '38;5;214', amber: '38;5;208', warm: '38;5;166', dusk: '38;5;130', alert: '1;38;5;196' }
-  : { hot: '1;33', bright: '33', amber: '33', warm: '31', dusk: '2;33', alert: '1;31' };
-const paint = (key) => (s) => (COLOR ? `\x1b[${PALETTE[key]}m${s}\x1b[0m` : String(s));
+//
+// Four of them, one per phosphor that actually shipped on a monochrome
+// monitor, in the order `t` cycles. Each is the same five steps in its own
+// hue; only `warm` has to be chosen per theme, since "lean out of the
+// ladder without leaving it" points in a different direction for each.
+// Deliberately no multicolor theme (C64, DOS, Solarized): the moment a
+// second hue carries meaning, the alert red stops being the only thing on
+// the screen that isn't the background color, which is the entire reason
+// this palette reads from across the room.
+const THEMES = {
+  // P3, the one this started as.
+  amber: COLOR256
+    ? { hot: '1;38;5;222', bright: '38;5;214', amber: '38;5;208', warm: '38;5;166', dusk: '38;5;130', alert: '1;38;5;196' }
+    : { hot: '1;33', bright: '33', amber: '33', warm: '31', dusk: '2;33', alert: '1;31' },
+  // P1, the other CRT everyone remembers. `warm` goes yellow-green rather
+  // than red-orange -- the direction green has to spare.
+  green: COLOR256
+    ? { hot: '1;38;5;157', bright: '38;5;82', amber: '38;5;40', warm: '38;5;184', dusk: '38;5;28', alert: '1;38;5;196' }
+    : { hot: '1;32', bright: '32', amber: '32', warm: '33', dusk: '2;32', alert: '1;31' },
+  // P4, the paper-white monitors (VT320, the compact Macs). The ladder is
+  // grey, so `warm` is the one step with any hue in it at all -- a tan
+  // that reads as off-white rather than as a sixth brightness.
+  white: COLOR256
+    ? { hot: '1;38;5;231', bright: '38;5;252', amber: '38;5;248', warm: '38;5;180', dusk: '38;5;240', alert: '1;38;5;196' }
+    : { hot: '1;37', bright: '37', amber: '37', warm: '33', dusk: '2;37', alert: '1;31' },
+  // P11, the blue phosphor. `warm` goes violet; blue has nothing warmer
+  // than that without colliding with the alert red.
+  blue: COLOR256
+    ? { hot: '1;38;5;153', bright: '38;5;75', amber: '38;5;39', warm: '38;5;141', dusk: '38;5;25', alert: '1;38;5;196' }
+    // Plain blue (34) is unreadable on a black background at 16 colors;
+    // cyan is what a 16-color terminal has that reads as this phosphor.
+    : { hot: '1;36', bright: '36', amber: '36', warm: '35', dusk: '2;36', alert: '1;31' },
+};
+const THEME_NAMES = Object.keys(THEMES);
+// --theme / CONTESTSCORE_TUI_THEME set the startup phosphor (an
+// unrecognised name just leaves it on amber); `t` cycles through them. No dotfile: same reasoning as the mult bell -- a view-only tool
+// shouldn't own persistent state, and on a tenant box `cstui` passes its
+// arguments straight through, so `cstui nw8s --theme green` is the way to
+// make it stick for a given wall display.
+let theme = THEME_NAMES.includes(String(argVal('--theme') || process.env.CONTESTSCORE_TUI_THEME || '').toLowerCase())
+  ? String(argVal('--theme') || process.env.CONTESTSCORE_TUI_THEME).toLowerCase()
+  : 'amber';
+// Reads `theme` at call time, not at definition time, so the toggle takes
+// effect on the very next render without rebuilding every painter.
+const paint = (key) => (s) => (COLOR ? `\x1b[${THEMES[theme][key]}m${s}\x1b[0m` : String(s));
 const hot = paint('hot');
 const bright = paint('bright');
 const amber = paint('amber');
@@ -772,7 +816,7 @@ function buildLines(width, height) {
 
   const footer = state.error
     ? alert(`! ${state.error}`)
-    : dusk(`${BASE}   q quit · b bell · r refresh`);
+    : dusk(`${BASE}   q quit · b bell · t ${theme} · r refresh`);
   while (lines.length < height - 1) lines.push('');
   return [...lines.slice(0, height - 1), clip(footer, width)];
 }
@@ -832,7 +876,10 @@ async function main() {
   process.stdin.on('data', (key) => {
     if (key === 'q' || key === '\u0003' || key === '\u001a') exitTui(0);
     else if (key === 'b') { bell.enabled = !bell.enabled; dirty = true; }
-    else if (key === 'r') loadAll();
+    else if (key === 't') {
+      theme = THEME_NAMES[(THEME_NAMES.indexOf(theme) + 1) % THEME_NAMES.length];
+      dirty = true;
+    } else if (key === 'r') loadAll();
   });
 
   render();
