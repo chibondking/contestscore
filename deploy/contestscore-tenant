@@ -226,6 +226,11 @@ cmd_show() {
   [[ -f "$ROOT/$id/tenant.env" ]] || die "no tenant $id"
   sed -E 's/^(CONTESTSCORE_API_TOKEN=).+/\1<redacted>/' "$ROOT/$id/tenant.env"
   echo "state: $(systemctl is-active "$(unit "$id")" 2>/dev/null || true)"
+  # "inactive" alone is ambiguous -- suspended on purpose, or fell over? Say
+  # which, and whether the hostname is at least serving the offline page.
+  if [[ "$(systemctl is-enabled "$(unit "$id")" 2>/dev/null || true)" == disabled ]]; then
+    echo "suspended: yes (offline page: $(systemctl is-active "$(offline_unit "$id")" 2>/dev/null || true))"
+  fi
 }
 
 cmd_token() {
