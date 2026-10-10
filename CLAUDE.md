@@ -46,7 +46,8 @@ passed that test so far:
   dashboard page already uses, so nothing in `src/` knows it exists and it
   adds exactly one dependency (`socket.io-client`). Its copies of the
   dashboard's derivations (`scoreStale`, `operatorStats`,
-  `continentCounts`, `bandLabel`, the mult-bell rules) are deliberate
+  `continentCounts`, `bandLabel`, the mult-bell rules) -- and of
+  `stats.js`'s At a Glance tiles (`glanceStats`) -- are deliberate
   duplicates rather than shared code -- those live inside `dashboard()`'s
   closure in a classic non-module script, same reason `report.js`/
   `compare.js` keep their own `bandLabel`; **change one, change the

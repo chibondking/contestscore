@@ -211,6 +211,43 @@ function n1mmTimestampMs(ts) {
 }
 const loggedAtMs = (q) => (q.logged_at ? n1mmTimestampMs(q.logged_at) : null);
 
+// --- copied from public/js/stats.js (the At a Glance tiles) --------------
+//
+// The stats page prefers N1MM's own logged time over our ingestion time for
+// anything post-hoc, which is what SH5/CBS work from; the rate meter and the
+// operator table above deliberately stick to logged_at instead, so a QSO
+// replayed out of a ContestPulse backlog lands in the window it actually
+// arrived in. Same split, kept on purpose.
+const statTimeMs = (q) => n1mmTimestampMs(q.n1mm_timestamp) ?? loggedAtMs(q);
+
+function fmtDur(ms) {
+  const mins = Math.round(ms / 60000);
+  const h = Math.floor(mins / 60);
+  return h ? `${h}h ${String(mins % 60).padStart(2, '0')}m` : `${mins}m`;
+}
+
+// The stats page's headline tiles, minus the three (QSOs, Points, Mults)
+// the SCORE panel already carries. Derived from the live log rather than
+// N1MM's Score snapshot -- these are shapes of the log, not the scoring.
+function glanceStats() {
+  const qs = countedQsos();
+  const times = qs.map(statTimeMs).filter((t) => t != null).sort((a, b) => a - b);
+  const points = qs.reduce((s, q) => s + (Number(q.points) || 0), 0);
+  const elapsedMs = times.length > 1 ? times[times.length - 1] - times[0] : 0;
+  const hours = elapsedMs / 3600000;
+  const distinct = (fn) => new Set(qs.map(fn).filter(Boolean)).size;
+  return [
+    // A contest whose packets carry no points at all would only show 0.00.
+    ...(points > 0 ? [['PTS/QSO', (points / qs.length).toFixed(2)]] : []),
+    ['AVG RATE', hours > 0 ? `${Math.round(qs.length / hours)}/h` : '—'],
+    ['DXCC', fmt(distinct((q) => q.countryprefix))],
+    ['CQ ZONES', fmt(distinct((q) => (q.zone && q.zone !== '0' ? q.zone : '')))],
+    ['BANDS', fmt(distinct((q) => q.band))],
+    ['HRS ACTIVE', fmt(new Set(times.map((t) => Math.floor(t / 3600000))).size)],
+    ['ELAPSED', elapsedMs ? fmtDur(elapsedMs) : '—'],
+  ];
+}
+
 // --- state ----------------------------------------------------------------
 
 const state = {
@@ -551,15 +588,37 @@ function rateLines(width) {
   return [metrics, amber(sparkline(rateOverTime(), Math.min(width, 48)))];
 }
 
+// A dim "+N more" tail, so a list that didn't fit says so rather than just
+// ending. A multi-op with eight radios and eight ops is the case this is
+// for: silently showing the first six and no sign of the rest is how a
+// station's second op quietly vanishes off the wall display.
+const moreLine = (total, shown) => (total > shown ? [dusk(`+${total - shown} more`)] : []);
+
 function radioLines(width, max) {
   if (!state.radios.length) return [dusk('no radio data yet')];
-  return state.radios.slice(0, max).map((r) => {
+  // Stable order, by station then radio number. The initial REST load is
+  // already sorted that way (getRadios), but a radio that first reports
+  // mid-contest is appended wherever it lands, and a row that jumps around
+  // the list as updates arrive is unreadable on an eight-radio multi-op.
+  const all = [...state.radios].sort((a, b) => (
+    String(a.station_name || '').localeCompare(String(b.station_name || ''))
+    || (a.radio_nr || 0) - (b.radio_nr || 0)
+  ));
+  const shown = all.slice(0, Math.max(1, max));
+  // radioLabel() grows a station-name prefix as soon as more than one
+  // station reports -- exactly the multi-op case -- and those names are
+  // arbitrary Windows hostnames. Size the column to what's actually on
+  // screen (same reasoning as ptsWidth), capped so one long name can't eat
+  // the row, rather than padding to a fixed 8 that longer labels blow past.
+  const labels = shown.map(radioLabel);
+  const labelW = Math.min(16, Math.max(4, ...labels.map(vlen))) + 1;
+  const rows = shown.map((r, i) => {
     // Band only, never the exact frequency -- the server strips freq/tx_freq
     // before they reach any viewer (src/routes/api.js), so there is nothing
     // finer to show here even if we wanted it.
     const tx = r.is_transmitting ? alert('●') : dusk('○');
     const row = [
-      padEnd(bright(radioLabel(r)), 8),
+      padEnd(bright(clip(labels[i], labelW - 1)), labelW),
       padEnd(amber(r.band || '—'), 6),
       padEnd(amber(r.mode || '—'), 5),
       tx,
@@ -571,6 +630,7 @@ function radioLines(width, max) {
     ].join(' ');
     return clip(row, width);
   });
+  return [...rows, ...moreLine(all.length, shown.length)];
 }
 
 function continentLine(width) {
@@ -579,18 +639,50 @@ function continentLine(width) {
   return clip(parts.length ? parts.join('   ') : dusk('no continent data yet'), width);
 }
 
+// The at-a-glance tiles, two to a line where there's room. Labels dim,
+// values bright -- the same brightness ladder the rest of the screen reads
+// by, so a column of tiles doesn't become a second thing to parse.
+function glanceLines(width) {
+  const stats = glanceStats();
+  if (!stats.length) return [dusk('no QSOs logged yet')];
+  // As many tiles per line as fit at 19 columns each (the widest label plus
+  // a readable value), capped so a full-width stack doesn't fling the label
+  // and its number to opposite ends of the screen.
+  const cells = Math.max(1, Math.min(4, Math.floor((width + 2) / 21)));
+  const cw = Math.min(26, Math.floor((width - (cells - 1) * 2) / cells));
+  const out = [];
+  for (let i = 0; i < stats.length; i += cells) {
+    out.push(clip(stats.slice(i, i + cells).map(([label, value]) => padEnd(
+      dusk(label) + padStart(bright(value), Math.max(1, cw - label.length)), cw,
+    )).join('  '), width));
+  }
+  return out;
+}
+
 function operatorLines(width, max) {
   const ops = operatorStats();
   if (!ops.length) return [dusk('no QSOs logged yet')];
-  const shown = ops.slice(0, max);
+  const shown = ops.slice(0, Math.max(1, max));
   const ptsW = ptsWidth(shown.map((op) => op.points), 8);
-  const head = dusk(padEnd('OPERATOR', 12) + padStart('QSOS', 6) + padStart('PTS', ptsW) + padStart('60m/hr', 9) + padStart('10m/hr', 9));
+  // Sized to the calls on screen, within a budget: a portable or slashed
+  // call ("VE3ABC/W1") runs past the 8 a fixed column leaves, and padEnd
+  // only pads -- so the overflow would shove QSOS/PTS out of line on that
+  // one row while its neighbours stayed put.
+  const nameW = Math.min(width < 44 ? 10 : 13, Math.max(7, ...shown.map((op) => vlen(op.operator)))) + 1;
+  // Beside the QSO table this column is narrower than it was full-width, so
+  // it sheds from the right: the 10-minute peak goes first (extrapolated,
+  // and the noisiest of the three). 60m/hr is N1MM's own hourly convention
+  // and is the last thing to go.
+  const peak10 = width >= nameW + 6 + ptsW + 9 + 9;
+  const head = dusk(padEnd('OPERATOR', nameW) + padStart('QSOS', 6) + padStart('PTS', ptsW)
+    + padStart('60m/hr', 9) + (peak10 ? padStart('10m/hr', 9) : ''));
   const rows = shown.map((op) => clip(
-    padEnd(bright(op.operator), 12) + padStart(amber(fmt(op.qsos)), 6) + padStart(amber(fmt(op.points)), ptsW)
-    + padStart(amber(fmt(op.peakRate60)), 9) + padStart(amber(fmt(op.peakRate10)), 9),
+    padEnd(bright(clip(op.operator, nameW - 1)), nameW) + padStart(amber(fmt(op.qsos)), 6)
+    + padStart(amber(fmt(op.points)), ptsW) + padStart(amber(fmt(op.peakRate60)), 9)
+    + (peak10 ? padStart(amber(fmt(op.peakRate10)), 9) : ''),
     width,
   ));
-  return [head, ...rows];
+  return [head, ...rows, ...moreLine(ops.length, shown.length)];
 }
 
 function qsoLines(width, max) {
@@ -620,26 +712,63 @@ function scoreTitle() {
   return m ? `SCORE (DXLog · every ~${m} min)` : 'SCORE (DXLog · delayed)';
 }
 
+// Below this, everything stacks full-width in one column; above it, the
+// operator table and the glance tiles move beside the QSO log so the log
+// gets the vertical space instead of sharing it. 94 is roughly where the
+// QSO table's own columns stop fitting in a 56% left pane.
+const WIDE_AT = 94;
+
 function buildLines(width, height) {
-  const leftWidth = Math.floor((width - 3) * 0.52);
+  const wide = width >= WIDE_AT;
+  // The right pane is sized to what goes in it (the operator table tops out
+  // around 46) rather than to a fraction of the screen, so a very wide
+  // terminal spends the extra columns on the QSO log, not on whitespace.
+  const rightWidth = wide
+    ? Math.min(46, Math.max(32, Math.round((width - 3) * 0.42)))
+    : width - Math.floor((width - 3) * 0.52) - 3;
+  const leftWidth = width - rightWidth - 3;
   const lines = [headerLine(width)];
 
-  lines.push(...twoCol([rule(scoreTitle(), leftWidth)], [rule('RATE', width - leftWidth - 3)], leftWidth, width));
-  lines.push(...twoCol(scoreLines(leftWidth), rateLines(width - leftWidth - 3), leftWidth, width));
+  lines.push(...twoCol([rule(scoreTitle(), leftWidth)], [rule('RATE', rightWidth)], leftWidth, width));
+  lines.push(...twoCol(scoreLines(leftWidth), rateLines(rightWidth), leftWidth, width));
 
-  lines.push(rule('RADIOS', width));
-  lines.push(...radioLines(width, 6));
-
-  lines.push(rule('BY CONTINENT', width));
-  lines.push(continentLine(width));
-
-  lines.push(rule('OPERATORS', width));
-  lines.push(...operatorLines(width, 6));
-
-  lines.push(rule('RECENT QSOS', width));
-  // Whatever vertical space is left after the fixed sections and the footer.
+  // Whatever vertical space is left after the header rows and the footer.
   const room = height - lines.length - 2;
-  lines.push(...qsoLines(width, Math.max(1, room)));
+  // Eight radios is about the ceiling for a real multi-op, and all eight
+  // should be on screen -- but never at the cost of the QSO log, which is
+  // the section the whole layout is built around. On a short terminal the
+  // radio list gives way first and says so with its own "+N more".
+  const radioMax = Math.min(8, Math.max(2, room - 14));
+
+  if (wide) {
+    const right = [rule('AT A GLANCE', rightWidth), ...glanceLines(rightWidth), rule('OPERATORS', rightWidth)];
+    // The operator table has the right pane largely to itself, so a
+    // multi-op's whole roster fits beside the log rather than competing
+    // with it for rows -- which is most of the point of the split.
+    right.push(...operatorLines(rightWidth, Math.max(1, room - right.length)));
+
+    const left = [
+      rule('RADIOS', leftWidth), ...radioLines(leftWidth, radioMax),
+      rule('BY CONTINENT', leftWidth), continentLine(leftWidth),
+      rule('RECENT QSOS', leftWidth),
+    ];
+    left.push(...qsoLines(leftWidth, Math.max(1, room - left.length)));
+
+    lines.push(...twoCol(left, right, leftWidth, width));
+  } else {
+    // Stacked, every section is spending the log's rows, so the two lists
+    // that can grow are both capped against what's left.
+    const stacked = [
+      rule('RADIOS', width), ...radioLines(width, radioMax),
+      rule('BY CONTINENT', width), continentLine(width),
+      rule('AT A GLANCE', width), ...glanceLines(width),
+      rule('OPERATORS', width),
+    ];
+    stacked.push(...operatorLines(width, Math.min(8, Math.max(2, room - stacked.length - 10))));
+    stacked.push(rule('RECENT QSOS', width));
+    stacked.push(...qsoLines(width, Math.max(1, room - stacked.length)));
+    lines.push(...stacked);
+  }
 
   const footer = state.error
     ? alert(`! ${state.error}`)
