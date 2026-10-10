@@ -59,12 +59,14 @@ sudo install -o root -g root -m 755 \
 sudo install -o root -g root -m 755 \
   /opt/contestscore/app/deploy/contestscore-tenant-agent \
   /usr/local/sbin/contestscore-tenant-agent
-if ! sudo cmp -s /opt/contestscore/app/deploy/contestscore@.service /etc/systemd/system/contestscore@.service; then
-  sudo install -o root -g root -m 644 \
-    /opt/contestscore/app/deploy/contestscore@.service \
-    /etc/systemd/system/contestscore@.service
-  sudo systemctl daemon-reload
-fi
+for u in contestscore@.service contestscore-offline@.service; do
+  if ! sudo cmp -s "/opt/contestscore/app/deploy/$u" "/etc/systemd/system/$u"; then
+    sudo install -o root -g root -m 644 \
+      "/opt/contestscore/app/deploy/$u" \
+      "/etc/systemd/system/$u"
+    sudo systemctl daemon-reload
+  fi
+done
 # Same for hamdata's unit -- but only once hamdata is installed at all: a
 # box that never set it up must not suddenly grow one.
 if [[ -f /etc/systemd/system/hamdata.service ]] \
@@ -114,6 +116,13 @@ mapfile -t tenants < <(systemctl list-units 'contestscore@*.service' --state=act
 for u in "${tenants[@]}"; do
   sudo systemctl restart "$u"
 done
+# ...and any offline stand-in that's up (a suspended tenant), so the page
+# itself picks up a change on deploy like everything else.
+mapfile -t stubs < <(systemctl list-units 'contestscore-offline@*.service' --state=active --plain --no-legend | awk '{print $1}')
+for u in "${stubs[@]}"; do
+  sudo systemctl restart "$u"
+done
+
 if ((${#tenants[@]})); then
   sleep 2
   for u in "${tenants[@]}"; do

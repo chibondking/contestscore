@@ -181,6 +181,15 @@ The same token opens their Admin page.
 | Remove one | `sudo contestscore-tenant delete k9ct --confirm k9ct` |
 | Update everything | `sudo /usr/local/bin/contestscore-deploy.sh` |
 
+**Suspend** stops the club but keeps the hostname answering: a small
+stand-in (`contestscore-offline@<id>.service`, `deploy/offline-server.js`)
+takes over the same port and serves a styled "temporarily offline" page with
+HTTP 503, so a visitor sees that the scoreboard is paused rather than the
+proxy's own "Bad Gateway". The page reloads itself every minute, so a wall
+display picks the scoreboard back up on its own after `resume`. 503 also
+means the club's ContestPulse bridge holds its QSOs and keeps retrying
+instead of dropping them.
+
 **Delete** stops the club, disables it and moves its folder to
 `/opt/contestscore/tenants/.deleted/<id>-<time>` — nothing is erased. Remove
 that folder yourself when you're sure, and remove the club's hostname from
@@ -263,6 +272,7 @@ password.
 | Thing | Value |
 |---|---|
 | Club instance | `contestscore@<id>.service`, listens on `127.0.0.1:<port>` (3200–3299) |
+| Offline stand-in | `contestscore-offline@<id>.service` — same port, styled 503 page while suspended |
 | Club settings | `/opt/contestscore/tenants/<id>/tenant.env` (`CONTESTSCORE_TENANT`, `CONTESTSCORE_TENANT_NAME`, `HTTP_PORT`, `DB_PATH`, `HAMDATA_URL`, `CONTESTSCORE_API_TOKEN`, plus any README setting) |
 | hamdata | `hamdata.service`, `127.0.0.1:3100`, settings in `/opt/contestscore/hamdata/hamdata.env` |
 | Health | `curl 127.0.0.1:<port>/api/health`, `sudo hamdata-ctl status` |

@@ -1,0 +1,29 @@
+# The "temporarily offline" stand-in for a SUSPENDED tenant (%i is the
+# tenant id). It binds the tenant's own HTTP_PORT and answers everything
+# with a styled 503 page -- see deploy/offline-server.js for why.
+#
+# Started/stopped only by contestscore-tenant (suspend/resume/delete); never
+# enabled, so a reboot leaves a suspended tenant simply down rather than
+# resurrecting a page nobody is watching. Conflicts with the real instance
+# so the two can never fight over the port.
+
+[Unit]
+Description=contestscore offline page (tenant %i)
+After=network.target
+Conflicts=contestscore@%i.service
+
+[Service]
+Type=simple
+User=contestscore
+Group=contestscore
+WorkingDirectory=/opt/contestscore/app
+EnvironmentFile=/opt/contestscore/tenants/%i/tenant.env
+ExecStart=/usr/bin/node deploy/offline-server.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict

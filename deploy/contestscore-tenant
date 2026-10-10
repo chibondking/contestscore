@@ -12,7 +12,9 @@
 #   contestscore-tenant token <id>             print the tenant's token (root only;
 #                                              for when the one-time display was missed)
 #   contestscore-tenant restart <id>
-#   contestscore-tenant suspend <id>           stop + disable, data kept
+#   contestscore-tenant suspend <id>           stop + disable, data kept; the
+#                                              tenant's port serves a styled
+#                                              "temporarily offline" page
 #   contestscore-tenant resume <id>
 #   contestscore-tenant export <id> <out.db>   consistent SQLite snapshot
 #   contestscore-tenant delete <id> --confirm <id>
@@ -65,6 +67,11 @@ need_id() {
   printf '%s' "$id"
 }
 unit() { printf 'contestscore@%s.service' "$1"; }
+# The stand-in that holds the tenant's port while it's suspended, so a
+# visitor gets our own "temporarily offline" page instead of Cloudflare's
+# "Bad Gateway" (deploy/offline-server.js). Only ever started by suspend
+# below; never enabled, so a reboot leaves a suspended tenant down.
+offline_unit() { printf 'contestscore-offline@%s.service' "$1"; }
 env_get() { sed -n "s/^$2=//p" "$1" | tail -1; }
 
 # Consistent copy of a (possibly live) SQLite file via better-sqlite3's
@@ -234,8 +241,29 @@ cmd_restart() {
   echo "tenant $id restarted"
 }
 
-cmd_suspend() { local id; id=$(need_id "${1:-}"); [[ -d "$ROOT/$id" ]] || die "no tenant $id"; systemctl disable --now "$(unit "$id")"; echo "tenant $id suspended (data kept)"; }
-cmd_resume()  { local id; id=$(need_id "${1:-}"); [[ -d "$ROOT/$id" ]] || die "no tenant $id"; systemctl enable --now "$(unit "$id")"; echo "tenant $id resumed"; }
+cmd_suspend() {
+  local id; id=$(need_id "${1:-}")
+  [[ -d "$ROOT/$id" ]] || die "no tenant $id"
+  systemctl disable --now "$(unit "$id")"
+  # Then put the offline page on the port the hostname still points at. A
+  # failure here must not make the suspend itself look failed -- the tenant
+  # IS stopped by this point, which is what was asked for.
+  if systemctl start "$(offline_unit "$id")" 2>/dev/null; then
+    echo "tenant $id suspended (data kept; offline page on :$(env_get "$ROOT/$id/tenant.env" HTTP_PORT))"
+  else
+    echo "tenant $id suspended (data kept)"
+    echo "  note: offline page did not start -- see: journalctl -u $(offline_unit "$id") -n 20" >&2
+  fi
+}
+cmd_resume()  {
+  local id; id=$(need_id "${1:-}")
+  [[ -d "$ROOT/$id" ]] || die "no tenant $id"
+  # Explicit stop before the real instance starts: the unit's Conflicts=
+  # would do it anyway, but the port has to be free before node binds it.
+  systemctl stop "$(offline_unit "$id")" 2>/dev/null || true
+  systemctl enable --now "$(unit "$id")"
+  echo "tenant $id resumed"
+}
 
 cmd_export() {
   local id out; id=$(need_id "${1:-}"); out="${2:-}"
@@ -255,6 +283,7 @@ cmd_delete() {
   [[ "${2:-}" == "--confirm" && "${3:-}" == "$id" ]] || die "delete: repeat the id: delete $id --confirm $id"
   [[ -d "$ROOT/$id" ]] || die "no tenant $id"
   systemctl disable --now "$(unit "$id")" 2>/dev/null || true
+  systemctl stop "$(offline_unit "$id")" 2>/dev/null || true
   install -d -o contestscore -g contestscore -m 750 "$ROOT/.deleted"
   local dest="$ROOT/.deleted/$id-$(date -u +%Y%m%dT%H%M%SZ)"
   mv "$ROOT/$id" "$dest"
