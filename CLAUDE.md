@@ -36,6 +36,19 @@ passed that test so far:
   over 15 min old) don't ring, and a burst rings once (2s cooldown).
   Browsers block audio until a click on the page, so a reloaded wall
   display needs one click before it can ding -- the popover says so;
+- the **TUI** (`tui/`, 2026-10-09) -- the same results core in a
+  terminal, for watching a contest over SSH on the box itself with no
+  browser in the way (`npm run tui`, defaults to `http://localhost:3000`).
+  A **client only**: it reads the public REST + socket.io surface the
+  dashboard page already uses, so nothing in `src/` knows it exists and it
+  adds exactly one dependency (`socket.io-client`). Its copies of the
+  dashboard's derivations (`scoreStale`, `operatorStats`,
+  `continentCounts`, `bandLabel`, the mult-bell rules) are deliberate
+  duplicates rather than shared code -- those live inside `dashboard()`'s
+  closure in a classic non-module script, same reason `report.js`/
+  `compare.js` keep their own `bandLabel`; **change one, change the
+  other.** No Admin page (destructive and token-gated -- no business
+  behind a keystroke), no world map, no busts panel. See `tui/README.md`;
 - **hamdata** (`hamdata/`, 2026-10-08) -- not a feature, plumbing: one
   shared process doing solar + callsign lookup for several contestscore
   instances on one VPS (the multi-tenant plan lives in the ops repo's
@@ -173,6 +186,7 @@ just somewhere that can see N1MM's LAN broadcasts.
 - XML parsing: xml2js
 - UDP: Node built-in dgram module
 - Frontend: Vanilla JS + Alpine.js + Chart.js (all CDN, no build step)
+- TUI: plain Node + hand-rolled ANSI escapes, `socket.io-client` (`tui/`)
 - No TypeScript, no bundler, no framework. This runs on a Raspberry Pi.
 
 No page script (`dashboard.js` / `charts.js` / `stats.js` / `analyze.js` /
@@ -249,6 +263,7 @@ contestscore/
     css/
       dashboard.css         # shared by every page
   contestpulse/             # standalone Go relay (LAN UDP -> HTTPS ingest); see "ContestPulse Bridge"
+  tui/                      # terminal front end for the live dashboard (client-only); see tui/README.md
   config/
     default.json            # ports, DB path, feature flags
   migrations/               # numbered SQL migration files, run on startup
