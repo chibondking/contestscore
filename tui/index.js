@@ -47,14 +47,34 @@ const ONCE = argv.includes('--once') || !process.stdout.isTTY;
 // --- terminal primitives --------------------------------------------------
 
 const COLOR = !process.env.NO_COLOR && process.stdout.isTTY;
-const sgr = (code) => (s) => (COLOR ? `\x1b[${code}m${s}\x1b[0m` : String(s));
-const bold = sgr('1');
-const dim = sgr('2');
-const red = sgr('31');
-const green = sgr('32');
-const yellow = sgr('33');
-const cyan = sgr('36');
-const magenta = sgr('35');
+
+// An amber-CRT palette: one hue, read by brightness, the way an amber
+// terminal actually worked. The point isn't nostalgia -- it's that when
+// everything is amber, the three things that AREN'T (a keyed transmitter, an
+// X-QSO, a feed that died) are the only things on the screen that catch the
+// eye from across the room. A rainbow of chip colors fights the data for
+// attention; this doesn't.
+//
+// Five amber steps, brightest to dimmest: hot (headline numbers, the
+// station call, a new mult), bright (values worth reading), amber (ordinary
+// table text), warm (a warning -- redder, so it leans out of the ladder
+// without leaving it), dusk (labels, rules, timestamps -- everything that
+// is structure rather than data). Plus alert, the one real red.
+//
+// 256-color where the terminal admits to it, which over SSH is essentially
+// always; the 16-color fallback keeps the same five steps using the yellows,
+// so a plain tty degrades rather than breaks.
+const COLOR256 = /256color|direct/i.test(process.env.TERM || '') || !!process.env.COLORTERM;
+const PALETTE = COLOR256
+  ? { hot: '1;38;5;222', bright: '38;5;214', amber: '38;5;208', warm: '38;5;166', dusk: '38;5;130', alert: '1;38;5;196' }
+  : { hot: '1;33', bright: '33', amber: '33', warm: '31', dusk: '2;33', alert: '1;31' };
+const paint = (key) => (s) => (COLOR ? `\x1b[${PALETTE[key]}m${s}\x1b[0m` : String(s));
+const hot = paint('hot');
+const bright = paint('bright');
+const amber = paint('amber');
+const warm = paint('warm');
+const dusk = paint('dusk');
+const alert = paint('alert');
 
 // Every pad/clip below measures *visible* width, so a cell can already be
 // colored when it gets laid out -- otherwise the escape bytes count toward
@@ -91,8 +111,8 @@ function clip(s, n) {
 }
 
 function rule(title, width) {
-  const label = title ? ` ${bold(title)} ` : '';
-  return clip(dim('─') + label + dim('─'.repeat(Math.max(0, width - vlen(label) - 1))), width);
+  const label = title ? ` ${hot(title)} ` : '';
+  return clip(dusk('─') + label + dusk('─'.repeat(Math.max(0, width - vlen(label) - 1))), width);
 }
 
 // Two columns from two arrays of pre-built lines; the shorter side just runs
@@ -484,26 +504,26 @@ function qsoTime(q) {
 }
 
 function bridgeChip(b) {
-  const paint = b.status === 'realtime' ? green : b.status === 'stale' ? yellow : red;
-  return paint(`${b.station_id}:${b.status}`);
+  const ink = b.status === 'realtime' ? bright : b.status === 'stale' ? warm : alert;
+  return ink(`${b.station_id}:${b.status}`);
 }
 
 function headerLine(width) {
-  const left = [bold(new Date().toISOString().slice(11, 19) + 'Z')];
+  const left = [bright(new Date().toISOString().slice(11, 19) + 'Z')];
   const call = stationCall();
-  if (call) left.push(bold(cyan(call)));
+  if (call) left.push(hot(call));
   if (state.score.contest) left.push(state.score.contest);
-  if (state.score.grid6) left.push(dim(state.score.grid6));
+  if (state.score.grid6) left.push(dusk(state.score.grid6));
   if (state.solar.updated) {
     const s = state.solar;
-    left.push(dim(`SFI ${s.sfi ?? '—'} A ${s.a ?? '—'} K ${s.k ?? '—'}`));
+    left.push(dusk(`SFI ${s.sfi ?? '—'} A ${s.a ?? '—'} K ${s.k ?? '—'}`));
   }
 
   const right = [];
   for (const b of state.bridges) right.push(bridgeChip(b));
-  right.push(dim(`upd ${Math.max(0, Math.round((Date.now() - state.lastUpdateAt) / 1000))}s`));
-  right.push(ONCE ? dim('snapshot') : state.connected ? green('live') : red('offline'));
-  right.push(bell.enabled ? yellow(`bell>${bell.after}`) : dim('bell off'));
+  right.push(dusk(`upd ${Math.max(0, Math.round((Date.now() - state.lastUpdateAt) / 1000))}s`));
+  right.push(ONCE ? dusk('snapshot') : state.connected ? bright('live') : alert('offline'));
+  right.push(bell.enabled ? warm(`bell>${bell.after}`) : dusk('bell off'));
 
   // Status sits on the right and stays put; the left group is what gets
   // clipped on a narrow terminal, since the clock/contest matter least.
@@ -514,40 +534,40 @@ function headerLine(width) {
 
 function scoreLines(width) {
   const metrics = [
-    `${dim('QSOs')} ${bold(fmt(state.score.qsos))}`,
-    `${dim('Mults')} ${bold(fmt(state.score.mults))}`,
-    `${dim('Total')} ${bold(green(fmt(state.score.total)))}`,
+    `${dusk('QSOs')} ${bright(fmt(state.score.qsos))}`,
+    `${dusk('Mults')} ${bright(fmt(state.score.mults))}`,
+    `${dusk('Total')} ${hot(fmt(state.score.total))}`,
   ].join('   ');
   return [
-    scoreStale() ? `${metrics}  ${yellow('catching up')}` : metrics,
-    dim(sparkline(state.scoreHistory.map((r) => r.score_total), Math.min(width, 48))),
+    scoreStale() ? `${metrics}  ${warm('catching up')}` : metrics,
+    amber(sparkline(state.scoreHistory.map((r) => r.score_total), Math.min(width, 48))),
   ];
 }
 
 function rateLines(width) {
   const metrics = state.rate.length
-    ? state.rate.map((r) => `${dim(`${r.minutes}m`)} ${bold(fmt(r.rate_per_hour))}${dim('/hr')}`).join('   ')
-    : dim('no rate data yet');
-  return [metrics, dim(sparkline(rateOverTime(), Math.min(width, 48)))];
+    ? state.rate.map((r) => `${dusk(`${r.minutes}m`)} ${bright(fmt(r.rate_per_hour))}${dusk('/hr')}`).join('   ')
+    : dusk('no rate data yet');
+  return [metrics, amber(sparkline(rateOverTime(), Math.min(width, 48)))];
 }
 
 function radioLines(width, max) {
-  if (!state.radios.length) return [dim('no radio data yet')];
+  if (!state.radios.length) return [dusk('no radio data yet')];
   return state.radios.slice(0, max).map((r) => {
     // Band only, never the exact frequency -- the server strips freq/tx_freq
     // before they reach any viewer (src/routes/api.js), so there is nothing
     // finer to show here even if we wanted it.
-    const tx = r.is_transmitting ? red('●') : green('○');
+    const tx = r.is_transmitting ? alert('●') : dusk('○');
     const row = [
-      padEnd(bold(radioLabel(r)), 8),
-      padEnd(r.band || '—', 6),
-      padEnd(r.mode || '—', 5),
+      padEnd(bright(radioLabel(r)), 8),
+      padEnd(amber(r.band || '—'), 6),
+      padEnd(amber(r.mode || '—'), 5),
       tx,
-      padEnd(r.op_call || '—', 9),
-      r.is_running ? cyan('RUN') : '   ',
+      padEnd(bright(r.op_call || '—'), 9),
+      r.is_running ? hot('RUN') : '   ',
       // N1MM never clears FunctionKeyCaption between transmissions, so it is
       // only meaningful while actually keying.
-      r.is_transmitting && r.function_key_caption ? dim(r.function_key_caption) : '',
+      r.is_transmitting && r.function_key_caption ? amber(r.function_key_caption) : '',
     ].join(' ');
     return clip(row, width);
   });
@@ -555,39 +575,39 @@ function radioLines(width, max) {
 
 function continentLine(width) {
   const counts = continentCounts();
-  const parts = CONTINENTS.filter((c) => counts[c]).map((c) => `${dim(c)} ${bold(fmt(counts[c]))}`);
-  return clip(parts.length ? parts.join('   ') : dim('no continent data yet'), width);
+  const parts = CONTINENTS.filter((c) => counts[c]).map((c) => `${dusk(c)} ${bright(fmt(counts[c]))}`);
+  return clip(parts.length ? parts.join('   ') : dusk('no continent data yet'), width);
 }
 
 function operatorLines(width, max) {
   const ops = operatorStats();
-  if (!ops.length) return [dim('no QSOs logged yet')];
+  if (!ops.length) return [dusk('no QSOs logged yet')];
   const shown = ops.slice(0, max);
   const ptsW = ptsWidth(shown.map((op) => op.points), 8);
-  const head = dim(padEnd('OPERATOR', 12) + padStart('QSOS', 6) + padStart('PTS', ptsW) + padStart('60m/hr', 9) + padStart('10m/hr', 9));
+  const head = dusk(padEnd('OPERATOR', 12) + padStart('QSOS', 6) + padStart('PTS', ptsW) + padStart('60m/hr', 9) + padStart('10m/hr', 9));
   const rows = shown.map((op) => clip(
-    padEnd(bold(op.operator), 12) + padStart(fmt(op.qsos), 6) + padStart(fmt(op.points), ptsW)
-    + padStart(fmt(op.peakRate60), 9) + padStart(fmt(op.peakRate10), 9),
+    padEnd(bright(op.operator), 12) + padStart(amber(fmt(op.qsos)), 6) + padStart(amber(fmt(op.points)), ptsW)
+    + padStart(amber(fmt(op.peakRate60)), 9) + padStart(amber(fmt(op.peakRate10)), 9),
     width,
   ));
   return [head, ...rows];
 }
 
 function qsoLines(width, max) {
-  if (!state.qsos.length) return [dim('no QSOs logged yet')];
+  if (!state.qsos.length) return [dusk('no QSOs logged yet')];
   const shown = state.qsos.slice(0, Math.max(0, max));
   const ptsW = ptsWidth(shown.map((q) => q.points), 4);
-  const head = dim(padEnd('TIME', 7) + padEnd('CALL', 12) + padEnd('BAND', 6) + padEnd('MODE', 5) + padEnd('OP', 10) + padStart('PTS', ptsW) + '  FLAGS');
+  const head = dusk(padEnd('TIME', 7) + padEnd('CALL', 12) + padEnd('BAND', 6) + padEnd('MODE', 5) + padEnd('OP', 10) + padStart('PTS', ptsW) + '  FLAGS');
   const rows = shown.map((q) => {
     const flags = [];
-    if (!isCountedQso(q)) flags.push(red('X-QSO'));
-    if (isQtc(q)) flags.push(dim('QTC'));
-    if (isMult(q)) flags.push(magenta('MULT'));
-    const call = isCountedQso(q) ? bold(q.call || '—') : dim(q.call || '—');
+    if (!isCountedQso(q)) flags.push(alert('X-QSO'));
+    if (isQtc(q)) flags.push(dusk('QTC'));
+    if (isMult(q)) flags.push(hot('MULT'));
+    const call = isCountedQso(q) ? bright(q.call || '—') : dusk(q.call || '—');
     return clip(
-      padEnd(dim(qsoTime(q)), 7) + padEnd(call, 12) + padEnd(bandLabel(q.band), 6)
-      + padEnd(q.mode || '—', 5) + padEnd(q.operator || '—', 10)
-      + padStart(fmt(q.points), ptsW) + '  ' + flags.join(' '),
+      padEnd(dusk(qsoTime(q)), 7) + padEnd(call, 12) + padEnd(amber(bandLabel(q.band)), 6)
+      + padEnd(amber(q.mode || '—'), 5) + padEnd(amber(q.operator || '—'), 10)
+      + padStart(amber(fmt(q.points)), ptsW) + '  ' + flags.join(' '),
       width,
     );
   });
@@ -622,8 +642,8 @@ function buildLines(width, height) {
   lines.push(...qsoLines(width, Math.max(1, room)));
 
   const footer = state.error
-    ? red(`! ${state.error}`)
-    : dim(`${BASE}   q quit · b bell · r refresh`);
+    ? alert(`! ${state.error}`)
+    : dusk(`${BASE}   q quit · b bell · r refresh`);
   while (lines.length < height - 1) lines.push('');
   return [...lines.slice(0, height - 1), clip(footer, width)];
 }
