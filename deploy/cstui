@@ -1,0 +1,53 @@
+#!/bin/bash
+# Run the contestscore TUI against an instance on this box.
+#
+#   cstui           the default tenant (wt2p), on its own HTTP_PORT
+#   cstui nw8s      that tenant instead
+#   cstui --list    every tenant on this box, with its port
+#   cstui wt2p --once   extra flags pass straight through to the TUI
+#
+# /opt/contestscore/app and each tenant.env are 750 contestscore:contestscore,
+# so a login user can't even traverse them -- everything here runs as that
+# user via sudo, including reading the port, which is why it greps the one
+# HTTP_PORT line instead of sourcing the file (tenant.env also holds that
+# tenant's API token).
+#
+# Installed to /usr/local/bin/cstui by contestscore-deploy.sh. Edit it in the
+# repo at deploy/cstui and push -- never edit the installed copy, a deploy
+# overwrites it.
+set -euo pipefail
+
+APP=/opt/contestscore/app
+TENANTS=/opt/contestscore/tenants
+DEFAULT_TENANT=wt2p
+
+case ${1-} in
+  --help | -h)
+    sed -n '3,7p' "$0" | sed 's/^# \?//'
+    exit 0
+    ;;
+  --list | -l)
+    sudo -u contestscore bash -c '
+      for f in "$1"/*/tenant.env; do
+        [[ -f $f ]] || continue
+        d=${f%/tenant.env}
+        printf "%-12s %s\n" "${d##*/}" "$(grep -h "^HTTP_PORT=" "$f" | head -1 | cut -d= -f2)"
+      done' _ "$TENANTS"
+    exit 0
+    ;;
+esac
+
+id=$DEFAULT_TENANT
+if [[ ${1-} && ${1-} != -* ]]; then id=$1; shift; fi
+# Goes into a sudo bash -c below, so don't take anything but an id shape.
+[[ $id =~ ^[A-Za-z0-9_-]+$ ]] || { echo "cstui: bad tenant id '$id'" >&2; exit 1; }
+
+if [[ -d $TENANTS ]]; then
+  port=$(sudo -u contestscore bash -c \
+    'grep -h "^HTTP_PORT=" "$1/tenant.env" 2>/dev/null | head -1 | cut -d= -f2' _ "$TENANTS/$id")
+  [[ -n ${port:-} ]] || { echo "cstui: no tenant '$id' here -- try: cstui --list" >&2; exit 1; }
+else
+  port=3000 # not a tenant box: the single contestscore.service install
+fi
+
+exec sudo -u contestscore node "$APP/tui/index.js" --url "http://localhost:$port" "$@"

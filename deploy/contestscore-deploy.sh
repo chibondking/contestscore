@@ -51,6 +51,11 @@ sudo install -o root -g root -m 755 \
 sudo install -o root -g root -m 755 \
   /opt/contestscore/app/deploy/hamdata-ctl \
   /usr/local/sbin/hamdata-ctl
+# The TUI launcher -- /usr/local/bin, not sbin: it's a read-only viewer a
+# human runs, not an admin tool that changes anything.
+sudo install -o root -g root -m 755 \
+  /opt/contestscore/app/deploy/cstui \
+  /usr/local/bin/cstui
 sudo install -o root -g root -m 755 \
   /opt/contestscore/app/deploy/contestscore-tenant-agent \
   /usr/local/sbin/contestscore-tenant-agent

@@ -8,7 +8,11 @@ npm run tui
 ```
 
 That's it -- it defaults to `http://localhost:3000`, the instance running on
-the same machine. `--url` or `CONTESTSCORE_URL` point it somewhere else
+the same machine. On the hosted box use `cstui` instead (`deploy/cstui`,
+installed to `/usr/local/bin` by the deploy): it runs this as the
+`contestscore` user, which a login user has to do anyway since the app
+directory is `750`, and looks the port up from the tenant's own
+`tenant.env` -- `cstui`, `cstui nw8s`, `cstui --list`. `--url` or `CONTESTSCORE_URL` point it somewhere else
 (mostly useful for testing against a scratch instance on another port).
 
 ```

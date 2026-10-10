@@ -38,7 +38,10 @@ passed that test so far:
   display needs one click before it can ding -- the popover says so;
 - the **TUI** (`tui/`, 2026-10-09) -- the same results core in a
   terminal, for watching a contest over SSH on the box itself with no
-  browser in the way (`npm run tui`, defaults to `http://localhost:3000`).
+  browser in the way (`npm run tui`, defaults to `http://localhost:3000`;
+  on a tenant box, `cstui [<tenant>]` -- `deploy/cstui`, installed to
+  `/usr/local/bin` by the deploy script, runs it as the `contestscore` user
+  and resolves the tenant's port from its `tenant.env`).
   A **client only**: it reads the public REST + socket.io surface the
   dashboard page already uses, so nothing in `src/` knows it exists and it
   adds exactly one dependency (`socket.io-client`). Its copies of the
