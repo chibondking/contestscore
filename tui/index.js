@@ -133,6 +133,17 @@ function sparkline(values, width) {
 
 const fmt = (n) => (Number.isFinite(Number(n)) ? Number(n).toLocaleString('en-US') : '—');
 
+// Width for a points column, sized to the values actually on screen. Points
+// are per-contest: 1-5 in most, but a distance-scored contest (Makrothen)
+// runs to five figures, and padStart only pads, never clips -- so a wide
+// value shoved everything after it out of line on that row alone (seen live
+// during Makrothen RTTY: "11,084" in a 4-wide column pushed FLAGS two
+// columns right while its neighbours stayed put). A fixed wide column would
+// instead waste the space in every ordinary contest, hence neither.
+function ptsWidth(values, floor) {
+  return Math.max(floor, ...values.map((v) => vlen(fmt(v))));
+}
+
 // --- copied from public/js/dashboard.js (see header comment) --------------
 
 function bandLabel(band) {
@@ -551,9 +562,11 @@ function continentLine(width) {
 function operatorLines(width, max) {
   const ops = operatorStats();
   if (!ops.length) return [dim('no QSOs logged yet')];
-  const head = dim(padEnd('OPERATOR', 12) + padStart('QSOS', 6) + padStart('PTS', 8) + padStart('60m/hr', 9) + padStart('10m/hr', 9));
-  const rows = ops.slice(0, max).map((op) => clip(
-    padEnd(bold(op.operator), 12) + padStart(fmt(op.qsos), 6) + padStart(fmt(op.points), 8)
+  const shown = ops.slice(0, max);
+  const ptsW = ptsWidth(shown.map((op) => op.points), 8);
+  const head = dim(padEnd('OPERATOR', 12) + padStart('QSOS', 6) + padStart('PTS', ptsW) + padStart('60m/hr', 9) + padStart('10m/hr', 9));
+  const rows = shown.map((op) => clip(
+    padEnd(bold(op.operator), 12) + padStart(fmt(op.qsos), 6) + padStart(fmt(op.points), ptsW)
     + padStart(fmt(op.peakRate60), 9) + padStart(fmt(op.peakRate10), 9),
     width,
   ));
@@ -562,8 +575,10 @@ function operatorLines(width, max) {
 
 function qsoLines(width, max) {
   if (!state.qsos.length) return [dim('no QSOs logged yet')];
-  const head = dim(padEnd('TIME', 7) + padEnd('CALL', 12) + padEnd('BAND', 6) + padEnd('MODE', 5) + padEnd('OP', 10) + padStart('PTS', 4) + '  FLAGS');
-  const rows = state.qsos.slice(0, Math.max(0, max)).map((q) => {
+  const shown = state.qsos.slice(0, Math.max(0, max));
+  const ptsW = ptsWidth(shown.map((q) => q.points), 4);
+  const head = dim(padEnd('TIME', 7) + padEnd('CALL', 12) + padEnd('BAND', 6) + padEnd('MODE', 5) + padEnd('OP', 10) + padStart('PTS', ptsW) + '  FLAGS');
+  const rows = shown.map((q) => {
     const flags = [];
     if (!isCountedQso(q)) flags.push(red('X-QSO'));
     if (isQtc(q)) flags.push(dim('QTC'));
@@ -572,7 +587,7 @@ function qsoLines(width, max) {
     return clip(
       padEnd(dim(qsoTime(q)), 7) + padEnd(call, 12) + padEnd(bandLabel(q.band), 6)
       + padEnd(q.mode || '—', 5) + padEnd(q.operator || '—', 10)
-      + padStart(fmt(q.points), 4) + '  ' + flags.join(' '),
+      + padStart(fmt(q.points), ptsW) + '  ' + flags.join(' '),
       width,
     );
   });
