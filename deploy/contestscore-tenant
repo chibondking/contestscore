@@ -69,8 +69,9 @@ need_id() {
 unit() { printf 'contestscore@%s.service' "$1"; }
 # The stand-in that holds the tenant's port while it's suspended, so a
 # visitor gets our own "temporarily offline" page instead of Cloudflare's
-# "Bad Gateway" (deploy/offline-server.js). Only ever started by suspend
-# below; never enabled, so a reboot leaves a suspended tenant down.
+# "Bad Gateway" (deploy/offline-server.js). Enabled alongside the suspend,
+# so the page is still there after a reboot -- "suspended" has to look the
+# same tomorrow as it did when the button was pressed.
 offline_unit() { printf 'contestscore-offline@%s.service' "$1"; }
 env_get() { sed -n "s/^$2=//p" "$1" | tail -1; }
 
@@ -248,7 +249,7 @@ cmd_suspend() {
   # Then put the offline page on the port the hostname still points at. A
   # failure here must not make the suspend itself look failed -- the tenant
   # IS stopped by this point, which is what was asked for.
-  if systemctl start "$(offline_unit "$id")" 2>/dev/null; then
+  if systemctl enable --now "$(offline_unit "$id")" 2>/dev/null; then
     echo "tenant $id suspended (data kept; offline page on :$(env_get "$ROOT/$id/tenant.env" HTTP_PORT))"
   else
     echo "tenant $id suspended (data kept)"
@@ -260,7 +261,7 @@ cmd_resume()  {
   [[ -d "$ROOT/$id" ]] || die "no tenant $id"
   # Explicit stop before the real instance starts: the unit's Conflicts=
   # would do it anyway, but the port has to be free before node binds it.
-  systemctl stop "$(offline_unit "$id")" 2>/dev/null || true
+  systemctl disable --now "$(offline_unit "$id")" 2>/dev/null || true
   systemctl enable --now "$(unit "$id")"
   echo "tenant $id resumed"
 }
@@ -283,7 +284,7 @@ cmd_delete() {
   [[ "${2:-}" == "--confirm" && "${3:-}" == "$id" ]] || die "delete: repeat the id: delete $id --confirm $id"
   [[ -d "$ROOT/$id" ]] || die "no tenant $id"
   systemctl disable --now "$(unit "$id")" 2>/dev/null || true
-  systemctl stop "$(offline_unit "$id")" 2>/dev/null || true
+  systemctl disable --now "$(offline_unit "$id")" 2>/dev/null || true
   install -d -o contestscore -g contestscore -m 750 "$ROOT/.deleted"
   local dest="$ROOT/.deleted/$id-$(date -u +%Y%m%dT%H%M%SZ)"
   mv "$ROOT/$id" "$dest"

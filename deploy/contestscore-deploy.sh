@@ -116,11 +116,22 @@ mapfile -t tenants < <(systemctl list-units 'contestscore@*.service' --state=act
 for u in "${tenants[@]}"; do
   sudo systemctl restart "$u"
 done
-# ...and any offline stand-in that's up (a suspended tenant), so the page
-# itself picks up a change on deploy like everything else.
-mapfile -t stubs < <(systemctl list-units 'contestscore-offline@*.service' --state=active --plain --no-legend | awk '{print $1}')
-for u in "${stubs[@]}"; do
-  sudo systemctl restart "$u"
+# Every SUSPENDED tenant gets (or keeps) its "temporarily offline" stand-in
+# on the tenant's own port -- deploy/contestscore-offline@.service, see
+# deploy/offline-server.js. Suspended means: the directory is there and the
+# real unit is disabled (contestscore-tenant suspend). A merely stopped-but-
+# enabled instance is a failure to investigate, not a suspension, so it's
+# left alone. Converging here rather than only in `suspend` means tenants
+# suspended before this existed are covered too, and the page itself picks
+# up changes on deploy like everything else.
+for d in /opt/contestscore/tenants/*/; do
+  id=$(basename "$d")
+  [[ -f "$d/tenant.env" ]] || continue
+  if [[ "$(systemctl is-enabled "contestscore@$id.service" 2>/dev/null || true)" == disabled ]]; then
+    sudo systemctl enable --now "contestscore-offline@$id.service" >/dev/null 2>&1 \
+      || echo "deploy: offline page for suspended tenant $id did not start" >&2
+    sudo systemctl restart "contestscore-offline@$id.service" >/dev/null 2>&1 || true
+  fi
 done
 
 if ((${#tenants[@]})); then

@@ -781,12 +781,15 @@ binds the same port and answers everything with a styled
 "temporarily offline" page in wt2p.us's amber-on-black; `resume`/`delete`
 stop it, and the unit `Conflicts=` the real one so they can't fight over
 the port. Deliberately dependency-free with the HTML inlined (it must start
-mid-deploy, and it is not part of the app), never `enable`d (a reboot leaves
-a suspended tenant simply down), and **503, not 200** -- so monitors and
+mid-deploy, and it is not part of the app), enabled alongside the suspend so
+a reboot still shows it, and **503, not 200** -- so monitors and
 search engines don't take it for the scoreboard, and ContestPulse's contact
 hold keeps retrying its QSOs instead of dropping them. Its colours are
 wt2p.us's own `:root` tokens, the same set `dashboard.css`'s `wt2p` theme
-copies -- change one, consider the other.
+copies -- change one, consider the other. The deploy script also *converges*
+this: any tenant whose real unit is `disabled` gets the stand-in enabled and
+restarted on every deploy, so tenants suspended before this existed are
+covered without a manual step.
 
 ## hamdata (shared solar + lookup)
 

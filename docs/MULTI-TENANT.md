@@ -186,7 +186,8 @@ stand-in (`contestscore-offline@<id>.service`, `deploy/offline-server.js`)
 takes over the same port and serves a styled "temporarily offline" page with
 HTTP 503, so a visitor sees that the scoreboard is paused rather than the
 proxy's own "Bad Gateway". The page reloads itself every minute, so a wall
-display picks the scoreboard back up on its own after `resume`. 503 also
+display picks the scoreboard back up on its own after `resume`. The
+stand-in is enabled, so a reboot still shows it. 503 also
 means the club's ContestPulse bridge holds its QSOs and keeps retrying
 instead of dropping them.
 

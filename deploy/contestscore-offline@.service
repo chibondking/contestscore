@@ -2,10 +2,10 @@
 # tenant id). It binds the tenant's own HTTP_PORT and answers everything
 # with a styled 503 page -- see deploy/offline-server.js for why.
 #
-# Started/stopped only by contestscore-tenant (suspend/resume/delete); never
-# enabled, so a reboot leaves a suspended tenant simply down rather than
-# resurrecting a page nobody is watching. Conflicts with the real instance
-# so the two can never fight over the port.
+# Enabled/disabled only by contestscore-tenant (suspend/resume/delete) --
+# enabled, so a reboot leaves a suspended tenant still saying so instead of
+# handing the visitor back the proxy's "Bad Gateway". Conflicts with the real
+# instance so the two can never fight over the port.
 
 [Unit]
 Description=contestscore offline page (tenant %i)
@@ -27,3 +27,6 @@ StandardError=journal
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target
