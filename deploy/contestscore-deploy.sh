@@ -25,6 +25,17 @@ sudo -u contestscore bash -c '
   set -euo pipefail
   cd /opt/contestscore/app
   git fetch origin
+  # package-lock.json is tracked, but the npm install below rewrites it in
+  # place on this box every deploy -- so the checkout carries a permanently
+  # dirty lock file, and the moment a commit actually TOUCHES the lock file
+  # (a new dependency), this ff-only merge aborts with "local changes would
+  # be overwritten". It sat latent for as long as no commit changed the lock
+  # file, then blocked the deploy of the one that did. The lock file is
+  # generated and never hand-edited here, so dropping the local churn is
+  # always safe. (npm ci would avoid the rewrite entirely, but it wipes
+  # node_modules and so rebuilds better-sqlite3 from source on every single
+  # deploy -- see DEPLOY.md on how much fun that is on this box.)
+  git checkout -- package-lock.json
   git merge --ff-only origin/main
 '
 
