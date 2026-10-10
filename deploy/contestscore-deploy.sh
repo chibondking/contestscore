@@ -124,15 +124,18 @@ done
 # left alone. Converging here rather than only in `suspend` means tenants
 # suspended before this existed are covered too, and the page itself picks
 # up changes on deploy like everything else.
-for d in /opt/contestscore/tenants/*/; do
-  id=$(basename "$d")
-  [[ -f "$d/tenant.env" ]] || continue
+# (The listing runs under sudo: /opt/contestscore/tenants is 750
+# contestscore:contestscore, so this script's own user can't even traverse
+# it -- without sudo the glob quietly matches nothing and the whole loop
+# silently does nothing at all.)
+while read -r id; do
+  [[ -n "$id" ]] || continue
   if [[ "$(systemctl is-enabled "contestscore@$id.service" 2>/dev/null || true)" == disabled ]]; then
     sudo systemctl enable --now "contestscore-offline@$id.service" >/dev/null 2>&1 \
       || echo "deploy: offline page for suspended tenant $id did not start" >&2
     sudo systemctl restart "contestscore-offline@$id.service" >/dev/null 2>&1 || true
   fi
-done
+done < <(sudo bash -c 'for d in /opt/contestscore/tenants/*/; do [[ -f "$d/tenant.env" ]] && basename "$d"; done' 2>/dev/null || true)
 
 if ((${#tenants[@]})); then
   sleep 2
