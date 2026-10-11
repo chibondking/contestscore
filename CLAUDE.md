@@ -276,6 +276,7 @@ contestscore/
     SETUP.md                # user-facing install guide (LAN / single VPS)
     MULTI-TENANT.md         # user-facing guide: several clubs on one VPS, by hand
     ANALYZER.md             # the log analyzer, in full
+    MULTI-CONTEST.md        # shelved effort study: several contests in one weekend
   test/
     parsers/                # unit tests for parser logic
     analyze/                # analyzer unit tests (parsers, cty, contests, manual, live, report, ...)
@@ -870,6 +871,17 @@ not built):
 - RumLog / DXLog (spotty in the original; tackle after N1MM is solid)
 - Multi-server aggregation (one dashboard aggregating multiple contestscore
   instances across sites)
+- **Switching between several contests on one weekend** -- the dashboard
+  reads `qsos.contestname`/`contestnr` and `score_snapshots.contest` from
+  nowhere, so a DB holding two contests mixes them (a sawtoothing score
+  sparkline, a merged breakdown, a rate across both). Studied and
+  **shelved 2026-10-11 by CJ**, to revisit; the full effort study, the
+  surface-by-surface breakdown, the zero-code workaround (snapshot to the
+  analyzer, then reset, at each switch) and the one unverified bit (does
+  `dynamicresults`'s `<contest>` match `contactinfo`'s `<contestname>`
+  byte for byte?) are in `docs/MULTI-CONTEST.md`. Ingest/parsing/storage
+  and ContestPulse need no changes -- the data is already tagged; only the
+  readers ignore it.
 - Authentication (local network tool, no auth planned)
 - Log analyzer deferrals (a scoring engine for bare Cabrillo, in-browser
   "quick look", N-way compare) -- see the "Not done" list in
