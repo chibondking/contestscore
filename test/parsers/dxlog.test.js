@@ -54,6 +54,36 @@ describe('DXLog (N1MM-compatible broadcast)', () => {
     const total = s.breakdown.find((b) => b.is_total);
     assert.deepEqual({ qsos: total.qsos, points: total.points, mults: total.mults }, { qsos: 3, points: 3, mults: 2 });
   });
+
+  // The regression this fixture exists for. K1USN SST sends TWO <mult>
+  // elements per band/mode -- type="state" and type="country" -- and the
+  // parser used to key a row on band|mode and assign, so the trailing
+  // type="country">0</mult> overwrote type="state">10</mult> and the
+  // dashboard's Mults metric sat at 0 for the whole contest while the
+  // per-QSO MULT chips (a different source: is_mult1/2/3 off the contact
+  // packets) showed up fine. Captured live from WT2P, 2026-10-12.
+  it('SST: a row with several <mult type=...> sums them, not last-one-wins', async () => {
+    const s = await parseScore(fixture('dynamicresults-sst.xml'));
+    assert.equal(s.contest, 'K1USNSST');
+    assert.equal(s.soft, 'DXLog');
+
+    const total = s.breakdown.find((b) => b.is_total);
+    // state 10 + country 0. The pre-fix bug returned 0 here.
+    assert.equal(total.mults, 10);
+    assert.deepEqual({ qsos: total.qsos, points: total.points }, { qsos: 11, points: 11 });
+
+    // The arithmetic check that says the sum is the right reduction: this
+    // is DXLog's own <score>, and it only works out if mults is 10.
+    assert.equal(s.score_total, 110);
+    assert.equal(total.points * total.mults, s.score_total);
+
+    // Per-band rows get the same treatment -- all 11 QSOs were on 40m.
+    const b40 = s.breakdown.find((b) => b.band === '40');
+    assert.equal(b40.mults, 10);
+    // An untouched band still reports 0 (both types present, both zero),
+    // which is different from null: the contest does score mults.
+    assert.equal(s.breakdown.find((b) => b.band === '20').mults, 0);
+  });
 });
 
 describe("DXLog's native broadcast (its own format, not N1MM-compatible)", () => {

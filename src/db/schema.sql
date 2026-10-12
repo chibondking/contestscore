@@ -132,7 +132,11 @@ CREATE TABLE IF NOT EXISTS score_snapshots (
   mode            TEXT,
   qsos            INTEGER DEFAULT 0,
   points          INTEGER DEFAULT 0,
-  mults           INTEGER,             -- NULL until a contest's <mult> breakdown shape is confirmed live
+  -- Sum of the packet's <mult> elements for this band/mode, across every
+  -- type= (multiplier category) it sends -- see parsers/score.js. NULL, not
+  -- 0, when the contest sends no <mult> at all, so the dashboard can tell
+  -- "no multipliers in this contest" from "none worked yet".
+  mults           INTEGER,
   is_total        INTEGER DEFAULT 0,
   score_total     INTEGER DEFAULT 0,   -- the packet's top-level <score> value
   captured_at     TEXT NOT NULL

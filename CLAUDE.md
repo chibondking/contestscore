@@ -360,11 +360,33 @@ third-party scoreboard aggregators, on its own update interval) is enabled;
 not confirmed either way, but the two features appear to share the same
 underlying XML serialization internally.
 
-No `<mult>` breakdown has been observed in a live capture yet (the only
-verified example, ARRL Field Day, doesn't score multipliers) — the parser
-handles one defensively if a contest sends it, using the same band/mode-keyed
-shape as `<qso>`/`<point>`, but treat multiplier data as unconfirmed until
-checked against a real non-Field-Day contest.
+`<mult>` is **confirmed live** and does *not* share `<qso>`/`<point>`'s
+shape: it carries a third attribute, `type`, and one band/mode can get
+**several** `<mult>` elements, one per multiplier category. Real DXLog
+K1USN SST capture (`test/fixtures/dxlog/dynamicresults-sst.xml`):
+
+```xml
+<mult band="total" mode="ALL" type="state">10</mult>
+<mult band="total" mode="ALL" type="country">0</mult>
+```
+
+A row's multiplier total is the **sum over its types**, which is what
+reproduces DXLog's own `<score>` (that capture: 11 points, `<score>110</score>`
+= 11 x (10 + 0)). Keying a row on `band|mode` alone and *assigning* let the
+last type win, so `country 0` overwrote `state 10` and the dashboard's Mults
+metric read 0 for an entire contest — while the per-QSO MULT chips, which
+come from a different source entirely (`is_mult1/2/3` on the contact
+packets), were correct the whole time. Fixed 2026-10-11; regression tests in
+`test/parsers/dxlog.test.js` and `test/parsers/score.test.js`.
+
+Two caveats worth keeping in mind: the earlier CW-OPS fixture sends only
+`type="state"`, which is why single-type contests looked fine all along; and
+in both captures in hand the extra category is 0, so they prove the
+overwrite but can't by themselves distinguish *sum* from *max* — sum is
+chosen because it's the scoring convention for multi-category contests (CQ
+WW: zones + countries) and it's what matches `<score>`. `mults` still stays
+`null` on every row when a contest sends no `<mult>` at all, which is how
+the dashboard tells "this contest has no multipliers" from "zero so far".
 
 ### ExternalCallsignLookup (:12061, same port as contacts) — root `<lookupinfo>`
 Field list beyond `mycall` has not been independently verified against the
