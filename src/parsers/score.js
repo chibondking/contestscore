@@ -34,10 +34,30 @@ function textAndAttrs(el) {
 // are accepted here; which one a given N1MM installation sends may depend on
 // its version or a setting this project doesn't otherwise touch.
 //
-// No <mult> breakdown has been confirmed yet — the only captured example
-// (ARRL Field Day) doesn't score multipliers. If a contest broadcasts one,
-// it's parsed defensively using the same band/mode-keyed shape as qso/point;
-// otherwise `mults` stays null on every row.
+// <mult> is confirmed live, and it does NOT share qso/point's shape: it
+// carries a third attribute, type, and a contest can send SEVERAL <mult>
+// elements for the same band/mode, one per multiplier category. From a real
+// DXLog K1USN SST capture (test/fixtures/dxlog/dynamicresults-sst.xml):
+//
+//   <mult band="total" mode="ALL" type="state">10</mult>
+//   <mult band="total" mode="ALL" type="country">0</mult>
+//
+// So a row's multiplier total is the SUM over its types, which is what
+// matches DXLog's own <score>: that capture has 11 points and <score>110</score>,
+// i.e. 11 x (10 + 0). Keying a row on band|mode alone and assigning made
+// the last type win, so "state 10" was overwritten by "country 0" and the
+// dashboard's Mults metric read 0 for the whole contest. (The earlier
+// CW-OPS fixture sends only type="state", which is why one mult type's
+// worth of this was right all along and the bug stayed invisible.)
+//
+// Sum, not max, because that's the scoring convention for a contest with
+// several multiplier categories (CQ WW: zones + countries) and it's what
+// reproduces <score>. Worth knowing: in both captures in hand the extra
+// type is 0, so they confirm the overwrite but can't by themselves
+// distinguish sum from max -- a capture with two nonzero types would.
+// `mults` still stays null on every row when a contest sends no <mult> at
+// all, which is how the dashboard tells "no multipliers in this contest"
+// from "zero so far".
 async function parseScore(buf) {
   const result = await xml2js.parseStringPromise(buf.toString(), PARSE_OPTS);
   const s = result.dynamicresults || (result.rtc && result.rtc.dynamicresults);
@@ -68,7 +88,11 @@ async function parseScore(buf) {
   }
   for (const el of toArray(breakdown.mult)) {
     const { text, attrs } = textAndAttrs(el);
-    rowFor(attrs).mults = Number(text) || 0;
+    const row = rowFor(attrs);
+    // += over =, so every type="..." for this band/mode contributes rather
+    // than the last one clobbering the rest. Starts from null -> 0 on the
+    // first <mult> seen, so a contest with no <mult> keeps null.
+    row.mults = (row.mults ?? 0) + (Number(text) || 0);
   }
 
   const breakdownRows = [...rows.values()].map((r) => ({

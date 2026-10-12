@@ -85,6 +85,36 @@ describe('parseScore', () => {
     assert.ok(s.breakdown.every((b) => b.mults === null));
   });
 
+  // Unit-level counterpart to the real-capture test in dxlog.test.js: a
+  // band/mode can carry one <mult> per multiplier category, and the row's
+  // total is the sum over them. Assigning instead of accumulating made the
+  // last category win.
+  it('sums several <mult type=...> for the same band/mode', async () => {
+    const multiType = base.replace(
+      '<qso band="total" mode="ALL">42</qso>',
+      '<mult band="20" mode="CW" type="state">7</mult>' +
+      '<mult band="20" mode="CW" type="country">3</mult>' +
+      '<mult band="20" mode="CW" type="zone">2</mult>' +
+      '<qso band="total" mode="ALL">42</qso>'
+    );
+    const s = await parseScore(Buffer.from(multiType));
+    const b20 = s.breakdown.find((b) => b.band === '20' && b.mode === 'CW');
+    assert.equal(b20.mults, 12); // 7 + 3 + 2, not 2
+  });
+
+  // A trailing zero category must not wipe out a nonzero one -- the exact
+  // shape K1USN SST sends, and the reason the dashboard read 0.
+  it('a zero <mult> type does not clobber a nonzero one', async () => {
+    const zeroLast = base.replace(
+      '<qso band="total" mode="ALL">42</qso>',
+      '<mult band="20" mode="CW" type="state">9</mult>' +
+      '<mult band="20" mode="CW" type="country">0</mult>' +
+      '<qso band="total" mode="ALL">42</qso>'
+    );
+    const s = await parseScore(Buffer.from(zeroLast));
+    assert.equal(s.breakdown.find((b) => b.band === '20' && b.mode === 'CW').mults, 9);
+  });
+
   it('parses a <mult> breakdown defensively when present', async () => {
     const withMults = base.replace(
       '<qso band="total" mode="ALL">42</qso>',

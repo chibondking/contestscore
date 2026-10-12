@@ -6,6 +6,14 @@ as received; used by test/parsers/dxlog.test.js and test/udp/pipeline.test.js.
 - `contactinfo.xml`: a new QSO (K9CT, 40m, a new multiplier), port 13061.
 - `contactreplace-xqso.xml`: the X-QSO of K9MMS: `IsClaimedQso` 0, points 0, mult cleared.
 - `dynamicresults.xml`: the score post (port 12062), sent on DXLog's online-scoreboard timer.
+  One multiplier category only (`<mult type="state">`).
+- `dynamicresults-sst.xml`: a second score post, from a live K1USN SST
+  session (WT2P, captured 2026-10-12 off the wire on the VPS). The reason
+  it's here: SST sends **two** `<mult>` elements per band/mode,
+  `type="state"` and `type="country"`, and the parser used to let the last
+  one win -- so `country 0` wiped out `state 10` and the dashboard's Mults
+  metric sat at 0. 11 QSOs, 11 points, `<score>110</score>`, which only
+  works out if the types are summed.
 
 DXLog's native broadcast (its own format, N1MM-compatible broadcast off), same
 session, as received:
