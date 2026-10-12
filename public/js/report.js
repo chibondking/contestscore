@@ -143,7 +143,10 @@ function renderReportText(data) {
   }
 
   out.push('');
-  out.push('-- ContestPulse analyzer report');
+  const origin = reportOrigin();
+  out.push(origin
+    ? `-- ContestPulse analyzer report (${origin})`
+    : '-- ContestPulse analyzer report');
   return out.join('\n');
 }
 
@@ -614,6 +617,32 @@ function bandLabel(band) {
   ];
   const hit = ranges.find(([lo, hi]) => n >= lo && n < hi);
   return hit ? hit[2] : String(band);
+}
+
+// The tenant's own base URL, for the text report's sign-off, so a pasted
+// report says which scoreboard it came from.
+//
+// Taken from location.origin rather than built from the tenant id, because
+// there is no single id -> hostname rule to rebuild it from: the tenant
+// tooling prints `https://<id>-score.<domain>` (deploy/contestscore-tenant),
+// while this very instance is served as `scoreboard.wt2p.us` -- an id-derived
+// guess would be wrong for the oldest tenant and would silently rot every
+// time a hostname is chosen differently. The report is rendered in the
+// browser, on the tenant's own host, so the origin already IS the answer and
+// needs nothing kept in sync.
+//
+// Returns '' under node (the tests, where there's no location) and for a
+// file:// or otherwise non-http origin, where a URL would be meaningless to
+// whoever receives the paste; the caller then omits the parenthetical
+// entirely rather than printing an empty one.
+function reportOrigin() {
+  try {
+    if (typeof location === 'undefined' || !location) return '';
+    const origin = location.origin;
+    return /^https?:\/\/./.test(origin || '') ? origin : '';
+  } catch {
+    return ''; // a sandboxed/opaque origin can throw on access
+  }
 }
 
 function pad(n) { return String(n).padStart(2, '0'); }

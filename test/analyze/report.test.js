@@ -391,3 +391,56 @@ describe('Callsigns worked on the most bands', () => {
     assert.equal(rows.length - 2, 25); // header + rule + 25 rows
   });
 });
+
+// The text report's sign-off names the scoreboard it came from, so a report
+// pasted into an email or a reflector post says where it was generated.
+// The hostname comes from location.origin, NOT from the tenant id: tenant
+// hostnames don't follow one rule (the tooling prints <id>-score.<domain>,
+// while the original instance is scoreboard.wt2p.us), so there's nothing to
+// reconstruct it from reliably.
+describe('renderReportText sign-off', () => {
+  const qsos = [qso({ call: 'K3LR' })];
+  const data = { meta: { station_call: 'K3LR', contest: 'CQ-WPX-CW' }, qsos };
+
+  // Under node there is no `location`, which is also the guard that keeps
+  // the renderer usable outside a browser at all.
+  it('omits the URL entirely when there is no location (node)', () => {
+    const text = renderReportText(data);
+    assert.match(text, /^-- ContestPulse analyzer report$/m);
+    assert.doesNotMatch(text, /analyzer report \(/);
+  });
+
+  it("names the tenant's own origin when served from one", () => {
+    globalThis.location = { origin: 'https://k9ct-score.wt2p.us' };
+    try {
+      assert.match(
+        renderReportText(data),
+        /^-- ContestPulse analyzer report \(https:\/\/k9ct-score\.wt2p\.us\)$/m
+      );
+    } finally {
+      delete globalThis.location;
+    }
+  });
+
+  // wt2p's own host follows none of the tenant naming patterns, which is
+  // exactly why the origin is read rather than derived from the id.
+  it('works for a host that does not match the tenant naming pattern', () => {
+    globalThis.location = { origin: 'https://scoreboard.wt2p.us' };
+    try {
+      assert.match(renderReportText(data), /\(https:\/\/scoreboard\.wt2p\.us\)$/m);
+    } finally {
+      delete globalThis.location;
+    }
+  });
+
+  it('omits a non-http origin rather than pasting something meaningless', () => {
+    for (const origin of ['file://', 'null', '', undefined]) {
+      globalThis.location = { origin };
+      try {
+        assert.match(renderReportText(data), /^-- ContestPulse analyzer report$/m);
+      } finally {
+        delete globalThis.location;
+      }
+    }
+  });
+});
