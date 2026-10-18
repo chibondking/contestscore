@@ -22,6 +22,8 @@
 // reasoning report.js/compare.js already use for their own copies of
 // bandLabel. If the dashboard's version of one of these changes, change it
 // here too.
+// The exception is the mult bell's strike count (multDingCount), which sits
+// in its own small public/js/multbell.js and is required from there.
 //
 // Deliberately NOT here: the Admin page (DELETE /api/db and the lookup kill
 // switch -- a destructive, token-gated surface with no business behind a
@@ -30,6 +32,8 @@
 // Keys: q quit · b toggle mult bell · t cycle phosphor · r force refresh
 
 const { io } = require('socket.io-client');
+// Shared with the dashboard, not copied: one strike per mult category.
+const { multDingCount, MULTBELL_STRIKE_GAP_MS } = require('../public/js/multbell.js');
 
 // --- config ---------------------------------------------------------------
 
@@ -247,9 +251,6 @@ function multBellShouldRing({ settings, isNew, isMult: mult, counted, multCount,
   return true;
 }
 
-// One strike per mult category the QSO is new for: double mult rings twice.
-const MULTBELL_STRIKE_GAP_MS = 280;
-const multDingCount = (q) => [q.is_mult1, q.is_mult2, q.is_mult3].filter(Boolean).length;
 
 // N1MM's "2026-09-16 14:23:05" (UTC) -> epoch ms, or null.
 function n1mmTimestampMs(ts) {

@@ -35,7 +35,8 @@ passed that test so far:
   sound file); edits, X-QSOs, QTCs and replayed backlogs (N1MM timestamp
   over 15 min old) don't ring, and a burst rings once (2s cooldown). A
   double mult (two of `is_mult1/2/3` set) rings twice, a triple three
-  times (`multDingCount`, ~280 ms apart).
+  times (`multDingCount`, ~280 ms apart -- `public/js/multbell.js`, the
+  one mult-bell rule the dashboard and TUI share rather than copy).
   Browsers block audio until a click on the page, so a reloaded wall
   display needs one click before it can ding -- the popover says so;
 - the **TUI** (`tui/`, 2026-10-09) -- the same results core in a
@@ -197,12 +198,12 @@ just somewhere that can see N1MM's LAN broadcasts.
 
 No page script (`dashboard.js` / `charts.js` / `stats.js` / `analyze.js` /
 `compare.js` / `admin.js`, plus the shared `chrome.js` / `manual.js` /
-`report.js`) is loaded as `type="module"` -- see the comment on each
+`report.js` / `multbell.js`) is loaded as `type="module"` -- see the comment on each
 page's `<script>` tag. A module's top-level declarations don't land on the
 global scope Alpine evaluates `x-data="..."` against, so a module-loaded
 page silently fails to initialize at all. This bit the dashboard once
-already (see git history); don't reintroduce it on a new page. `manual.js`
-and `report.js` guard a `module.exports` at the bottom so their pure
+already (see git history); don't reintroduce it on a new page. `manual.js`,
+`report.js` and `multbell.js` guard a `module.exports` at the bottom so their pure
 functions are also unit-testable under Node -- that's the only concession.
 
 ## Project Structure
@@ -257,6 +258,7 @@ contestscore/
     admin.html              # DB reset UI
     js/
       dashboard.js          # socket.io client, DOM updates
+      multbell.js           # multDingCount(): mult bell strikes; also required by tui/
       charts.js             # Chart.js; ?log=<id> loads a saved analysis instead of the live feed
       stats.js              # stats tables; same ?log=<id> hook
       solar.js              # solar page: fixed 30-day window, plain JS (no Alpine), helpers tested in test/solar/
