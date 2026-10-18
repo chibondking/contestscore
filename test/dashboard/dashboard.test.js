@@ -9,9 +9,11 @@ const { parseContact } = require('../../src/parsers/contact');
 // CLAUDE.md), so load it the way a browser would and pull the `dashboard`
 // factory off the resulting global scope. Only the factory is defined at load
 // time; io/Chart/Alpine are touched inside init(), which these tests never call.
-const src = fs.readFileSync(path.join(__dirname, '../../public/js/dashboard.js'), 'utf8');
-const sandbox = {};
-vm.runInNewContext(src, sandbox);
+// multbell.js first, the same order index.html loads them in.
+const sandbox = vm.createContext({});
+for (const f of ['multbell.js', 'dashboard.js']) {
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../../public/js', f), 'utf8'), sandbox);
+}
 const dashboard = sandbox.dashboard;
 assert.equal(typeof dashboard, 'function', 'dashboard.js should define dashboard()');
 

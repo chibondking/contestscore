@@ -99,7 +99,8 @@ way from `public/js/stats.js`'s At a Glance tiles). They live inside
 (see CLAUDE.md), so sharing them would mean refactoring the page this only
 mirrors; `report.js` and `compare.js` already keep their own copies of
 `bandLabel` for the same reason. **If one changes in the dashboard, change
-it here too.**
+it here too.** The one exception is the mult bell's strike count
+(`multDingCount`), which both load from `public/js/multbell.js`.
 
 `--once` prints a plain-text snapshot instead of taking over the screen (no
 escape codes, no socket, exit 1 if the API couldn't be reached) -- handy in

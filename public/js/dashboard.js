@@ -46,13 +46,7 @@ function multBellShouldRing({ settings, isNew, isMult, counted, multCount, n1mmA
   return true;
 }
 
-// How many strikes: one per multiplier category the QSO is new for, so a
-// double mult (say a new zone AND a new country) rings twice, a triple three
-// times. Counts N1MM's is_mult1/2/3 the same truthy way isMult() reads them.
-const MULTBELL_STRIKE_GAP_S = 0.28;
-function multDingCount(q) {
-  return [q.is_mult1, q.is_mult2, q.is_mult3].filter(Boolean).length;
-}
+// multDingCount / MULTBELL_STRIKE_GAP_MS live in multbell.js (shared with the TUI).
 
 // N1MM's <timestamp> ("2026-09-16 14:23:05", UTC) -> epoch ms, or null.
 function n1mmTimestampMs(ts) {
@@ -747,7 +741,7 @@ function dashboard() {
       if (!ctx) return;
       try {
         for (let i = 0; i < Math.max(1, strikes); i += 1) {
-          playDeskBell(ctx, this.multBell.volume, i * MULTBELL_STRIKE_GAP_S);
+          playDeskBell(ctx, this.multBell.volume, (i * MULTBELL_STRIKE_GAP_MS) / 1000);
         }
       } catch { /* no sound, no harm */ }
     },
