@@ -77,7 +77,8 @@ before the QSO log does and says `+N more` rather than just ending.
 The mult bell is the terminal's own bell character, so whatever your
 terminal does for a bell is what you get. Same rules as the browser's: off
 unless you turn it on, a `--after N` style threshold so the early hours stay
-quiet, one ding per 2s burst, and nothing for edits or a replayed backlog.
+quiet, one ding per 2s burst (twice for a double mult, three times for a
+triple), and nothing for edits or a replayed backlog.
 `CONTESTSCORE_TUI_BELL=1` and `CONTESTSCORE_TUI_BELL_AFTER=50` set the
 startup state; `b` toggles it live.
 

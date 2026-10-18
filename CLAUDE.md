@@ -33,7 +33,9 @@ passed that test so far:
   "only after N mults" threshold so the early hours of a contest, when
   nearly every QSO is a mult, stay quiet. Synthesized with Web Audio (no
   sound file); edits, X-QSOs, QTCs and replayed backlogs (N1MM timestamp
-  over 15 min old) don't ring, and a burst rings once (2s cooldown).
+  over 15 min old) don't ring, and a burst rings once (2s cooldown). A
+  double mult (two of `is_mult1/2/3` set) rings twice, a triple three
+  times (`multDingCount`, ~280 ms apart).
   Browsers block audio until a click on the page, so a reloaded wall
   display needs one click before it can ding -- the popover says so;
 - the **TUI** (`tui/`, 2026-10-09) -- the same results core in a

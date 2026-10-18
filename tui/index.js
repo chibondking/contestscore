@@ -247,6 +247,10 @@ function multBellShouldRing({ settings, isNew, isMult: mult, counted, multCount,
   return true;
 }
 
+// One strike per mult category the QSO is new for: double mult rings twice.
+const MULTBELL_STRIKE_GAP_MS = 280;
+const multDingCount = (q) => [q.is_mult1, q.is_mult2, q.is_mult3].filter(Boolean).length;
+
 // N1MM's "2026-09-16 14:23:05" (UTC) -> epoch ms, or null.
 function n1mmTimestampMs(ts) {
   if (!ts) return null;
@@ -505,7 +509,12 @@ function maybeRingBell(q, isNew) {
   });
   if (!ok) return;
   lastDingAt = now;
-  process.stdout.write('\x07'); // the terminal's own bell -- no Web Audio to mimic
+  // The terminal's own bell -- no Web Audio to mimic. Spaced out, since a
+  // terminal tends to swallow back-to-back BELs as one.
+  const strikes = Math.max(1, multDingCount(q));
+  for (let i = 0; i < strikes; i += 1) {
+    setTimeout(() => process.stdout.write('\x07'), i * MULTBELL_STRIKE_GAP_MS);
+  }
 }
 
 function wireSocket() {
