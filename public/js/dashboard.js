@@ -46,6 +46,14 @@ function multBellShouldRing({ settings, isNew, isMult, counted, multCount, n1mmA
   return true;
 }
 
+// How many strikes: one per multiplier category the QSO is new for, so a
+// double mult (say a new zone AND a new country) rings twice, a triple three
+// times. Counts N1MM's is_mult1/2/3 the same truthy way isMult() reads them.
+const MULTBELL_STRIKE_GAP_S = 0.28;
+function multDingCount(q) {
+  return [q.is_mult1, q.is_mult2, q.is_mult3].filter(Boolean).length;
+}
+
 // N1MM's <timestamp> ("2026-09-16 14:23:05", UTC) -> epoch ms, or null.
 function n1mmTimestampMs(ts) {
   if (!ts) return null;
@@ -56,9 +64,10 @@ function n1mmTimestampMs(ts) {
 // Synthesized, so there's no audio file to ship or cache: a service bell is
 // a bright fundamental plus a few inharmonic partials that die away faster
 // the higher they are, struck by a short click. The two slightly detuned
-// fundamentals beat against each other for the ring's shimmer.
-function playDeskBell(ctx, volume) {
-  const t0 = ctx.currentTime + 0.01;
+// fundamentals beat against each other for the ring's shimmer. `delay`
+// (seconds) schedules the strike later, for a double or triple ding.
+function playDeskBell(ctx, volume, delay = 0) {
+  const t0 = ctx.currentTime + 0.01 + delay;
   const out = ctx.createGain();
   out.gain.value = Math.max(0, Math.min(1, volume)) * 0.35;
   out.connect(ctx.destination);
@@ -710,7 +719,7 @@ function dashboard() {
       });
       if (!ring) return;
       lastDingAt = now;
-      this.ding();
+      this.ding(multDingCount(q));
     },
 
     // Make (or wake) the audio context. Must first run inside a user
@@ -733,10 +742,14 @@ function dashboard() {
       }
     },
 
-    ding() {
+    ding(strikes = 1) {
       const ctx = this.ensureAudio();
       if (!ctx) return;
-      try { playDeskBell(ctx, this.multBell.volume); } catch { /* no sound, no harm */ }
+      try {
+        for (let i = 0; i < Math.max(1, strikes); i += 1) {
+          playDeskBell(ctx, this.multBell.volume, i * MULTBELL_STRIKE_GAP_S);
+        }
+      } catch { /* no sound, no harm */ }
     },
 
     saveMultBell() {

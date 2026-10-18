@@ -338,7 +338,7 @@ describe('tenantLabel (footer)', () => {
 });
 
 describe('mult bell', () => {
-  const { normalizeMultBell, multBellShouldRing, n1mmTimestampMs } = sandbox;
+  const { normalizeMultBell, multBellShouldRing, multDingCount, n1mmTimestampMs } = sandbox;
   const on = { enabled: true, after: 0, volume: 0.6 };
   const base = { settings: on, isNew: true, isMult: true, counted: true, multCount: 5, n1mmAgeMs: 1000, msSinceLastDing: null };
 
@@ -385,6 +385,13 @@ describe('mult bell', () => {
     assert.equal(multBellShouldRing({ ...base, n1mmAgeMs: null }), true);
     assert.equal(multBellShouldRing({ ...base, msSinceLastDing: 500 }), false);
     assert.equal(multBellShouldRing({ ...base, msSinceLastDing: 5000 }), true);
+  });
+
+  it('strikes once per mult category: double rings twice, triple three times', () => {
+    assert.equal(multDingCount({ is_mult1: 1, is_mult2: 0, is_mult3: 0 }), 1);
+    assert.equal(multDingCount({ is_mult1: 0, is_mult2: 1, is_mult3: null }), 1);
+    assert.equal(multDingCount({ is_mult1: 1, is_mult2: 1, is_mult3: 0 }), 2);
+    assert.equal(multDingCount({ is_mult1: 1, is_mult2: 1, is_mult3: 1 }), 3);
   });
 
   it('parses N1MM timestamps as UTC', () => {
