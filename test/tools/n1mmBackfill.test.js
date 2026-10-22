@@ -21,7 +21,7 @@ describe('n1mm-backfill contactPacket', () => {
     assert.equal(q.ext_id, 'a738b31bc2d04ec3b02b32b01e9c6143');
     assert.equal(q.call, 'KI6OY');
     assert.equal(q.band, '7');          // DXLOG's float 7.0, sent the way N1MM broadcasts it
-    assert.equal(q.rx_freq, 7036500);   // kHz in the DB -> tens of Hz on the wire -> Hz
+    assert.equal(q.rx_freq, '7036500'); // kHz in the DB -> tens of Hz on the wire -> Hz
     assert.equal(q.mycall, 'K9CT');
     assert.equal(q.contestnr, '34');
     assert.equal(q.is_mult1, 1);
