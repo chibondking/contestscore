@@ -136,6 +136,44 @@ function isCountedQso(q) {
   return q.is_claimed_qso == null || Number(q.is_claimed_qso) !== 0;
 }
 
+// The Operators table's rules, copied from stats.js (dedupeForScoring,
+// modeGroup, bestWindow) so its numbers match the Stats page: a dupe (same
+// call, band and mode group; the earliest one counts) is dropped, and peak
+// rate is the best *sliding* window, not a fixed clock block. Change one,
+// change the other -- tui/index.js has a third copy.
+function rateModeGroup(mode) {
+  const m = String(mode || '').toUpperCase();
+  if (!m) return '—';
+  if (m === 'CW') return 'CW';
+  if (['USB', 'LSB', 'SSB', 'AM', 'FM', 'PH', 'PHONE', 'DV', 'FMN'].includes(m)) return 'PH';
+  return 'DG';
+}
+
+function dedupeForRate(qs, timeOf) {
+  const best = new Map();
+  const passthrough = [];
+  for (const q of qs) {
+    const t = timeOf(q);
+    if (/QTC/i.test(q.exchange1 || '') || t == null || Number.isNaN(t)) { passthrough.push(q); continue; }
+    const k = `${(q.call || '').toUpperCase()}|${q.band || ''}|${rateModeGroup(q.mode)}`;
+    const e = best.get(k);
+    if (!e || t < e.t) best.set(k, { q, t });
+  }
+  return [...passthrough, ...[...best.values()].map((e) => e.q)];
+}
+
+// Most entries of `times` (sorted ascending, ms) inside any window of windowMs.
+function bestWindowCount(times, windowMs) {
+  let best = 0;
+  let j = 0;
+  for (let i = 0; i < times.length; i++) {
+    if (j < i) j = i;
+    while (j + 1 < times.length && times[j + 1] - times[i] < windowMs) j += 1;
+    best = Math.max(best, j - i + 1);
+  }
+  return best;
+}
+
 // Used by mapDotsSvg() below, which builds raw SVG markup by hand (see its
 // own comment for why) -- Alpine's x-text auto-escapes, but a hand-built
 // HTML string doesn't, and a callsign/exchange field ultimately comes from
@@ -604,38 +642,34 @@ function dashboard() {
     // Per-operator stats (QSO count, points, peak rate), the same breakdown
     // the original Node-RED dashboard showed for multi-op stations. Computed
     // client-side from the already-loaded qsos array, same approach as
-    // continentCounts() -- no new backend endpoint needed. Peak rate keys
-    // off a 60-minute bucket (matching N1MM's own "hourly rate" convention
-    // and the main Rate card's slowest/steadiest window) rather than a
-    // short bucket that a single fast run could spike; peakRate10 is a
-    // secondary, noisier column for a short hot streak that a 60-minute
-    // window would smooth out.
+    // continentCounts() -- no new backend endpoint needed. Dupes are dropped
+    // and peak rate is the best sliding 60/10 minutes, the same rules as the
+    // Stats page (see dedupeForRate above), so the two pages agree. The 60m
+    // count already is the rate/hr; the 10m column is extrapolated (x6) and
+    // noisier on purpose -- a short hot streak a 60m window smooths out.
     operatorStats() {
+      const timeOf = (q) => (q.logged_at ? new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime() : NaN);
       const byOp = new Map();
-      for (const q of this.countedQsos()) {
+      for (const q of dedupeForRate(this.countedQsos(), timeOf)) {
         const op = q.operator || '—';
-        if (!byOp.has(op)) byOp.set(op, { operator: op, qsos: 0, points: 0, buckets60: new Map(), buckets10: new Map() });
+        if (!byOp.has(op)) byOp.set(op, { operator: op, qsos: 0, points: 0, times: [] });
         const entry = byOp.get(op);
         entry.qsos += 1;
         entry.points += Number(q.points) || 0;
-        const t = q.logged_at ? new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime() : NaN;
-        if (!Number.isNaN(t)) {
-          const b60 = Math.floor(t / 3600000) * 3600000;
-          entry.buckets60.set(b60, (entry.buckets60.get(b60) || 0) + 1);
-          const b10 = Math.floor(t / 600000) * 600000;
-          entry.buckets10.set(b10, (entry.buckets10.get(b10) || 0) + 1);
-        }
+        const t = timeOf(q);
+        if (!Number.isNaN(t)) entry.times.push(t);
       }
       return [...byOp.values()]
-        .map((entry) => ({
-          operator: entry.operator,
-          qsos: entry.qsos,
-          points: entry.points,
-          // A 60-minute bucket's own count already is the rate/hr -- no
-          // extrapolation needed, unlike the 10-minute column.
-          peakRate60: Math.max(0, ...entry.buckets60.values()),
-          peakRate10: Math.round(Math.max(0, ...entry.buckets10.values()) * 6),
-        }))
+        .map((entry) => {
+          const times = entry.times.sort((a, b) => a - b);
+          return {
+            operator: entry.operator,
+            qsos: entry.qsos,
+            points: entry.points,
+            peakRate60: bestWindowCount(times, 3600000),
+            peakRate10: bestWindowCount(times, 600000) * 6,
+          };
+        })
         .sort((a, b) => b.qsos - a.qsos);
     },
 

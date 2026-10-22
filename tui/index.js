@@ -375,33 +375,67 @@ function continentCounts() {
   return counts;
 }
 
-// Peak rate keys off a 60-minute bucket (N1MM's own hourly-rate convention);
-// a 60-minute bucket's count already *is* the rate/hr, unlike the 10-minute
-// column, which is extrapolated and noisier on purpose.
+// The Operators table's rules, copied from stats.js (dedupeForScoring,
+// modeGroup, bestWindow) so its numbers match the Stats page: a dupe (same
+// call, band and mode group; the earliest one counts) is dropped, and peak
+// rate is the best *sliding* window, not a fixed clock block. Change one,
+// change the other -- public/js/dashboard.js has another copy.
+function rateModeGroup(mode) {
+  const m = String(mode || '').toUpperCase();
+  if (!m) return '—';
+  if (m === 'CW') return 'CW';
+  if (['USB', 'LSB', 'SSB', 'AM', 'FM', 'PH', 'PHONE', 'DV', 'FMN'].includes(m)) return 'PH';
+  return 'DG';
+}
+
+function dedupeForRate(qs, timeOf) {
+  const best = new Map();
+  const passthrough = [];
+  for (const q of qs) {
+    const t = timeOf(q);
+    if (/QTC/i.test(q.exchange1 || '') || t == null || Number.isNaN(t)) { passthrough.push(q); continue; }
+    const k = `${(q.call || '').toUpperCase()}|${q.band || ''}|${rateModeGroup(q.mode)}`;
+    const e = best.get(k);
+    if (!e || t < e.t) best.set(k, { q, t });
+  }
+  return [...passthrough, ...[...best.values()].map((e) => e.q)];
+}
+
+// Most entries of `times` (sorted ascending, ms) inside any window of windowMs.
+function bestWindowCount(times, windowMs) {
+  let best = 0;
+  let j = 0;
+  for (let i = 0; i < times.length; i++) {
+    if (j < i) j = i;
+    while (j + 1 < times.length && times[j + 1] - times[i] < windowMs) j += 1;
+    best = Math.max(best, j - i + 1);
+  }
+  return best;
+}
+
+// Dupes dropped, peak rate the best sliding 60/10 minutes (rules above).
 function operatorStats() {
   const byOp = new Map();
-  for (const q of countedQsos()) {
+  for (const q of dedupeForRate(countedQsos(), loggedAtMs)) {
     const op = q.operator || '—';
-    if (!byOp.has(op)) byOp.set(op, { operator: op, qsos: 0, points: 0, b60: new Map(), b10: new Map() });
+    if (!byOp.has(op)) byOp.set(op, { operator: op, qsos: 0, points: 0, times: [] });
     const entry = byOp.get(op);
     entry.qsos += 1;
     entry.points += Number(q.points) || 0;
     const t = loggedAtMs(q);
-    if (t != null) {
-      const k60 = Math.floor(t / 3600000) * 3600000;
-      entry.b60.set(k60, (entry.b60.get(k60) || 0) + 1);
-      const k10 = Math.floor(t / 600000) * 600000;
-      entry.b10.set(k10, (entry.b10.get(k10) || 0) + 1);
-    }
+    if (t != null) entry.times.push(t);
   }
   return [...byOp.values()]
-    .map((e) => ({
-      operator: e.operator,
-      qsos: e.qsos,
-      points: e.points,
-      peakRate60: Math.max(0, ...e.b60.values()),
-      peakRate10: Math.round(Math.max(0, ...e.b10.values()) * 6),
-    }))
+    .map((e) => {
+      const times = e.times.sort((a, b) => a - b);
+      return {
+        operator: e.operator,
+        qsos: e.qsos,
+        points: e.points,
+        peakRate60: bestWindowCount(times, 3600000),
+        peakRate10: bestWindowCount(times, 600000) * 6,
+      };
+    })
     .sort((a, b) => b.qsos - a.qsos);
 }
 

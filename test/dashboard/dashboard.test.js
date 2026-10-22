@@ -412,3 +412,33 @@ describe('mult bell', () => {
     assert.equal(d.multCount(), 2);
   });
 });
+
+// Same rules as the Stats page (stats.js dedupeForScoring + bestWindow), so
+// the two pages agree: a sliding window, not a clock block, and a dupe
+// doesn't count. Caught comparing a live board against its saved analysis.
+describe('operatorStats', () => {
+  const at = (hhmmss, extra) => qso({ logged_at: `2026-10-08 ${hhmmss}`, ...extra });
+
+  it('peak rate is the best sliding window, not a fixed clock block', () => {
+    const d = dashboard();
+    // 3 QSOs either side of 03:10 -- no 03:00/03:10 block holds more than 3,
+    // but 03:07-03:13 holds all 6.
+    d.qsos = ['03:07:00', '03:08:00', '03:09:00', '03:11:00', '03:12:00', '03:13:00']
+      .map((t, i) => at(t, { call: `K${i}AA` }));
+    const [op] = d.operatorStats();
+    assert.equal(op.peakRate10, 36);
+    assert.equal(op.peakRate60, 6);
+  });
+
+  it('drops a dupe (same call, band, mode group) and keeps the earliest', () => {
+    const d = dashboard();
+    d.qsos = [
+      at('03:34:31', { call: 'W1UU', points: 0 }),
+      at('03:17:30', { call: 'W1UU', points: 1 }),
+      at('03:20:00', { call: 'W1UU', band: '40', points: 1 }), // other band: not a dupe
+    ];
+    const [op] = d.operatorStats();
+    assert.equal(op.qsos, 2);
+    assert.equal(op.points, 2);
+  });
+});
