@@ -3,6 +3,13 @@ const { tensOfHzToHz } = require('./util');
 
 const PARSE_OPTS = { explicitArray: false, trim: true };
 
+// tools/n1mm-backfill.js replays QSOs logged before the bridge was running,
+// tagged <app>ContestScore-Backfill</app>. For those, logged_at (normally
+// our ingest time) takes N1MM's own UTC timestamp instead, or every
+// backfilled QSO would land in the rate meter and charts as "just now".
+const BACKFILL_APP = 'ContestScore-Backfill';
+const N1MM_TS = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
 // N1MM sends True/False for booleans; older versions may send 1/0
 function toBool(val) {
   if (val == null) return 0;
@@ -94,6 +101,7 @@ async function parseContact(buf) {
       : (native && c.xqso != null ? 1 - toBool(c.xqso) : 1),
     sent_exchange:    c.SentExchange || '',
     n1mm_timestamp:   c.timestamp || '',
+    logged_at:        c.app === BACKFILL_APP && N1MM_TS.test(c.timestamp || '') ? c.timestamp : null,
   };
 }
 

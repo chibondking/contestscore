@@ -164,6 +164,15 @@ because the server upserts by N1MM's `<ID>`. Radio/score keep the old
 16-deep drop-oldest queue (snapshots; replaying stale ones is noise).
 Memory only; capped at 20,000 packets.
 
+**Late start** (`tools/n1mm-backfill.js`, 2026-10-22): QSOs logged before
+the bridge came up are never broadcast again, so this reads N1MM's `.s3db`
+(`DXLOG`, filtered to one `ContestNR`; `DXLOG.ID` is the same GUID N1MM
+broadcasts) and POSTs each as `<contactinfo>` to `/api/ingest/contact`.
+Tagged `<app>ContestScore-Backfill</app>`, which is the one case where the
+parser sets `logged_at` (normally our ingest time) from N1MM's timestamp --
+insert-only, so a re-send never moves it. Node 22.13+ `node:sqlite`, no
+dependency. User steps in `docs/SETUP.md`.
+
 ContestPulse also sends a heartbeat (`POST /api/ingest/heartbeat`, default
 every 10s, configurable) independent of whatever N1MM traffic is or isn't
 flowing -- Contact/Score packets only happen when the contest produces
@@ -635,6 +644,11 @@ Send a test UDP packet (simulate N1MM score broadcast):
 npm run test:send-score
 ```
 (scripts/sendTestPacket.js accepts --type radio|contact|score)
+
+Backfill the board from N1MM's database after a late bridge start:
+```
+node tools/n1mm-backfill.js <log.s3db>   # lists contests; see docs/SETUP.md
+```
 
 Replay a captured real contest as live traffic (club demo / presentation,
 as opposed to sendTestPacket.js's synthetic data):

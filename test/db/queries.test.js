@@ -98,6 +98,16 @@ describe('QSOs', () => {
     assert.deepEqual(rows.map((r) => r.ext_id).sort(), ['qtc-1', 'qtc-2', 'qtc-parent']);
   });
 
+  it('a backfilled QSO keeps the logged_at it was given, and a re-send never moves it', () => {
+    q.upsertQso({ ...QSO, ext_id: 'id-backfill', call: 'W5GCX', logged_at: '2026-10-10 00:02:15' });
+    const row = () => q.getQsos().find((r) => r.ext_id === 'id-backfill');
+    assert.equal(row().logged_at, '2026-10-10 00:02:15');
+    q.upsertQso({ ...QSO, ext_id: 'id-backfill', call: 'W5GCX', points: 2 }); // live edit, no logged_at
+    assert.equal(row().logged_at, '2026-10-10 00:02:15');
+    assert.equal(row().points, 2);
+    q.deleteQso({ ext_id: 'id-backfill' });
+  });
+
   it('filters by band', () => {
     const rows = q.getQsos({ band: '40' });
     assert.equal(rows.length, 1);
