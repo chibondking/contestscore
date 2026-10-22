@@ -24,6 +24,7 @@ const QSO_DEFAULTS = {
   run1run2: '', rover_loc: '', radio_interfaced: null, comp_nr: null,
   is_original: 1, netbios_name: '', is_run_qso: 0, station_name: '',
   is_claimed_qso: 1, sent_exchange: '', n1mm_timestamp: '',
+  logged_at: null,
 };
 
 function prepare() {
@@ -36,8 +37,11 @@ function prepare() {
   const _delCache  = db.prepare('DELETE FROM callsign_cache');
   const _delRadios = db.prepare('DELETE FROM radio_state');
 
-  const cols = QSO_COLUMNS.join(', ');
-  const placeholders = QSO_COLUMNS.map((c) => `@${c}`).join(', ');
+  // logged_at is normally our own ingest time; only a backfilled QSO (see
+  // parsers/contact.js) supplies one. It's insert-only -- left out of
+  // updateSet, so re-sending a QSO never moves the time it was first seen.
+  const cols = `${QSO_COLUMNS.join(', ')}, logged_at`;
+  const placeholders = `${QSO_COLUMNS.map((c) => `@${c}`).join(', ')}, COALESCE(@logged_at, datetime('now'))`;
   const updateSet = QSO_COLUMNS
     .filter((c) => c !== 'ext_id')
     .map((c) => `${c} = excluded.${c}`)

@@ -212,6 +212,25 @@ serve HTTPS (steps below cover Caddy, nginx, or a Cloudflare Tunnel).
    server is briefly unreachable (a restart, a network drop), the bridge
    holds your QSOs and sends them as soon as it's back — leave it running.
 
+### Started the bridge late?
+
+The bridge only sees QSOs logged while it's running, and N1MM can't
+re-send its log. To catch the board up, copy the contest's database from
+the N1MM PC (`Documents\N1MM Logger+\Databases\<name>.s3db`) to any
+machine with Node 22.13+ and a checkout of this repo, then:
+
+```bash
+node tools/n1mm-backfill.js WT2P.s3db                    # lists its contests
+node tools/n1mm-backfill.js WT2P.s3db --contest latest --dry-run
+node tools/n1mm-backfill.js WT2P.s3db --contest latest \
+     --api https://scoreboard.example.org --token <the same token>
+```
+
+Pick the right contest from the listing first: one database holds every
+contest it has ever logged. It's safe to run while the bridge is live,
+and to run again: QSOs already on the board are updated, not duplicated,
+and they keep N1MM's own times. Reload the dashboard afterwards.
+
 ### Keeping it updated
 
 ```bash
