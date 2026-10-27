@@ -172,6 +172,12 @@ Tagged `<app>ContestScore-Backfill</app>`, which is the one case where the
 parser sets `logged_at` (normally our ingest time) from N1MM's timestamp --
 insert-only, so a re-send never moves it. Node 22.13+ `node:sqlite`, no
 dependency. User steps in `docs/SETUP.md`.
+`tools/dxlog-backfill.js` is the DXLog.net twin: a `.dxn` is SQLite too, one
+contest per file; it sends DXLog's native `<contactinfo>` (so no server
+change). `qsoguid` is a .NET Guid in `ToByteArray` order, `multN` hold the
+mult's value on every QSO and `multkey` (bitmask) says which were new --
+see its header. Whether that guid equals the live broadcast's `<guid>` is
+**not yet confirmed** against a capture.
 
 ContestPulse also sends a heartbeat (`POST /api/ingest/heartbeat`, default
 every 10s, configurable) independent of whatever N1MM traffic is or isn't
@@ -648,6 +654,7 @@ npm run test:send-score
 Backfill the board from N1MM's database after a late bridge start:
 ```
 node tools/n1mm-backfill.js <log.s3db>   # lists contests; see docs/SETUP.md
+node tools/dxlog-backfill.js <log.dxn> --dry-run
 ```
 
 Replay a captured real contest as live traffic (club demo / presentation,
@@ -923,6 +930,13 @@ not built):
   and ContestPulse need no changes -- the data is already tagged; only the
   readers ignore it.
 - Authentication (local network tool, no auth planned)
+- **DXLog backfill gaps** (`tools/dxlog-backfill.js`, CJ 2026-10-26: covered
+  for completeness, low priority -- CJ runs DXLog on site and sets remote
+  ops up in advance, so a late start is unlikely). To revisit: **run/S&P**
+  (no `.dxn` column is clearly it; `stn` isn't), **WAE QTCs** (`qtcdata`,
+  not sent), and confirming `qsoguid` equals the live `<guid>` against a
+  capture. Same QTC question for `n1mm-backfill.js`, which sends QTC rows
+  as plain DXLOG rows untested.
 - Log analyzer deferrals (a scoring engine for bare Cabrillo, in-browser
   "quick look", N-way compare) -- see the "Not done" list in
   `docs/ANALYZER.md`.
