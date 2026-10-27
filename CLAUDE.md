@@ -930,6 +930,13 @@ not built):
   and ContestPulse need no changes -- the data is already tagged; only the
   readers ignore it.
 - Authentication (local network tool, no auth planned)
+- **DXLog backfill gaps** (`tools/dxlog-backfill.js`, CJ 2026-10-26: covered
+  for completeness, low priority -- CJ runs DXLog himself and sets remote
+  ops up in advance, so a late start is unlikely). To revisit: **run/S&P**
+  (no `.dxn` column is clearly it; `stn` isn't), **WAE QTCs** (`qtcdata`,
+  not sent), and confirming `qsoguid` equals the live `<guid>` against a
+  capture. Same QTC question for `n1mm-backfill.js`, which sends QTC rows
+  as plain DXLOG rows untested.
 - Log analyzer deferrals (a scoring engine for bare Cabrillo, in-browser
   "quick look", N-way compare) -- see the "Not done" list in
   `docs/ANALYZER.md`.
