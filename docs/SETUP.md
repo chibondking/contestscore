@@ -231,6 +231,18 @@ contest it has ever logged. It's safe to run while the bridge is live,
 and to run again: QSOs already on the board are updated, not duplicated,
 and they keep N1MM's own times. Reload the dashboard afterwards.
 
+**DXLog.net**: same idea, with the contest's `.dxn` log file instead (one
+file is one contest, so there's nothing to pick):
+
+```bash
+node tools/dxlog-backfill.js SO1R.dxn --dry-run
+node tools/dxlog-backfill.js SO1R.dxn --api https://scoreboard.example.org --token <the same token>
+```
+
+Not yet checked against a live DXLog broadcast of the same QSO: if a QSO
+backfilled this way is later edited in DXLog and shows up twice on the
+board, tell us.
+
 ### Keeping it updated
 
 ```bash
