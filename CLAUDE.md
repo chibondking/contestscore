@@ -43,9 +43,12 @@ passed that test so far:
   and ARRL Field Day only (`SECTION_CONTEST_RE` in `dashboard.js`: exact
   N1MM names `ARRL-SS-CW`/`ARRL-SS-SSB`/`ARRL-FD`, or contactinfo's
   `SSCW`/`SSPH`/`FD`), the world map card shows a US/VE/Caribbean map of
-  all 85 ARRL/RAC sections instead (Canada cropped at ~69N, CJ's call; AK and
-  PAC as insets, PR/VI and the
-  small Northeast sections as callouts), each worked section filled in,
+  all 85 ARRL/RAC sections instead, in the world map's 2:1 shape so it
+  fills the card the same way: Canada cropped at ~69N (CJ's call), Alaska
+  and Hawaii insets on the left, a ~2x Northeast close-up on the right
+  where the small sections are labelled; the rest too small to label get
+  callouts (California, PE/NS, WCF, ONS, PR/VI). Worked sections are filled
+  in, the newest new one pulses amber for ~90 s, foreign land is greyed,
   plus an "N / 85" count and a Needed list. **The section is the one
   copied in the logger (`qsos.section`), full stop** -- HamQTH lookups
   still run for busts, but never decide a section (a station listed in IL

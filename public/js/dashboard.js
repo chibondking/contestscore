@@ -270,14 +270,13 @@ function sectionNightPaths(frames, date) {
 // The world map's own imagery (public/img/map/, plate carree 2000x1000),
 // resampled once into the section map's projection so both maps share one
 // look: the same ocean, relief and city lights. Land is clipped to the
-// vector coastlines (Natural Earth land + every section outline, Great
-// Lakes cut back out), so the shoreline stays as sharp as the borders drawn
-// over it even though the relief underneath is upsampled. Inside the
-// inset boxes the image's own coastline is used -- Alaska's box also shows
-// the Yukon and Russia, which have no outlines here. K = output pixels per
-// viewBox unit (1.5: crisp on a wall TV without a multi-second resample of
-// the ~1000x1150 map on a Pi). Returns object URLs.
-async function buildSectionImagery(m, oceanHref, dark, K = 1.5) {
+// vector coastlines (Natural Earth land + every section outline, lakes cut
+// back out) in every frame, so the shoreline stays as sharp as the borders
+// drawn over it even though the relief underneath is upsampled. K = output
+// pixels per
+// viewBox unit (2 keeps the 1000x500 map crisp on a wall TV). Returns object
+// URLs.
+async function buildSectionImagery(m, oceanHref, dark, K = 2) {
   const load = async (href) => {
     const img = new Image();
     img.src = href;
@@ -335,28 +334,47 @@ async function buildSectionImagery(m, oceanHref, dark, K = 1.5) {
   const landRaw = canvasOf(out[1]);
   const landCut = canvasOf(null);
   const lc = landCut.getContext('2d');
-  const mask = new Path2D();
-  mask.addPath(new Path2D(m.land));
-  for (const s of Object.values(m.sections)) mask.addPath(new Path2D(s.d));
-  lc.save();
-  lc.scale(K, K);
-  lc.clip(mask);
-  lc.setTransform(1, 0, 0, 1, 0, 0);
-  // A solid fill under the relief, so a sliver where the raster's
-  // coastline falls short of the vector one reads as land, not a hole.
-  lc.fillStyle = dark ? '#3b4a35' : '#9fb07f';
-  lc.fillRect(0, 0, W, H);
-  lc.drawImage(landRaw, 0, 0);
-  lc.restore();
+  // Land outside the sections (Mexico, Greenland, Cuba, Russia in the
+  // Alaska box) is greyed back so the eye stays on the sections, the way a
+  // printed atlas mutes neighbouring countries.
+  const foreign = dark ? 'grayscale(0.85) brightness(0.6)' : 'grayscale(0.8) brightness(1.08)';
+  const solid = dark ? '#3b4a35' : '#9fb07f';
+  const paint = (box, landD, secDs, lakesD) => {
+    lc.save();
+    lc.scale(K, K);
+    if (box) {
+      lc.beginPath();
+      lc.rect(box.x, box.y, box.w, box.h);
+      lc.clip();
+    }
+    const allLand = new Path2D(landD);
+    const secLand = new Path2D();
+    for (const d of secDs) { allLand.addPath(new Path2D(d)); secLand.addPath(new Path2D(d)); }
+    for (const [clip, filter] of [[allLand, foreign], [secLand, 'none']]) {
+      lc.save();
+      lc.clip(clip);
+      lc.setTransform(1, 0, 0, 1, 0, 0);
+      lc.filter = filter;
+      // A solid fill under the relief, so a sliver where the raster's
+      // coastline falls short of the vector one reads as land, not a hole.
+      lc.fillStyle = solid;
+      lc.fillRect(0, 0, W, H);
+      lc.drawImage(landRaw, 0, 0);
+      lc.restore();
+    }
+    lc.globalCompositeOperation = 'destination-out';
+    lc.fill(new Path2D(lakesD));
+    lc.restore();
+  };
+  const secs = Object.values(m.sections);
+  paint(null, m.land, secs.filter((x) => x.frame === 0).map((x) => x.d), m.lakes);
   for (const b of m.insets) {
     lc.clearRect(b.x * K, b.y * K, b.w * K, b.h * K);
-    lc.drawImage(landRaw, b.x * K, b.y * K, b.w * K, b.h * K, b.x * K, b.y * K, b.w * K, b.h * K);
+    const ds = b.key === 'NE'
+      ? secs.filter((x) => x.ne).map((x) => x.ne.d)
+      : secs.filter((x) => x.frame === b.frame).map((x) => x.d);
+    paint(b, b.land, ds, b.lakes);
   }
-  lc.save();
-  lc.scale(K, K);
-  lc.globalCompositeOperation = 'destination-out';
-  lc.fill(new Path2D(m.lakes));
-  lc.restore();
   const base = canvasOf(out[0]);
   const bc = base.getContext('2d');
   // Same dimming the world map gives its relief in the dark theme.
@@ -1155,13 +1173,44 @@ function dashboard() {
       return out.join('');
     },
 
-    // Home QTH on the section map: score.grid6, like homePoint(), drawn in
-    // whichever frame holds it (a KL7 or KH6 station lands in its inset).
-    sectionHomePoint() {
+    // Transmitter location on the section map: score.grid6, like
+    // homePoint(), in whichever frame holds it (a KL7 or KH6 station lands
+    // in its inset) -- and again in the Northeast close-up when it's in
+    // there too. Raw SVG for the same x-for-in-<svg> reason as the dots.
+    sectionHomeSvg() {
       const m = this.sectionMapData;
       const ll = gridToLatLon(this.score.grid6);
-      if (!m || !ll) return null;
-      return { ...lccForward(sectionFrameFor(m.frames, ll.lon, ll.lat), ll.lon, ll.lat), grid: this.score.grid6 };
+      if (!m || !ll) return '';
+      const pts = [lccForward(sectionFrameFor(m.frames, ll.lon, ll.lat), ll.lon, ll.lat)];
+      const ne = m.frames[3];
+      if (ne) {
+        const p = lccForward(ne, ll.lon, ll.lat);
+        const [x, y, w, h] = ne.box;
+        if (p.x >= x && p.x <= x + w && p.y >= y && p.y <= y + h) pts.push(p);
+      }
+      const tip = escapeHtml(`Transmitter location — ${this.score.grid6}`);
+      return pts.map((p) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5" class="worldmap-home"><title>${tip}</title></circle>`).join('');
+    },
+
+    // The section most recently worked for the first time, while that
+    // first QSO is under 90 s old -- it pulses on the map so a room
+    // watching the wall sees each new one land. Date.now(), not this.now:
+    // reading the 1s ticker would re-render every section path each second.
+    // A re-render after 90 s (the next QSO) drops the pulse; the CSS
+    // animation also runs out on its own.
+    newestNewSection() {
+      const first = new Map();
+      for (const q of this.countedQsos()) {
+        if (this.isQtc(q) || !q.logged_at) continue;
+        const code = sectionCode(q.section);
+        const t = Date.parse(String(q.logged_at).replace(' ', 'T') + 'Z');
+        if (!code || Number.isNaN(t)) continue;
+        if (!first.has(code) || t < first.get(code)) first.set(code, t);
+      }
+      let best = null;
+      let bestT = -Infinity;
+      for (const [code, t] of first) if (t > bestT) { best = code; bestT = t; }
+      return best && Date.now() - bestT < 90000 ? best : null;
     },
 
     // section code -> QSO count, over the QSOs that count (X-QSOs and QTCs
@@ -1189,39 +1238,74 @@ function dashboard() {
     // Raw SVG string via x-html, for the same reason as mapDotsSvg(): no
     // x-for inside an <svg>. Every path, code and name comes from our own
     // JSON, never from a packet; the text is escaped anyway.
+    //
+    // Layout (sections.json): the main map, then the Alaska / Hawaii /
+    // Northeast insets, each its own clipped panel with a title. A section
+    // too small to label on the main map is labelled in the Northeast
+    // close-up if it's there, else by a callout pill in open water.
     sectionMapSvg() {
       const m = this.sectionMapData;
       if (!m) return '';
       const worked = this.workedSections();
-      const out = [];
-      // Flat land/lakes only until the reprojected imagery is ready.
-      if (!this.sectionImagery.base) {
-        out.push(`<path d="${m.land}" class="secmap-land"></path>`);
-        out.push(`<path d="${m.lakes}" class="secmap-lake"></path>`);
-      }
-      for (const b of m.insets) {
-        out.push(`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="4" class="secmap-inset"></rect>`);
-      }
+      const fresh = this.newestNewSection();
       const codes = Object.keys(m.sections);
-      for (const code of codes) {
-        const s = m.sections[code];
+      const flat = !this.sectionImagery.base; // flat land until the imagery is built
+      const out = [];
+      const shape = (code, d) => {
         const n = worked.get(code) || 0;
-        const tip = escapeHtml(`${code} — ${s.name}: ${n ? `${n} QSO${n === 1 ? '' : 's'}` : 'needed'}`);
-        out.push(`<path d="${s.d}" class="secmap-sec${n ? ' secmap-sec--worked' : ''}"><title>${tip}</title></path>`);
+        const tip = escapeHtml(`${code} — ${m.sections[code].name}: ${n ? `${n} QSO${n === 1 ? '' : 's'}` : 'needed'}`);
+        const cls = `secmap-sec${n ? ' secmap-sec--worked' : ''}${code === fresh ? ' secmap-sec--new' : ''}`;
+        return `<path d="${d}" class="${cls}"><title>${tip}</title></path>`;
+      };
+      const label = (code, x, y, fs) => {
+        const cls = worked.has(code) ? 'secmap-label secmap-label--worked' : 'secmap-label';
+        return `<text x="${x}" y="${y}" font-size="${fs}" class="${cls}">${escapeHtml(code)}</text>`;
+      };
+
+      out.push('<defs>' + m.insets.map((b) => `<clipPath id="secmap-box-${b.key}"><rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}"></rect></clipPath>`).join('') + '</defs>');
+      if (flat) {
+        out.push(`<path d="${m.land}" class="secmap-land"></path>`, `<path d="${m.lakes}" class="secmap-lake"></path>`);
       }
-      // Labels after every shape, so a neighbour's fill never covers one.
+      for (const code of codes) if (m.sections[code].frame === 0) out.push(shape(code, m.sections[code].d));
+      out.push(`<path d="${m.neRegion}" class="secmap-region"></path>`);
+
+      // Main-map labels and callouts, after every shape so no fill covers one.
       for (const code of codes) {
         const s = m.sections[code];
-        const cls = worked.has(code) ? 'secmap-label secmap-label--worked' : 'secmap-label';
+        if (s.frame !== 0 || s.lx == null) continue;
         if (s.ax != null) {
+          const on = worked.has(code);
+          const w = code.length * 5.2 + 6;
           out.push(`<line x1="${s.lx}" y1="${s.ly}" x2="${s.ax}" y2="${s.ay}" class="secmap-leader"></line>`);
-          out.push(`<circle cx="${s.ax}" cy="${s.ay}" r="1.6" class="secmap-anchor${worked.has(code) ? ' secmap-anchor--worked' : ''}"></circle>`);
-          // A callout's label sits in open water, so it gets a pill of its
-          // own to carry the worked/needed colour.
-          const w = code.length * 6.4 + 6;
-          out.push(`<rect x="${(s.lx - w / 2).toFixed(1)}" y="${(s.ly - 6.5).toFixed(1)}" width="${w.toFixed(1)}" height="13" rx="3" class="secmap-pill${worked.has(code) ? ' secmap-pill--worked' : ''}"></rect>`);
+          out.push(`<circle cx="${s.ax}" cy="${s.ay}" r="1.4" class="secmap-anchor${on ? ' secmap-anchor--worked' : ''}"></circle>`);
+          out.push(`<rect x="${(s.lx - w / 2).toFixed(1)}" y="${(s.ly - 5.5).toFixed(1)}" width="${w.toFixed(1)}" height="11" rx="2.5" class="secmap-pill${on ? ' secmap-pill--worked' : ''}"></rect>`);
         }
-        out.push(`<text x="${s.lx}" y="${s.ly}" font-size="${s.fs}" class="${cls}">${escapeHtml(code)}</text>`);
+        out.push(label(code, s.lx, s.ly, s.fs));
+      }
+
+      // Insets: shapes and labels clipped to the panel, then its frame and title.
+      for (const b of m.insets) {
+        out.push(`<g clip-path="url(#secmap-box-${b.key})">`);
+        if (flat) out.push(`<path d="${b.land}" class="secmap-land"></path>`, `<path d="${b.lakes}" class="secmap-lake"></path>`);
+        const inPanel = codes.filter((c) => (b.key === 'NE' ? m.sections[c].ne : m.sections[c].frame === b.frame));
+        for (const code of inPanel) out.push(shape(code, b.key === 'NE' ? m.sections[code].ne.d : m.sections[code].d));
+        for (const code of inPanel) {
+          const s = b.key === 'NE' ? m.sections[code].ne : m.sections[code];
+          if (s.lx != null) out.push(label(code, s.lx, s.ly, s.fs));
+        }
+        out.push('</g>');
+        out.push(`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" class="secmap-inset"></rect>`);
+        out.push(`<text x="${b.x + 4}" y="${b.y + 8}" class="secmap-inset-title">${escapeHtml(b.title)}</text>`);
+      }
+
+      // Legend.
+      if (m.legend) {
+        const [lx, ly] = m.legend;
+        out.push(`<g class="secmap-legend" transform="translate(${lx} ${ly})">`
+          + '<rect x="0" y="-4" width="9" height="8" class="secmap-sec secmap-sec--worked"></rect><text x="13" y="0">Worked</text>'
+          + '<rect x="62" y="-4" width="9" height="8" class="secmap-sec"></rect><text x="75" y="0">Needed</text>'
+          + '<circle cx="128" cy="0" r="4" class="worldmap-home"></circle><text x="136" y="0">Transmitter</text>'
+          + '</g>');
       }
       return out.join('');
     },

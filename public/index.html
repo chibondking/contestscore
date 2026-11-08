@@ -201,9 +201,9 @@
          jump when the first QSO lands); only the map itself waits for QSOs
          -- see the x-if around .map-box below. -->
     <section class="card card--wide" id="worldmap">
-      <!-- A section contest (Sweepstakes, Field Day, ARRL 160 -- dashboard.js
-           SECTION_CONTEST_RE) swaps the world map for the ARRL/RAC section
-           map, worked sections filled in. Same card, same Show/Hide. -->
+      <!-- ARRL Sweepstakes and Field Day (dashboard.js SECTION_CONTEST_RE)
+           swap the world map for the ARRL/RAC section map, worked sections
+           filled in. Same card, same Show/Hide, same 2:1 shape. -->
       <h2 x-show="!sectionContest()">World Map <span class="map-subtitle" x-text="mapBand === 'all' ? 'last 30 QSOs' : ('last 30 QSOs on ' + bandLabel(mapBand))"></span>
         <!-- Per-viewer show/hide, remembered in localStorage (see
              toggleWorldMap()). Collapses to just this header rather than
@@ -221,10 +221,7 @@
            terminator every second or hold its images in the layout. -->
       <template x-if="showWorldMap && sectionContest()">
       <div id="secmap-body" x-init="loadSectionMap()">
-        <!-- --secmap-aspect feeds the CSS that keeps the whole map inside the
-             window at any zoom (see .secmap-box in dashboard.css). -->
-        <div class="map-box secmap-box" x-show="sectionMapData"
-             :style="{ '--secmap-aspect': sectionMapData ? sectionMapData.width / sectionMapData.height : 1.31 }">
+        <div class="map-box secmap-box" x-show="sectionMapData">
           <!-- Same layering as the world map: ocean + relief, then the
                grayline (tint + city lights through a blurred night mask),
                then the sections, labels and home ring on top. The imagery
@@ -236,7 +233,7 @@
                the default 300x150 box (seen live: map cropped to a 150px
                strip). Must match sections.json's width/height; a test in
                test/dashboard checks it. -->
-          <svg viewBox="0 0 1000 763"
+          <svg viewBox="0 0 1000 500"
                class="worldmap-svg" preserveAspectRatio="xMidYMid meet">
             <defs>
               <filter id="secmap-soft" x="-10%" y="-10%" width="120%" height="120%">
@@ -258,10 +255,7 @@
             <!-- x-html on a <g>, like the world map's dots -- see
                  sectionMapSvg() in dashboard.js. -->
             <g x-html="sectionMapSvg()"></g>
-            <circle x-show="sectionHomePoint()" :cx="sectionHomePoint() ? sectionHomePoint().x : 0"
-                    :cy="sectionHomePoint() ? sectionHomePoint().y : 0" r="6" class="worldmap-home">
-              <title x-text="sectionHomePoint() ? ('Transmitter location — ' + sectionHomePoint().grid) : ''"></title>
-            </circle>
+            <g x-html="sectionHomeSvg()"></g>
           </svg>
         </div>
         <p class="secmap-needed" x-show="sectionMapData && sectionTally().needed.length">

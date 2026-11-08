@@ -761,65 +761,82 @@ body {
 }
 
 /* ARRL/RAC section map (dashboard.js sectionMapSvg()), the world map's
-   stand-in for Sweepstakes and Field Day. Sits on the same reprojected
-   ocean/relief/grayline imagery; a needed section is just its outline
-   over the relief, a worked one is filled in. Labels carry a halo so they
-   read over relief, night and fill alike. */
+   stand-in for Sweepstakes and Field Day. Same 2:1 card-filling shape and
+   the same reprojected ocean/relief/grayline imagery. A needed section is
+   its outline over the relief; a worked one is a solid, slightly muted
+   fill that hides the city lights under it, so the worked area reads as
+   one calm shape. Labels: one size (two in tight spots), with a halo. */
 :root {
-  --sec-edge:         rgba(255, 255, 255, 0.55);
-  --sec-worked:       rgba(63, 185, 80, 0.62);
+  --sec-edge:         rgba(255, 255, 255, 0.5);
+  --sec-worked:       rgba(46, 125, 64, 0.93);
   --sec-worked-edge:  #7ee08b;
-  --sec-label:        rgba(230, 237, 243, 0.62);
+  --sec-new:          rgba(255, 201, 77, 0.95);
+  --sec-label:        rgba(230, 237, 243, 0.72);
   --sec-label-worked: #ffffff;
-  --sec-halo:         rgba(3, 8, 20, 0.9);
+  --sec-halo:         rgba(3, 8, 20, 0.88);
+  --sec-panel-edge:   rgba(255, 255, 255, 0.4);
   --sec-land:         #2a3326;  /* flat land until the imagery is built */
 }
 :root[data-theme="light"] {
-  --sec-edge:         rgba(20, 20, 20, 0.55);
-  --sec-worked:       rgba(26, 127, 55, 0.58);
+  --sec-edge:         rgba(20, 20, 20, 0.5);
+  --sec-worked:       rgba(34, 120, 58, 0.9);
   --sec-worked-edge:  #0f5a25;
-  --sec-label:        rgba(20, 20, 20, 0.7);
+  --sec-new:          rgba(230, 150, 0, 0.95);
+  --sec-label:        rgba(20, 20, 20, 0.75);
   --sec-label-worked: #ffffff;
   --sec-halo:         rgba(255, 255, 255, 0.85);
+  --sec-panel-edge:   rgba(0, 0, 0, 0.45);
   --sec-land:         #c9c7a8;
-}
-/* Fit the whole map in the window, not just the card's width: a wide card
-   (a big screen, or the page zoomed out to 67%) would otherwise scale the
-   taller-than-the-world-map section map past the bottom of the screen.
-   Width is capped so the height (width / aspect) leaves room for the page
-   header, the card title and the Needed line; centred in the card. The
-   aspect comes from sections.json via an inline --secmap-aspect. */
-.secmap-box {
-  width: min(100%, calc((100vh - 9rem) * var(--secmap-aspect, 1.31)));
-  margin-inline: auto;
 }
 .secmap-land { fill: var(--sec-land); }
 .secmap-lake { fill: var(--map-ocean); }
-.secmap-inset { fill: none; stroke: var(--sec-edge); stroke-width: 0.8; stroke-dasharray: 3 2; }
 .secmap-sec {
   fill: transparent;
   stroke: var(--sec-edge);
-  stroke-width: 0.6;
+  stroke-width: 0.5;
   stroke-linejoin: round;
 }
-.secmap-sec--worked { fill: var(--sec-worked); stroke: var(--sec-worked-edge); }
-.secmap-sec:hover { fill: rgba(255, 201, 77, 0.35); }
+.secmap-sec--worked { fill: var(--sec-worked); }
+.secmap-sec:hover { fill: rgba(255, 201, 77, 0.4); }
+/* Newly worked: a minute of amber pulse, so the room sees it land. */
+.secmap-sec--new { animation: secmap-new 1.4s ease-in-out 40; }
+@keyframes secmap-new { 50% { fill: var(--sec-new); } }
+@media (prefers-reduced-motion: reduce) { .secmap-sec--new { animation: none; fill: var(--sec-new); } }
 .secmap-label {
   fill: var(--sec-label);
   stroke: var(--sec-halo);
-  stroke-width: 2.4px;
+  stroke-width: 2.2px;
   paint-order: stroke;
   font-weight: 700;
+  letter-spacing: 0.03em;
   text-anchor: middle;
   dominant-baseline: central;
   pointer-events: none;
 }
 .secmap-label--worked { fill: var(--sec-label-worked); }
-.secmap-leader { stroke: var(--sec-edge); stroke-width: 0.6; pointer-events: none; }
+.secmap-leader { stroke: var(--sec-edge); stroke-width: 0.5; pointer-events: none; }
 .secmap-anchor { fill: var(--sec-edge); pointer-events: none; }
 .secmap-anchor--worked { fill: var(--sec-worked-edge); }
-.secmap-pill { fill: var(--sec-halo); stroke: var(--sec-edge); stroke-width: 0.6; pointer-events: none; }
+.secmap-pill { fill: var(--sec-halo); stroke: var(--sec-edge); stroke-width: 0.5; pointer-events: none; }
 .secmap-pill--worked { fill: var(--sec-worked); stroke: var(--sec-worked-edge); }
+/* Insets: a solid hairline frame and a small caps title, atlas style. */
+.secmap-inset { fill: none; stroke: var(--sec-panel-edge); stroke-width: 0.8; pointer-events: none; }
+.secmap-inset-title, .secmap-legend text {
+  fill: var(--sec-label);
+  stroke: var(--sec-halo);
+  stroke-width: 2px;
+  paint-order: stroke;
+  font-size: 6.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.secmap-inset-title { dominant-baseline: auto; }
+.secmap-legend { pointer-events: none; }
+/* The Northeast close-up's area, outlined on the main map. */
+.secmap-region { fill: none; stroke: var(--sec-panel-edge); stroke-width: 0.7; stroke-dasharray: 3 2; pointer-events: none; }
 .secmap-needed { margin-top: 0.5rem; font-size: 0.9rem; color: var(--text); line-height: 1.5; word-spacing: 0.25em; }
 .secmap-needed-label { color: var(--muted); margin-right: 0.4em; word-spacing: normal; }
 .secmap-sweep { color: var(--green); font-weight: 600; }
