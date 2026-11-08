@@ -221,7 +221,10 @@
            terminator every second or hold its images in the layout. -->
       <template x-if="showWorldMap && sectionContest()">
       <div id="secmap-body" x-init="loadSectionMap()">
-        <div class="map-box secmap-box" x-show="sectionMapData">
+        <!-- --secmap-aspect feeds the CSS that keeps the whole map inside the
+             window at any zoom (see .secmap-box in dashboard.css). -->
+        <div class="map-box secmap-box" x-show="sectionMapData"
+             :style="{ '--secmap-aspect': sectionMapData ? sectionMapData.width / sectionMapData.height : 1.31 }">
           <!-- Same layering as the world map: ocean + relief, then the
                grayline (tint + city lights through a blurred night mask),
                then the sections, labels and home ring on top. The imagery
