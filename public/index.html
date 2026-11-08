@@ -228,7 +228,12 @@
                is the world map's own, reprojected in the browser
                (buildSectionImagery()); until it's ready the vector land
                shows instead. -->
-          <svg :viewBox="sectionMapData ? ('0 0 ' + sectionMapData.width + ' ' + sectionMapData.height) : '0 0 1000 663'"
+          <!-- Static viewBox, never an Alpine-bound one -- the HTML parser lowercases
+               the bound attribute to "viewbox", which SVG ignores, leaving
+               the default 300x150 box (seen live: map cropped to a 150px
+               strip). Must match sections.json's width/height; a test in
+               test/dashboard checks it. -->
+          <svg viewBox="0 0 1000 663"
                class="worldmap-svg" preserveAspectRatio="xMidYMid meet">
             <defs>
               <filter id="secmap-soft" x="-10%" y="-10%" width="120%" height="120%">
