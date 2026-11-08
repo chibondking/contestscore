@@ -271,7 +271,7 @@ HAWAII = lcc(-157, 20, 19, 22)
 class Frame:
     """A projection plus the affine fit into a viewBox rectangle."""
 
-    def __init__(self, proj, west, south, east, north, box=None, points=None, margin=0):
+    def __init__(self, proj, west, south, east, north, box=None, points=None, margin=0, top=None):
         self.proj = proj
         if points is None:
             points = [(lon, lat) for lon in range(int(west), int(east) + 1)
@@ -280,6 +280,8 @@ class Frame:
         pad = margin * (max(xs) - min(xs))
         self.x0, self.x1 = min(xs) - pad, max(xs) + pad
         self.y0, self.y1 = min(ys) - pad, max(ys) + pad
+        if top is not None:   # crop the top at this (lon, lat)
+            self.y1 = proj(*top)[1]
         self.fit(box)
 
     def fit(self, box):
@@ -306,10 +308,13 @@ class Frame:
         return self.ox + (x - self.x0) * self.s, self.oy + (self.y1 - y) * self.s
 
 
-# Main frame: fitted to landmarks at the edges of what it must show -- all
-# of Canada (Ellesmere Island's north tip to the Yukon's Arctic coast),
-# the lower 48, Puerto Rico and the Virgin Islands. Alaska and Hawaii are
-# insets, so they don't stretch it.
+# Main frame: fitted to landmarks at the edges of what it must show -- the
+# width from all of Canada (Ellesmere to the Yukon coast), the lower 48,
+# Puerto Rico and the Virgin Islands -- then cropped at the top along the
+# arc through 69.2N on the central meridian (CJ, 2026-11-08: the full
+# Arctic made the card taller than wide). That keeps all of Hudson Bay and
+# the mainland territories' southern half; the archipelago is cut. Alaska
+# and Hawaii are insets, so they don't stretch it.
 MAIN_EXTENT = [
     (-133.1, 54.0),   # Haida Gwaii
     (-141.0, 69.6),   # Yukon / Alaska line at the Beaufort Sea
@@ -319,13 +324,14 @@ MAIN_EXTENT = [
     (-64.6, 60.4),    # Labrador, northern tip
     (-52.6, 47.5),    # St. John's
     (-64.5, 17.6),    # US Virgin Islands
+    (-61.0, 15.8),    # open sea past VI, so it isn't jammed in the corner
     (-80.2, 24.5),    # Florida Keys
     (-97.2, 25.8),    # Brownsville
     (-117.1, 32.5),   # San Diego
     (-124.4, 40.4),   # Cape Mendocino
     (-129.5, 38.0),   # open Pacific, room for the Bay Area callouts
 ]
-main = Frame(MAIN, 0, 0, 0, 0, points=MAIN_EXTENT, margin=0.015)
+main = Frame(MAIN, 0, 0, 0, 0, points=MAIN_EXTENT, margin=0.015, top=(-96, 69.2))
 H = round(main.h)
 INSET_BOXES = {'AK': (6, H - 196, 210, 150), 'PAC': (222, H - 96, 150, 70)}
 INSETS = {
@@ -455,7 +461,7 @@ CALLOUT_COLUMNS = [
     (-65.0, ['VT', 'NH', 'WMA', 'EMA', 'RI', 'CT', 'NLI', 'NNJ', 'SNJ', 'DE', 'MDC']),
     (-127.4, ['SF', 'EB', 'SCV']),
 ]
-CALLOUTS = {'PE': (-60.6, 48.6), 'GH': (-77.6, 43.55), 'VI': (-63.0, 19.6), 'PR': (-67.0, 20.6)}
+CALLOUTS = {'PE': (-60.6, 48.6), 'GH': (-77.6, 43.55), 'VI': (-65.6, 22.4), 'PR': (-69.0, 22.0)}
 CALLOUT_STEP = 13   # px between labels in a column
 
 
@@ -539,6 +545,7 @@ def main_build():
     for sec, (lon, lat) in CALLOUTS.items():
         e = sections[sec]
         cx, cy = main(lon, lat)
+        cx, cy = min(max(cx, 16), W - 16), min(max(cy, 10), H - 10)   # pill stays on the map
         e.update(ax=e['lx'], ay=e['ly'], lx=round(cx, 1), ly=round(cy, 1), fs=9)
     for lon, secs in CALLOUT_COLUMNS:
         mid = sum(sections[s]['ly'] for s in secs) / len(secs)
