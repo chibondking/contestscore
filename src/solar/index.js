@@ -46,6 +46,19 @@ async function parseSolarXml(text) {
   };
 }
 
+// hamqsl now and then answers with <solarflux>0</solarflux> while every
+// other index is fine -- a feed hiccup, since the 10.7 cm flux never gets
+// anywhere near 0 (its quiet-sun floor is ~65). Stored as-is it drew a
+// spike to zero on the solar page and showed "SFI 0" in the header, so a 0
+// takes the previous reading's SFI instead (CJ, 2026-11-08); with nothing
+// before it, null. Sunspots, A and K really can be 0 and are left alone.
+// migrations/006_solar_sfi_zero_carry_forward.sql repaired the rows stored
+// before this.
+function carryForwardSfi(sfi, previous) {
+  if (sfi !== 0) return sfi;
+  return previous && previous.sfi ? previous.sfi : null;
+}
+
 // DB row -> the shape the API / socket expose.
 function publicView(row) {
   if (!row) return { updated: null };
@@ -100,7 +113,7 @@ function createSolarService({ io, env = process.env, deps = {} } = {}) {
         if (!Array.isArray(rows) || !rows.length) break;
         for (const r of rows) {
           insert({
-            sfi: r.sfi, a: r.a_index, k: r.k_index, sunspots: r.sunspots,
+            sfi: carryForwardSfi(r.sfi, latest()), a: r.a_index, k: r.k_index, sunspots: r.sunspots,
             xray: r.xray, geomag: r.geomag, source_updated: r.source_updated,
             fetched_at: r.fetched_at,
           });
@@ -128,6 +141,7 @@ function createSolarService({ io, env = process.env, deps = {} } = {}) {
       if (reading.sfi == null && reading.a == null && reading.k == null) {
         throw new Error('no indices in response');
       }
+      reading.sfi = carryForwardSfi(reading.sfi, latest());
       insert(reading);
       current = latest();
       if (io) io.emit('solar:update', publicView(current));
@@ -159,4 +173,4 @@ function createSolarService({ io, env = process.env, deps = {} } = {}) {
   };
 }
 
-module.exports = { createSolarService, parseSolarXml, resolveSolarConfig, latestSolar };
+module.exports = { createSolarService, parseSolarXml, resolveSolarConfig, latestSolar, carryForwardSfi };

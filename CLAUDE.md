@@ -794,6 +794,13 @@ span to chart QSO rate vs. conditions (noted in `docs/ANALYZER.md`'s "Not
 done"). Manually-uploaded logs get nothing -- there's no captured solar for
 an arbitrary past date.
 
+**SFI 0 is a feed glitch, not a reading** (CJ, 2026-11-08): hamqsl now and
+then sends `<solarflux>0</solarflux>` with every other index fine. Ingest
+stores the previous reading's SFI instead (`carryForwardSfi()`, both the
+hamqsl and hamdata paths), and `migrations/006_...` repaired the rows
+already stored -- an UPDATE of the one value, never a delete. Sunspots /
+A / K can genuinely be 0 and are left alone.
+
 Dashboard header only; `SOLAR_ENABLED=false` disables the poll and the
 chip. The analyzer never triggers a fetch.
 
