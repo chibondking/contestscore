@@ -556,3 +556,61 @@ describe('section map: index.html viewBox', () => {
     assert.ok(html.includes(`viewBox="0 0 ${m.width} ${m.height}"`));
   });
 });
+
+describe('section map: layout (2:1, insets, labels)', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(__dirname, '../../public/img/map/sections.json'), 'utf8'));
+
+  it('is the world map\'s 2:1 shape, so it fills the card the same way', () => {
+    assert.equal(m.width, 1000);
+    assert.equal(m.height, 500);
+  });
+
+  it('every section is labelled somewhere: in place, by callout, or in the Northeast close-up', () => {
+    for (const [code, s] of Object.entries(m.sections)) {
+      assert.ok(s.lx != null || (s.ne && s.ne.lx != null), `${code} has no label`);
+    }
+  });
+
+  it('the small Northeast sections are labelled in the close-up, not by a callout fan', () => {
+    for (const code of ['RI', 'CT', 'DE', 'NLI', 'NNJ', 'SNJ', 'EMA', 'WMA', 'VT', 'NH', 'MDC', 'GH']) {
+      const s = m.sections[code];
+      assert.ok(s.ne && s.ne.lx != null, `${code} labelled in the Northeast inset`);
+      assert.equal(s.ax, undefined, `${code} has no callout`);
+    }
+  });
+
+  it('has Alaska, Hawaii and Northeast panels, and labels use at most the two sizes (7 only in the close-up)', () => {
+    assert.deepEqual(m.insets.map((b) => b.key), ['AK', 'PAC', 'NE']);
+    assert.equal(m.frames.length, 4);
+    const main = Object.values(m.sections).filter((s) => s.lx != null && s.ax == null).map((s) => s.fs);
+    assert.ok(main.every((fs) => fs === 10 || fs === 8), `main sizes ${[...new Set(main)]}`);
+  });
+
+  it('draws inset panels with titles and a legend', () => {
+    const d = dashboard();
+    d.sectionMapData = m;
+    const svg = d.sectionMapSvg();
+    for (const t of ['Alaska', 'Hawaii', 'Northeast']) assert.match(svg, new RegExp(`class="secmap-inset-title">${t}<`));
+    assert.match(svg, /class="secmap-legend"/);
+    assert.match(svg, /clip-path="url\(#secmap-box-NE\)"/);
+  });
+
+  it('a transmitter in the Northeast is marked on the main map and in the close-up', () => {
+    const d = dashboard();
+    d.sectionMapData = m;
+    d.score = { grid6: 'FN31PR' }; // Connecticut
+    assert.equal((d.sectionHomeSvg().match(/<circle/g) || []).length, 2);
+    assert.match(d.sectionHomeSvg(), /Transmitter location — FN31PR/);
+    d.score = { grid6: 'DM79' }; // Colorado
+    assert.equal((d.sectionHomeSvg().match(/<circle/g) || []).length, 1);
+  });
+
+  it('pulses the newest newly-worked section for 90 s', () => {
+    const d = dashboard();
+    const iso = (msAgo) => new Date(Date.now() - msAgo).toISOString().slice(0, 19).replace('T', ' ');
+    d.qsos = [qso({ section: 'OH', logged_at: iso(5000) }), qso({ section: 'IL', logged_at: iso(20000) }), qso({ section: 'OH', logged_at: iso(600000) })];
+    assert.equal(d.newestNewSection(), 'IL'); // OH was first worked 10 min ago
+    d.qsos = [qso({ section: 'IL', logged_at: iso(200000) })];
+    assert.equal(d.newestNewSection(), null);
+  });
+});
