@@ -783,6 +783,16 @@ body {
   --sec-halo:         rgba(255, 255, 255, 0.85);
   --sec-land:         #c9c7a8;
 }
+/* Fit the whole map in the window, not just the card's width: a wide card
+   (a big screen, or the page zoomed out to 67%) would otherwise scale the
+   taller-than-the-world-map section map past the bottom of the screen.
+   Width is capped so the height (width / aspect) leaves room for the page
+   header, the card title and the Needed line; centred in the card. The
+   aspect comes from sections.json via an inline --secmap-aspect. */
+.secmap-box {
+  width: min(100%, calc((100vh - 9rem) * var(--secmap-aspect, 1.31)));
+  margin-inline: auto;
+}
 .secmap-land { fill: var(--sec-land); }
 .secmap-lake { fill: var(--map-ocean); }
 .secmap-inset { fill: none; stroke: var(--sec-edge); stroke-width: 0.8; stroke-dasharray: 3 2; }
