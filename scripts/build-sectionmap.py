@@ -54,6 +54,10 @@ OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'img', 'map', 'sec
 
 W = 1000          # viewBox width; height follows from the projected extent
 SIMPLIFY = 0.35   # Douglas-Peucker tolerance, viewBox px
+# Coarser for the big, ragged northern coastlines (the Arctic archipelago
+# alone was half the file), along with a larger minimum island area.
+COARSE = {'TER': (0.9, 1.5), 'NL': (0.6, 0.6), 'QC': (0.6, 0.6), 'BC': (0.6, 0.6),
+          'ONN': (0.6, 0.6), 'MB': (0.6, 0.6)}
 
 # ---------------------------------------------------------------- sections
 
@@ -267,15 +271,15 @@ HAWAII = lcc(-157, 20, 19, 22)
 class Frame:
     """A projection plus the affine fit into a viewBox rectangle."""
 
-    def __init__(self, proj, west, south, east, north, box=None):
+    def __init__(self, proj, west, south, east, north, box=None, points=None, margin=0):
         self.proj = proj
-        xs, ys = [], []
-        for lon in range(int(west), int(east) + 1):
-            for lat in (south, north, (south + north) / 2):
-                x, y = proj(lon, lat)
-                xs.append(x)
-                ys.append(y)
-        self.x0, self.x1, self.y0, self.y1 = min(xs), max(xs), min(ys), max(ys)
+        if points is None:
+            points = [(lon, lat) for lon in range(int(west), int(east) + 1)
+                      for lat in (south, north, (south + north) / 2)]
+        xs, ys = zip(*(proj(lon, lat) for lon, lat in points))
+        pad = margin * (max(xs) - min(xs))
+        self.x0, self.x1 = min(xs) - pad, max(xs) + pad
+        self.y0, self.y1 = min(ys) - pad, max(ys) + pad
         self.fit(box)
 
     def fit(self, box):
@@ -302,10 +306,26 @@ class Frame:
         return self.ox + (x - self.x0) * self.s, self.oy + (self.y1 - y) * self.s
 
 
-# Main frame: Vancouver Island to Newfoundland, the Florida Keys/Puerto Rico
-# to the middle of Hudson Bay. The territories (TER) show only their
-# southern edge -- the far north would otherwise be most of the map.
-main = Frame(MAIN, -127, 16.5, -56, 58.5)
+# Main frame: fitted to landmarks at the edges of what it must show -- all
+# of Canada (Ellesmere Island's north tip to the Yukon's Arctic coast),
+# the lower 48, Puerto Rico and the Virgin Islands. Alaska and Hawaii are
+# insets, so they don't stretch it.
+MAIN_EXTENT = [
+    (-133.1, 54.0),   # Haida Gwaii
+    (-141.0, 69.6),   # Yukon / Alaska line at the Beaufort Sea
+    (-125.0, 72.0),   # Banks Island
+    (-120.0, 77.0),   # Prince Patrick Island
+    (-70.0, 83.1),    # Ellesmere Island, north tip
+    (-64.6, 60.4),    # Labrador, northern tip
+    (-52.6, 47.5),    # St. John's
+    (-64.5, 17.6),    # US Virgin Islands
+    (-80.2, 24.5),    # Florida Keys
+    (-97.2, 25.8),    # Brownsville
+    (-117.1, 32.5),   # San Diego
+    (-124.4, 40.4),   # Cape Mendocino
+    (-129.5, 38.0),   # open Pacific, room for the Bay Area callouts
+]
+main = Frame(MAIN, 0, 0, 0, 0, points=MAIN_EXTENT, margin=0.015)
 H = round(main.h)
 INSET_BOXES = {'AK': (6, H - 196, 210, 150), 'PAC': (222, H - 96, 150, 70)}
 INSETS = {
@@ -433,7 +453,7 @@ def seg_dist(px, py, a, b):
 # south by where their sections are, so no two leaders cross.
 CALLOUT_COLUMNS = [
     (-65.0, ['VT', 'NH', 'WMA', 'EMA', 'RI', 'CT', 'NLI', 'NNJ', 'SNJ', 'DE', 'MDC']),
-    (-127.2, ['SF', 'EB', 'SCV']),
+    (-127.4, ['SF', 'EB', 'SCV']),
 ]
 CALLOUTS = {'PE': (-60.6, 48.6), 'GH': (-77.6, 43.55), 'VI': (-63.0, 19.6), 'PR': (-67.0, 20.6)}
 CALLOUT_STEP = 13   # px between labels in a column
@@ -506,9 +526,10 @@ def main_build():
         rings = outline(groups[sec])
         if frame is main:
             rings = [r for r in rings if any(-1 <= x <= W + 1 and -1 <= y <= H + 1 for x, y in (main(*p) for p in r[::7] + [r[0]]))]
+        tol, min_area = COARSE.get(sec, (SIMPLIFY, 0.15))
         prj = project_rings(rings, frame) if frame is not main else \
-            [q for q in (simplify_ring(r, SIMPLIFY) for r in clamp([[main(*p) for p in r] for r in rings]))
-             if q and abs(signed_area(q)) >= 0.15]
+            [q for q in (simplify_ring(r, tol) for r in clamp([[main(*p) for p in r] for r in rings]))
+             if q and abs(signed_area(q)) >= min_area]
         if not prj:
             sys.exit('section %s simplified away' % sec)
         (lx, ly), room = label_point(prj)
@@ -521,7 +542,7 @@ def main_build():
         e.update(ax=e['lx'], ay=e['ly'], lx=round(cx, 1), ly=round(cy, 1), fs=9)
     for lon, secs in CALLOUT_COLUMNS:
         mid = sum(sections[s]['ly'] for s in secs) / len(secs)
-        x = round(main(lon, 40)[0], 1)
+        x = round(min(max(main(lon, 40)[0], 16), W - 16), 1)   # pill stays on the map
         for i, sec in enumerate(secs):
             e = sections[sec]
             y = mid + (i - (len(secs) - 1) / 2) * CALLOUT_STEP

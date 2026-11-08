@@ -233,13 +233,13 @@
                the default 300x150 box (seen live: map cropped to a 150px
                strip). Must match sections.json's width/height; a test in
                test/dashboard checks it. -->
-          <svg viewBox="0 0 1000 663"
+          <svg viewBox="0 0 1000 1142"
                class="worldmap-svg" preserveAspectRatio="xMidYMid meet">
             <defs>
               <filter id="secmap-soft" x="-10%" y="-10%" width="120%" height="120%">
                 <feGaussianBlur stdDeviation="6"></feGaussianBlur>
               </filter>
-              <mask id="secmap-night-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="700">
+              <mask id="secmap-night-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="2000">
                 <g x-html="sectionNightMaskSvg()"></g>
               </mask>
             </defs>
@@ -247,7 +247,7 @@
                    :width="sectionMapData ? sectionMapData.width : 0" :height="sectionMapData ? sectionMapData.height : 0"
                    preserveAspectRatio="none"></image>
             <g mask="url(#secmap-night-mask)" class="worldmap-nightside">
-              <rect class="worldmap-night" x="0" y="0" width="1000" height="700"></rect>
+              <rect class="worldmap-night" x="0" y="0" width="1000" height="2000"></rect>
               <image x-show="sectionImagery.lights" :href="sectionImagery.lights" x="0" y="0"
                      :width="sectionMapData ? sectionMapData.width : 0" :height="sectionMapData ? sectionMapData.height : 0"
                      preserveAspectRatio="none"></image>
