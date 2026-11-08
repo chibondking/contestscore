@@ -579,7 +579,7 @@ body {
   --map-dot:         #ffc94d;
   --map-mult:        #3fb950;
   --map-mark-edge:   #050a18;
-  --map-home:        #ffffff;
+  --map-home:        #ff4d4d;  /* red: reads as "us", not as a QSO dot */
   --map-night:       rgba(2, 6, 22, 0.72);
   --map-zone-line:   rgba(255, 255, 255, 0.12);
   --map-zone-band:   rgba(255, 255, 255, 0.025);
@@ -747,13 +747,16 @@ body {
   dominant-baseline: central;
 }
 
-/* Home QTH (N1MM's reported transmitter grid) -- an open ring, not a
-   filled dot, so it never reads as "a QSO" or "a mult" at a glance: it's a
-   landmark, not contact data. */
+/* Home QTH (N1MM's reported transmitter grid) -- a red ring, not a QSO
+   dot colour, so it never reads as "a QSO" or "a mult" at a glance: it's
+   the station itself. A faint fill so hovering anywhere inside it shows
+   the "Transmitter location" tooltip, not just on the ring's stroke. */
 .worldmap-home {
-  fill: none;
+  fill: rgba(255, 77, 77, 0.25);
   stroke: var(--map-home);
   stroke-width: 2.5;
+  pointer-events: all;
+  cursor: help;
   filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
 }
 
