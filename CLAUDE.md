@@ -39,6 +39,21 @@ passed that test so far:
   one mult-bell rule the dashboard and TUI share rather than copy).
   Browsers block audio until a click on the page, so a reloaded wall
   display needs one click before it can ding -- the popover says so;
+- the **section map** (2026-11-08) -- during ARRL Sweepstakes (CW/SSB)
+  and ARRL Field Day only (`SECTION_CONTEST_RE` in `dashboard.js`: exact
+  N1MM names `ARRL-SS-CW`/`ARRL-SS-SSB`/`ARRL-FD`, or contactinfo's
+  `SSCW`/`SSPH`/`FD`), the world map card shows a US/VE/Caribbean map of
+  all 85 ARRL/RAC sections instead (AK and PAC as insets, PR/VI and the
+  small Northeast sections as callouts), each worked section filled in,
+  plus an "N / 85" count and a Needed list. **The section is the one
+  copied in the logger (`qsos.section`), full stop** -- HamQTH lookups
+  still run for busts, but never decide a section (a station listed in IL
+  operating from OH counts as OH). Geometry + projection are
+  `public/img/map/sections.json`, built (committed, not at deploy) by
+  `scripts/build-sectionmap.py` from Census counties + StatCan census
+  divisions using ARRL's/RAC's county lists; the browser reprojects the
+  world map's own ocean/relief/lights imagery into it once
+  (`buildSectionImagery()`) and draws the same blurred grayline;
 - the **TUI** (`tui/`, 2026-10-09) -- the same results core in a
   terminal, for watching a contest over SSH on the box itself with no
   browser in the way (`npm run tui`, defaults to `http://localhost:3000`;
@@ -284,6 +299,7 @@ contestscore/
   config/
     default.json            # ports, DB path, feature flags
   migrations/               # numbered SQL migration files, run on startup
+  scripts/                  # build-worldmap.py / build-sectionmap.py (map assets, run by hand) + test sender
   deploy/                   # DEPLOY.md + the production deploy script + nginx/systemd units
   docs/
     SETUP.md                # user-facing install guide (LAN / single VPS)

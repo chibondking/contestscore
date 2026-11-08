@@ -757,6 +757,60 @@ body {
   filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
 }
 
+/* ARRL/RAC section map (dashboard.js sectionMapSvg()), the world map's
+   stand-in for Sweepstakes and Field Day. Sits on the same reprojected
+   ocean/relief/grayline imagery; a needed section is just its outline
+   over the relief, a worked one is filled in. Labels carry a halo so they
+   read over relief, night and fill alike. */
+:root {
+  --sec-edge:         rgba(255, 255, 255, 0.55);
+  --sec-worked:       rgba(63, 185, 80, 0.62);
+  --sec-worked-edge:  #7ee08b;
+  --sec-label:        rgba(230, 237, 243, 0.62);
+  --sec-label-worked: #ffffff;
+  --sec-halo:         rgba(3, 8, 20, 0.9);
+  --sec-land:         #2a3326;  /* flat land until the imagery is built */
+}
+:root[data-theme="light"] {
+  --sec-edge:         rgba(20, 20, 20, 0.55);
+  --sec-worked:       rgba(26, 127, 55, 0.58);
+  --sec-worked-edge:  #0f5a25;
+  --sec-label:        rgba(20, 20, 20, 0.7);
+  --sec-label-worked: #ffffff;
+  --sec-halo:         rgba(255, 255, 255, 0.85);
+  --sec-land:         #c9c7a8;
+}
+.secmap-land { fill: var(--sec-land); }
+.secmap-lake { fill: var(--map-ocean); }
+.secmap-inset { fill: none; stroke: var(--sec-edge); stroke-width: 0.8; stroke-dasharray: 3 2; }
+.secmap-sec {
+  fill: transparent;
+  stroke: var(--sec-edge);
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+}
+.secmap-sec--worked { fill: var(--sec-worked); stroke: var(--sec-worked-edge); }
+.secmap-sec:hover { fill: rgba(255, 201, 77, 0.35); }
+.secmap-label {
+  fill: var(--sec-label);
+  stroke: var(--sec-halo);
+  stroke-width: 2.4px;
+  paint-order: stroke;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.secmap-label--worked { fill: var(--sec-label-worked); }
+.secmap-leader { stroke: var(--sec-edge); stroke-width: 0.6; pointer-events: none; }
+.secmap-anchor { fill: var(--sec-edge); pointer-events: none; }
+.secmap-anchor--worked { fill: var(--sec-worked-edge); }
+.secmap-pill { fill: var(--sec-halo); stroke: var(--sec-edge); stroke-width: 0.6; pointer-events: none; }
+.secmap-pill--worked { fill: var(--sec-worked); stroke: var(--sec-worked-edge); }
+.secmap-needed { margin-top: 0.5rem; font-size: 0.9rem; color: var(--text); line-height: 1.5; word-spacing: 0.25em; }
+.secmap-needed-label { color: var(--muted); margin-right: 0.4em; word-spacing: normal; }
+.secmap-sweep { color: var(--green); font-weight: 600; }
+
 .chart-box { position: relative; width: 100%; }
 .chart-box--trend { height: 280px; }
 .chart-box--pie { height: 260px; }
