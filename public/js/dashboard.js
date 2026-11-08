@@ -275,8 +275,9 @@ function sectionNightPaths(frames, date) {
 // over it even though the relief underneath is upsampled. Inside the
 // inset boxes the image's own coastline is used -- Alaska's box also shows
 // the Yukon and Russia, which have no outlines here. K = output pixels per
-// viewBox unit (2 keeps it crisp on a TV). Returns object URLs.
-async function buildSectionImagery(m, oceanHref, dark, K = 2) {
+// viewBox unit (1.5: crisp on a wall TV without a multi-second resample of
+// the ~1000x1150 map on a Pi). Returns object URLs.
+async function buildSectionImagery(m, oceanHref, dark, K = 1.5) {
   const load = async (href) => {
     const img = new Image();
     img.src = href;

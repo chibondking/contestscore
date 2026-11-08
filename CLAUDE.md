@@ -43,7 +43,8 @@ passed that test so far:
   and ARRL Field Day only (`SECTION_CONTEST_RE` in `dashboard.js`: exact
   N1MM names `ARRL-SS-CW`/`ARRL-SS-SSB`/`ARRL-FD`, or contactinfo's
   `SSCW`/`SSPH`/`FD`), the world map card shows a US/VE/Caribbean map of
-  all 85 ARRL/RAC sections instead (AK and PAC as insets, PR/VI and the
+  all 85 ARRL/RAC sections instead (all of Canada up to Ellesmere; AK and
+  PAC as insets, PR/VI and the
   small Northeast sections as callouts), each worked section filled in,
   plus an "N / 85" count and a Needed list. **The section is the one
   copied in the logger (`qsos.section`), full stop** -- HamQTH lookups
