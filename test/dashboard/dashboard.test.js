@@ -442,3 +442,108 @@ describe('operatorStats', () => {
     assert.equal(op.points, 2);
   });
 });
+
+describe('section map (ARRL Sweepstakes / Field Day)', () => {
+  const sectionMap = JSON.parse(fs.readFileSync(path.join(__dirname, '../../public/img/map/sections.json'), 'utf8'));
+
+  it('only SS CW, SS SSB and Field Day get it, by either name N1MM sends', () => {
+    for (const n of ['ARRL-SS-CW', 'ARRL-SS-SSB', 'SSCW', 'SSPH', 'ARRL-FD', 'FD', 'arrl-ss-cw', ' SSCW ']) {
+      assert.equal(sandbox.isSectionContest(n), true, n);
+    }
+    for (const n of ['SST', 'K1USN-SST', 'ARRL-160', 'WFD', 'ARRL-10', 'CQ-WW-CW', 'NAQP-CW', 'ARRL-SS', '', null, undefined]) {
+      assert.equal(sandbox.isSectionContest(n), false, String(n));
+    }
+  });
+
+  it('sectionContest() reads the Score packet, else the newest QSO', () => {
+    const d = dashboard();
+    assert.equal(d.sectionContest(), false);
+    d.score = { contest: 'ARRL-SS-CW' };
+    assert.equal(d.sectionContest(), true);
+    d.score = {};
+    d.qsos = [qso({ contestname: 'SSCW' })];
+    assert.equal(d.sectionContest(), true);
+    d.qsos = [qso({ contestname: 'CQ-WW-CW' })];
+    assert.equal(d.sectionContest(), false);
+  });
+
+  it("the logged (copied) section is what counts -- not the station's home QTH", () => {
+    const d = dashboard();
+    // WT2P is listed in IL but sent OH; only the copied OH lights up.
+    d.qsos = [qso({ call: 'WT2P', section: 'OH', state: 'IL' })];
+    const worked = d.workedSections();
+    assert.equal(worked.get('OH'), 1);
+    assert.equal(worked.has('IL'), false);
+  });
+
+  it('counts QSOs per section, skipping X-QSOs and QTCs, folding old territory codes into TER', () => {
+    const d = dashboard();
+    d.qsos = [
+      qso({ section: 'oh' }), qso({ section: 'OH ' }),
+      qso({ section: 'NT' }), qso({ section: 'YT' }),
+      qso({ section: 'IL', is_claimed_qso: 0 }),
+      qso({ section: 'IN', exchange1: 'SQTC' }),
+      qso({ section: '' }),
+    ];
+    const worked = d.workedSections();
+    assert.equal(worked.get('OH'), 2);
+    assert.equal(worked.get('TER'), 2);
+    assert.equal(worked.has('IL'), false);
+    assert.equal(worked.has('IN'), false);
+    assert.equal(worked.size, 2);
+  });
+
+  it('the map has all 85 sections, PAC, PR and VI included', () => {
+    const codes = Object.keys(sectionMap.sections);
+    assert.equal(codes.length, 85);
+    for (const c of ['PAC', 'PR', 'VI', 'AK', 'TER', 'GH', 'PE', 'NLI', 'SDG']) assert.ok(codes.includes(c), c);
+  });
+
+  it('tally and Needed list are against the map, ignoring codes it lacks (DX, busts)', () => {
+    const d = dashboard();
+    d.sectionMapData = sectionMap;
+    d.qsos = [qso({ section: 'OH' }), qso({ section: 'PAC' }), qso({ section: 'VI' }), qso({ section: 'DX' })];
+    const t = d.sectionTally();
+    assert.equal(t.total, 85);
+    assert.equal(t.worked, 3);
+    assert.equal(t.needed.length, 82);
+    assert.ok(!t.needed.includes('OH') && !t.needed.includes('PAC') && !t.needed.includes('VI'));
+    assert.ok(t.needed.includes('PR'));
+  });
+
+  it('marks worked sections in the SVG', () => {
+    const d = dashboard();
+    d.sectionMapData = sectionMap;
+    d.qsos = [qso({ section: 'PR' })];
+    const svg = d.sectionMapSvg();
+    assert.match(svg, /class="secmap-sec secmap-sec--worked"><title>PR — Puerto Rico: 1 QSO<\/title>/);
+    assert.match(svg, /class="secmap-sec"><title>VI — US Virgin Islands: needed<\/title>/);
+  });
+
+  it('projection round-trips, and Alaska/Hawaii land in their insets', () => {
+    for (const f of sectionMap.frames) {
+      const p = sandbox.lccForward(f, -100, 40);
+      const ll = sandbox.lccInverse(f, p.x, p.y);
+      assert.ok(Math.abs(ll.lon + 100) < 1e-6 && Math.abs(ll.lat - 40) < 1e-6);
+    }
+    const inBox = (f, p) => p.x >= f.box[0] && p.x <= f.box[0] + f.box[2] && p.y >= f.box[1] && p.y <= f.box[1] + f.box[3];
+    const fr = sectionMap.frames;
+    const hnl = sandbox.lccForward(sandbox.sectionFrameFor(fr, -157.9, 21.3), -157.9, 21.3);
+    assert.ok(inBox(fr[2], hnl), 'Honolulu in the Hawaii inset');
+    const anc = sandbox.lccForward(sandbox.sectionFrameFor(fr, -149.9, 61.2), -149.9, 61.2);
+    assert.ok(inBox(fr[1], anc), 'Anchorage in the Alaska inset');
+    const sju = sandbox.lccForward(sandbox.sectionFrameFor(fr, -66.1, 18.4), -66.1, 18.4);
+    assert.ok(sju.x > 0 && sju.x < sectionMap.width && sju.y > 0 && sju.y < sectionMap.height, 'San Juan on the main map');
+  });
+
+  it('grayline: one night shape per frame, dark pole by season', () => {
+    const paths = sandbox.sectionNightPaths(sectionMap.frames, new Date(Date.UTC(2026, 10, 8, 3, 0)));
+    assert.equal(paths.length, sectionMap.frames.length);
+    for (const p of paths) assert.match(p, /^M[-\d.]+,[-\d.]+(L[-\d.]+,[-\d.]+)+Z$/);
+    // 03Z in November: the whole of the continental US is in darkness.
+    const d = dashboard();
+    d.sectionMapData = sectionMap;
+    d.now = Date.UTC(2026, 10, 8, 3, 0);
+    assert.match(d.sectionNightMaskSvg(), /secmap-clip-1/);
+  });
+});

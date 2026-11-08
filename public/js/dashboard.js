@@ -188,6 +188,184 @@ function escapeHtml(s) {
 }
 
 // ---------------------------------------------------------------------
+// ARRL/RAC section map: shown in place of the world map during ARRL
+// Sweepstakes (CW or SSB) and ARRL Field Day -- the contests whose W/VE
+// exchange is an ARRL/RAC section -- with every section the log has worked
+// filled in. Geometry and projection are public/img/map/sections.json
+// (scripts/build-sectionmap.py), fetched only while one of those is on.
+//
+// Names as N1MM sends them: the Score packet's <contest> ("ARRL-SS-CW",
+// "ARRL-SS-SSB", "ARRL-FD") and contactinfo's shorter <contestname>
+// ("SSCW", "SSPH", "FD"). Exact matches only -- nothing else gets the map.
+const SECTION_CONTEST_RE = /^(ARRL-SS-CW|ARRL-SS-SSB|SSCW|SSPH|ARRL-FD|FD)$/i;
+
+function isSectionContest(name) {
+  return SECTION_CONTEST_RE.test(String(name || '').trim());
+}
+
+// What a logger may still send for a section that has since been renamed:
+// the three territories have been one section, TER, since 2023.
+const SECTION_ALIASES = { NT: 'TER', NWT: 'TER', YT: 'TER', NU: 'TER', NF: 'NL', PQ: 'QC' };
+
+function sectionCode(raw) {
+  const s = String(raw || '').trim().toUpperCase();
+  return SECTION_ALIASES[s] || s;
+}
+
+// The section map's projection: spherical Lambert conformal conic, one
+// "frame" per area (the main map, then the Alaska and Hawaii insets), each
+// with the constants and the viewBox fit the build script wrote into
+// sections.json -- the same math as its lcc()/Frame, so a point drawn here
+// lands where the build put the coastline.
+function lccForward(f, lon, lat) {
+  const r = Math.PI / 180;
+  const rho = f.F / Math.tan(Math.PI / 4 + (lat * r) / 2) ** f.n;
+  const t = f.n * (lon - f.lon0) * r;
+  const x = rho * Math.sin(t);
+  const y = f.rho0 - rho * Math.cos(t);
+  return { x: f.ox + (x - f.x0) * f.s, y: f.oy + (f.y1 - y) * f.s };
+}
+
+function lccInverse(f, px, py) {
+  const x = (px - f.ox) / f.s + f.x0;
+  const y = f.y1 - (py - f.oy) / f.s;
+  const dy = f.rho0 - y;
+  const rho = Math.hypot(x, dy);
+  const lat = 2 * Math.atan((f.F / rho) ** (1 / f.n)) - Math.PI / 2;
+  const lon = f.lon0 + Math.atan2(x, dy) / f.n / (Math.PI / 180);
+  return { lon, lat: lat / (Math.PI / 180) };
+}
+
+// The frame a viewBox pixel belongs to: an inset inside its box, else main.
+function sectionFrameAt(frames, px, py) {
+  for (let i = 1; i < frames.length; i++) {
+    const [bx, by, bw, bh] = frames[i].box;
+    if (px >= bx && px < bx + bw && py >= by && py < by + bh) return frames[i];
+  }
+  return frames[0];
+}
+
+// The frame a lat/lon is drawn in: Alaska and Hawaii live in their insets.
+function sectionFrameFor(frames, lon, lat) {
+  if (frames.length > 2 && lon < -150 && lat < 30) return frames[2];
+  if (frames.length > 1 && lon < -129 && lat > 51) return frames[1];
+  return frames[0];
+}
+
+// Night side of the terminator as one closed path per frame, in that
+// frame's projection: the terminator from 180W to 0 (well past both edges
+// of every frame), closed through whichever pole is dark. -89 rather than
+// the pole itself, which the conic sends to infinity.
+function sectionNightPaths(frames, date) {
+  const sub = subsolarPoint(date);
+  const poleLat = sub.lat >= 0 ? -89 : 89;
+  return frames.map((f) => {
+    const pts = [];
+    for (let lon = -180; lon <= 0; lon += 2) pts.push(lccForward(f, lon, terminatorLatDeg(lon, sub)));
+    for (let lon = 0; lon >= -180; lon -= 4) pts.push(lccForward(f, lon, poleLat));
+    return 'M' + pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join('L') + 'Z';
+  });
+}
+
+// The world map's own imagery (public/img/map/, plate carree 2000x1000),
+// resampled once into the section map's projection so both maps share one
+// look: the same ocean, relief and city lights. Land is clipped to the
+// vector coastlines (Natural Earth land + every section outline, Great
+// Lakes cut back out), so the shoreline stays as sharp as the borders drawn
+// over it even though the relief underneath is upsampled. Inside the
+// inset boxes the image's own coastline is used -- Alaska's box also shows
+// the Yukon and Russia, which have no outlines here. K = output pixels per
+// viewBox unit (2 keeps it crisp on a TV). Returns object URLs.
+async function buildSectionImagery(m, oceanHref, dark, K = 2) {
+  const load = async (href) => {
+    const img = new Image();
+    img.src = href;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    return ctx.getImageData(0, 0, c.width, c.height);
+  };
+  const [ocean, land, lights] = await Promise.all([
+    load(oceanHref), load('/img/map/land.webp'), load('/img/map/lights.webp'),
+  ]);
+  const W = Math.round(m.width * K);
+  const H = Math.round(m.height * K);
+  const srcs = [ocean, land, lights];
+  const out = srcs.map(() => new ImageData(W, H));
+  for (let j = 0; j < H; j++) {
+    // Hand the main thread back every few rows: on a Pi this is seconds of
+    // work, and socket events / the clock must keep flowing meanwhile.
+    if (j % 48 === 0) await new Promise((res) => setTimeout(res, 0));
+    const py = (j + 0.5) / K;
+    for (let i = 0; i < W; i++) {
+      const px = (i + 0.5) / K;
+      const { lon, lat } = lccInverse(sectionFrameAt(m.frames, px, py), px, py);
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+      const o = (j * W + i) * 4;
+      for (let k = 0; k < 3; k++) {
+        // bilinear sample; longitude wraps, latitude clamps
+        const src = srcs[k];
+        const w = src.width;
+        const u = (((lon + 180) / 360) * w - 0.5 + w) % w;
+        const v = Math.min(Math.max(((90 - lat) / 180) * src.height - 0.5, 0), src.height - 1);
+        const u0 = Math.floor(u); const v0 = Math.floor(v);
+        const u1 = (u0 + 1) % w; const v1 = Math.min(v0 + 1, src.height - 1);
+        const fu = u - u0; const fv = v - v0;
+        const d = src.data; const t = out[k].data;
+        const a = (v0 * w + u0) * 4; const b = (v0 * w + u1) * 4;
+        const c = (v1 * w + u0) * 4; const e = (v1 * w + u1) * 4;
+        for (let ch = 0; ch < 4; ch++) {
+          t[o + ch] = (d[a + ch] * (1 - fu) + d[b + ch] * fu) * (1 - fv)
+            + (d[c + ch] * (1 - fu) + d[e + ch] * fu) * fv;
+        }
+      }
+    }
+  }
+  const canvasOf = (data) => {
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    if (data) c.getContext('2d').putImageData(data, 0, 0);
+    return c;
+  };
+  const landRaw = canvasOf(out[1]);
+  const landCut = canvasOf(null);
+  const lc = landCut.getContext('2d');
+  const mask = new Path2D();
+  mask.addPath(new Path2D(m.land));
+  for (const s of Object.values(m.sections)) mask.addPath(new Path2D(s.d));
+  lc.save();
+  lc.scale(K, K);
+  lc.clip(mask);
+  lc.setTransform(1, 0, 0, 1, 0, 0);
+  // A solid fill under the relief, so a sliver where the raster's
+  // coastline falls short of the vector one reads as land, not a hole.
+  lc.fillStyle = dark ? '#3b4a35' : '#9fb07f';
+  lc.fillRect(0, 0, W, H);
+  lc.drawImage(landRaw, 0, 0);
+  lc.restore();
+  for (const b of m.insets) {
+    lc.clearRect(b.x * K, b.y * K, b.w * K, b.h * K);
+    lc.drawImage(landRaw, b.x * K, b.y * K, b.w * K, b.h * K, b.x * K, b.y * K, b.w * K, b.h * K);
+  }
+  lc.save();
+  lc.scale(K, K);
+  lc.globalCompositeOperation = 'destination-out';
+  lc.fill(new Path2D(m.lakes));
+  lc.restore();
+  const base = canvasOf(out[0]);
+  const bc = base.getContext('2d');
+  // Same dimming the world map gives its relief in the dark theme.
+  if (dark) bc.filter = 'brightness(0.8) saturate(0.9)';
+  bc.drawImage(landCut, 0, 0);
+  const url = (c) => new Promise((res) => c.toBlob((blob) => res(URL.createObjectURL(blob)), 'image/png'));
+  return { base: await url(base), lights: await url(canvasOf(out[2])) };
+}
+
+// ---------------------------------------------------------------------
 // Grayline (day/night terminator) -- pure date math, no server round trip,
 // so it's recomputed client-side on the same 1s ticker as the UTC clock
 // (see dashboard()'s `now`). Spencer (1971) Fourier-series approximations
@@ -335,6 +513,14 @@ function dashboard() {
     // remembered 40m would silently empty the map in the next contest.
     mapBand: 'all',
     mapOceanHref: '/img/map/ocean-dark.webp',
+    // public/img/map/sections.json once loadSectionMap() has fetched it --
+    // only ever fetched while a section contest is on (sectionContest()).
+    sectionMapData: null,
+    _sectionMapLoading: false,
+    // Object URLs of the world map imagery reprojected for the section map
+    // (buildSectionImagery()); empty until built, and the vector map shows
+    // on its own until then.
+    sectionImagery: { base: '', lights: '' },
     // Per-station ContestPulse (or other bridge) liveness, keyed by
     // station_id. Not contest data -- db:cleared deliberately leaves this
     // alone, since it reflects the bridge process, not the QSO log.
@@ -919,6 +1105,124 @@ function dashboard() {
         // tooltip mechanism.
         return `<circle cx="${p.x}" cy="${p.y}" r="${r}" class="${cls}"><title>${title}</title></circle>`;
       }).join('');
+    },
+
+    // A section contest (see SECTION_CONTEST_RE) gets the section map in
+    // place of the world map. The Score packet names the contest; a log
+    // with no Score broadcast yet still has each QSO's own contestname.
+    sectionContest() {
+      return isSectionContest(this.score.contest) || isSectionContest(this.qsos[0] && this.qsos[0].contestname);
+    },
+
+    // Fetched once, the first time a section contest shows up (x-init on
+    // the section map in index.html). A failure leaves it null, and the
+    // next render of the card tries again.
+    async loadSectionMap() {
+      if (this.sectionMapData || this._sectionMapLoading) return;
+      this._sectionMapLoading = true;
+      try {
+        const m = await fetch('/img/map/sections.json').then((r) => r.json());
+        this.sectionMapData = m;
+        const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+        // Next frame, so the vector map paints first; the resample is a
+        // one-off couple of million pixels.
+        await new Promise((res) => requestAnimationFrame(res));
+        this.sectionImagery = await buildSectionImagery(m, this.mapOceanHref, dark);
+      } catch (err) {
+        console.error('Failed to load section map:', err);
+      } finally {
+        this._sectionMapLoading = false;
+      }
+    },
+
+    // The grayline mask's contents: each frame's night shape, blurred,
+    // the insets clipped to their own boxes and blanked out of the main
+    // frame's. Reads `this.now`, so it follows the same 1s ticker as the
+    // world map's nightPolygonPath() -- kept apart from sectionMapSvg() so
+    // the ticking doesn't re-render every section path each second.
+    sectionNightMaskSvg() {
+      const m = this.sectionMapData;
+      if (!m) return '';
+      const paths = sectionNightPaths(m.frames, new Date(this.now));
+      const out = [`<path d="${paths[0]}" fill="#fff" filter="url(#secmap-soft)"></path>`];
+      m.frames.slice(1).forEach((f, i) => {
+        const [x, y, w, h] = f.box;
+        out.push(`<clipPath id="secmap-clip-${i}"><rect x="${x}" y="${y}" width="${w}" height="${h}"></rect></clipPath>`);
+        out.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#000"></rect>`);
+        out.push(`<g clip-path="url(#secmap-clip-${i})"><path d="${paths[i + 1]}" fill="#fff" filter="url(#secmap-soft)"></path></g>`);
+      });
+      return out.join('');
+    },
+
+    // Home QTH on the section map: score.grid6, like homePoint(), drawn in
+    // whichever frame holds it (a KL7 or KH6 station lands in its inset).
+    sectionHomePoint() {
+      const m = this.sectionMapData;
+      const ll = gridToLatLon(this.score.grid6);
+      if (!m || !ll) return null;
+      return { ...lccForward(sectionFrameFor(m.frames, ll.lon, ll.lat), ll.lon, ll.lat), grid: this.score.grid6 };
+    },
+
+    // section code -> QSO count, over the QSOs that count (X-QSOs and QTCs
+    // out, same as the world map). A code the map doesn't know (DX, a
+    // miscopy) is kept here but simply has nothing to light up.
+    workedSections() {
+      const worked = new Map();
+      for (const q of this.countedQsos()) {
+        if (this.isQtc(q)) continue;
+        const code = sectionCode(q.section);
+        if (code) worked.set(code, (worked.get(code) || 0) + 1);
+      }
+      return worked;
+    },
+
+    // { worked, total, needed[] } against the map's own section list --
+    // the card header's "N / 85" and the Needed line under the map.
+    sectionTally() {
+      const all = this.sectionMapData ? Object.keys(this.sectionMapData.sections) : [];
+      const worked = this.workedSections();
+      const needed = all.filter((s) => !worked.has(s)).sort();
+      return { worked: all.length - needed.length, total: all.length, needed };
+    },
+
+    // Raw SVG string via x-html, for the same reason as mapDotsSvg(): no
+    // x-for inside an <svg>. Every path, code and name comes from our own
+    // JSON, never from a packet; the text is escaped anyway.
+    sectionMapSvg() {
+      const m = this.sectionMapData;
+      if (!m) return '';
+      const worked = this.workedSections();
+      const out = [];
+      // Flat land/lakes only until the reprojected imagery is ready.
+      if (!this.sectionImagery.base) {
+        out.push(`<path d="${m.land}" class="secmap-land"></path>`);
+        out.push(`<path d="${m.lakes}" class="secmap-lake"></path>`);
+      }
+      for (const b of m.insets) {
+        out.push(`<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="4" class="secmap-inset"></rect>`);
+      }
+      const codes = Object.keys(m.sections);
+      for (const code of codes) {
+        const s = m.sections[code];
+        const n = worked.get(code) || 0;
+        const tip = escapeHtml(`${code} — ${s.name}: ${n ? `${n} QSO${n === 1 ? '' : 's'}` : 'needed'}`);
+        out.push(`<path d="${s.d}" class="secmap-sec${n ? ' secmap-sec--worked' : ''}"><title>${tip}</title></path>`);
+      }
+      // Labels after every shape, so a neighbour's fill never covers one.
+      for (const code of codes) {
+        const s = m.sections[code];
+        const cls = worked.has(code) ? 'secmap-label secmap-label--worked' : 'secmap-label';
+        if (s.ax != null) {
+          out.push(`<line x1="${s.lx}" y1="${s.ly}" x2="${s.ax}" y2="${s.ay}" class="secmap-leader"></line>`);
+          out.push(`<circle cx="${s.ax}" cy="${s.ay}" r="1.6" class="secmap-anchor${worked.has(code) ? ' secmap-anchor--worked' : ''}"></circle>`);
+          // A callout's label sits in open water, so it gets a pill of its
+          // own to carry the worked/needed colour.
+          const w = code.length * 6.4 + 6;
+          out.push(`<rect x="${(s.lx - w / 2).toFixed(1)}" y="${(s.ly - 6.5).toFixed(1)}" width="${w.toFixed(1)}" height="13" rx="3" class="secmap-pill${worked.has(code) ? ' secmap-pill--worked' : ''}"></rect>`);
+        }
+        out.push(`<text x="${s.lx}" y="${s.ly}" font-size="${s.fs}" class="${cls}">${escapeHtml(code)}</text>`);
+      }
+      return out.join('');
     },
 
     // The station's own location, from N1MM's reported transmitter grid
