@@ -774,6 +774,9 @@ body {
   --sec-label:        rgba(230, 237, 243, 0.72);
   --sec-label-worked: #ffffff;
   --sec-halo:         rgba(3, 8, 20, 0.88);
+  /* White worked-section text always sits on a dark green halo: on the
+     light theme's white halo it turned to mush (seen live, 2026-11-08). */
+  --sec-halo-worked:  rgba(8, 48, 20, 0.92);
   --sec-panel-edge:   rgba(255, 255, 255, 0.4);
   --sec-land:         #2a3326;  /* flat land until the imagery is built */
 }
@@ -782,9 +785,9 @@ body {
   --sec-worked:       rgba(34, 120, 58, 0.9);
   --sec-worked-edge:  #0f5a25;
   --sec-new:          rgba(230, 150, 0, 0.95);
-  --sec-label:        rgba(20, 20, 20, 0.75);
+  --sec-label:        #1a1a1a;
   --sec-label-worked: #ffffff;
-  --sec-halo:         rgba(255, 255, 255, 0.85);
+  --sec-halo:         rgba(255, 255, 255, 0.8);
   --sec-panel-edge:   rgba(0, 0, 0, 0.45);
   --sec-land:         #c9c7a8;
 }
@@ -805,7 +808,10 @@ body {
 .secmap-label {
   fill: var(--sec-label);
   stroke: var(--sec-halo);
-  stroke-width: 2.2px;
+  /* Thin and round: in viewBox units it scales with the map, and a fat
+     halo swallows the letters' counters on a big screen. */
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
   paint-order: stroke;
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -813,7 +819,7 @@ body {
   dominant-baseline: central;
   pointer-events: none;
 }
-.secmap-label--worked { fill: var(--sec-label-worked); }
+.secmap-label--worked { fill: var(--sec-label-worked); stroke: var(--sec-halo-worked); }
 .secmap-leader { stroke: var(--sec-edge); stroke-width: 0.5; pointer-events: none; }
 .secmap-anchor { fill: var(--sec-edge); pointer-events: none; }
 .secmap-anchor--worked { fill: var(--sec-worked-edge); }
@@ -824,7 +830,8 @@ body {
 .secmap-inset-title, .secmap-legend text {
   fill: var(--sec-label);
   stroke: var(--sec-halo);
-  stroke-width: 2px;
+  stroke-width: 1px;
+  stroke-linejoin: round;
   paint-order: stroke;
   font-size: 6.5px;
   font-weight: 700;
