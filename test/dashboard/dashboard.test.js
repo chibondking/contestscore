@@ -547,3 +547,12 @@ describe('section map (ARRL Sweepstakes / Field Day)', () => {
     assert.match(d.sectionNightMaskSvg(), /secmap-clip-1/);
   });
 });
+
+describe('section map: index.html viewBox', () => {
+  it("is static and matches sections.json (a bound :viewBox is lowercased and ignored)", () => {
+    const html = fs.readFileSync(path.join(__dirname, '../../public/index.html'), 'utf8');
+    const m = JSON.parse(fs.readFileSync(path.join(__dirname, '../../public/img/map/sections.json'), 'utf8'));
+    assert.ok(!/:viewBox/i.test(html), 'no bound viewBox anywhere');
+    assert.ok(html.includes(`viewBox="0 0 ${m.width} ${m.height}"`));
+  });
+});
