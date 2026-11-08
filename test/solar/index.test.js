@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { createSolarService, parseSolarXml, resolveSolarConfig } = require('../../src/solar');
+const { createSolarService, parseSolarXml, resolveSolarConfig, carryForwardSfi } = require('../../src/solar');
 
 const XML = `<?xml version="1.0"?>
 <solar>
@@ -183,5 +183,51 @@ describe('createSolarService in hamdata mode', () => {
     });
     assert.equal(await svc.refresh(), null);
     assert.equal(svc.getCurrent().sfi, 109);
+  });
+});
+
+describe('SFI 0 from the feed takes the previous reading (CJ, 2026-11-08)', () => {
+  it('carryForwardSfi: only an exact 0 is replaced; null stays null', () => {
+    assert.equal(carryForwardSfi(0, { sfi: 121 }), 121);
+    assert.equal(carryForwardSfi(0, null), null);
+    assert.equal(carryForwardSfi(0, { sfi: 0 }), null);
+    assert.equal(carryForwardSfi(0, { sfi: null }), null);
+    assert.equal(carryForwardSfi(118, { sfi: 121 }), 118);
+    assert.equal(carryForwardSfi(null, { sfi: 121 }), null);
+  });
+
+  it('hamqsl: a 0 is stored as the last SFI, the other indices as sent', async () => {
+    const inserts = [];
+    const svc = createSolarService({
+      io: null,
+      env: {},
+      deps: {
+        fetchImpl: okFetch(XML.replace('<solarflux>109</solarflux>', '<solarflux>0</solarflux>')),
+        insertSolarSnapshot: (r) => inserts.push(r),
+        getLatestSolar: () => ({ ...ROW, sfi: 126 }),
+      },
+    });
+    await svc.refresh();
+    assert.equal(inserts.length, 1);
+    assert.equal(inserts[0].sfi, 126);
+    assert.equal(inserts[0].a, 12);
+    assert.equal(inserts[0].sunspots, 90);
+  });
+
+  it('hamdata copy: a 0 in the middle of a page takes the row before it', async () => {
+    const table = [];
+    const row = (sfi, t) => ({ sfi, a_index: 5, k_index: 1, sunspots: 40, fetched_at: t });
+    const pages = [[row(120, '2026-11-06 20:00:00'), row(0, '2026-11-06 22:00:00'), row(0, '2026-11-07 00:00:00'), row(124, '2026-11-07 02:00:00')]];
+    const svc = createSolarService({
+      io: null,
+      env: { HAMDATA_URL: 'http://127.0.0.1:3100' },
+      deps: {
+        hamdataClient: { solarSince: async () => pages.shift() || [] },
+        insertSolarSnapshot: (r) => table.push({ sfi: r.sfi, fetched_at: r.fetched_at }),
+        getLatestSolar: () => table[table.length - 1] || null,
+      },
+    });
+    await svc.refresh();
+    assert.deepEqual(table.map((r) => r.sfi), [120, 120, 120, 124]);
   });
 });
