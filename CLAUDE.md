@@ -58,6 +58,12 @@ passed that test so far:
   divisions using ARRL's/RAC's county lists; the browser reprojects the
   world map's own ocean/relief/lights imagery into it once
   (`buildSectionImagery()`) and draws the same blurred grayline.
+  Any **other** contest gets a **World | US/VE** switch in the card header
+  (CJ, 2026-11-09, for e.g. MST; per viewer, localStorage
+  `contestpulse_mapview`): US/VE draws the same atlas with nothing worked
+  or needed, and the world map's QSO dots (last 30, band filter)
+  reprojected onto it (`sectionDotPositions()`); DX off North America is
+  simply not drawn there.
   Both maps have a **Save PNG** button in the card header (`exportMap()` /
   `renderMapPng()`): the SVG on screen with computed styles and images
   inlined, drawn at 3x (3000x1500) with a caption strip -- station,

@@ -629,6 +629,11 @@ body {
 /* A second header button (the map's Save PNG, then Show/Hide) sits next to
    the first instead of being pushed apart from it. */
 .card-toggle + .card-toggle { margin-left: 0; }
+/* World | US/VE in the map header (setMapView()): the band buttons' look,
+   taking the right edge in place of the first .card-toggle. */
+.map-views { margin-left: auto; display: inline-flex; gap: 0.25rem; letter-spacing: 0.08em; }
+.map-views .map-band { font-size: 0.7rem; text-transform: none; }
+.map-views ~ .card-toggle { margin-left: 0; } /* ~: each x-if leaves its <template> in between */
 .card-toggle:disabled { opacity: 0.6; cursor: progress; }
 
 /* Mult bell (header): a small toggle-looking button that opens a settings
