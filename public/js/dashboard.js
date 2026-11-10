@@ -385,6 +385,118 @@ async function buildSectionImagery(m, oceanHref, dark, K = 2) {
 }
 
 // ---------------------------------------------------------------------
+// Map export (the card header's "Save PNG"): the map on screen, as a
+// PNG to post or keep. The live <svg> is styled by dashboard.css and draws
+// same-origin / blob: images; an SVG loaded as an <img> can use neither,
+// so the copy gets each element's computed paint inlined and every image
+// inlined as a data: URL, then is drawn to a canvas at 3x with a caption
+// strip (station, contest, count, UTC time) underneath.
+
+// Presentation properties copied from computed style. Not filter/mask/
+// clip-path: those are url(#id) references the elements already carry as
+// attributes, except the dark theme's CSS brightness on the relief, which
+// is copied when it isn't a url().
+const MAP_EXPORT_PROPS = [
+  'display', 'visibility', 'opacity', 'fill', 'fill-opacity', 'fill-rule',
+  'stroke', 'stroke-width', 'stroke-opacity', 'stroke-linejoin', 'stroke-linecap',
+  'stroke-dasharray', 'paint-order', 'font-family', 'font-size', 'font-weight',
+  'letter-spacing', 'text-transform', 'text-anchor', 'dominant-baseline', 'mix-blend-mode',
+];
+
+// "WT2P_ARRL-SS-CW_sections_20261109-1422Z.png" -- anything that isn't a
+// letter, digit or dash (a "/8" portable, spaces) becomes a dash.
+function mapExportFilename({ call, contest, kind, date }) {
+  const clean = (v) => String(v || '').trim().replace(/[^A-Za-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+  const iso = date.toISOString();
+  const stamp = `${iso.slice(0, 10).replace(/-/g, '')}-${iso.slice(11, 13)}${iso.slice(14, 16)}Z`;
+  return [clean(call), clean(contest), kind, stamp].filter(Boolean).join('_') + '.png';
+}
+
+// "2026-11-09 1422Z", the caption's timestamp.
+function mapExportStamp(date) {
+  const iso = date.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 13)}${iso.slice(14, 16)}Z`;
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+async function renderMapPng(svg, { caption, scale = 3 }) {
+  const vb = svg.viewBox.baseVal;
+  const W = Math.round(vb.width * scale);
+  const H = Math.round(vb.height * scale);
+
+  const clone = svg.cloneNode(true);
+  const src = [svg, ...svg.querySelectorAll('*')];
+  const dst = [clone, ...clone.querySelectorAll('*')];
+  src.forEach((el, i) => {
+    const cs = getComputedStyle(el);
+    let style = '';
+    for (const p of MAP_EXPORT_PROPS) {
+      const v = cs.getPropertyValue(p);
+      if (v) style += `${p}:${v};`;
+    }
+    const f = cs.getPropertyValue('filter');
+    if (f && f !== 'none' && !f.includes('url(')) style += `filter:${f};`;
+    dst[i].setAttribute('style', style);
+  });
+  clone.querySelectorAll('title').forEach((t) => t.remove());
+  clone.setAttribute('width', W);
+  clone.setAttribute('height', H);
+
+  const cache = new Map();
+  for (const img of clone.querySelectorAll('image')) {
+    const href = img.getAttribute('href') || img.getAttribute('xlink:href');
+    if (!href || href.startsWith('data:')) continue;
+    if (!cache.has(href)) {
+      cache.set(href, fetch(href).then((r) => r.blob()).then(blobToDataUrl));
+    }
+    img.setAttribute('href', await cache.get(href));
+  }
+
+  const xml = new XMLSerializer().serializeToString(clone);
+  const svgUrl = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml' }));
+  try {
+    const img = new Image();
+    img.src = svgUrl;
+    await img.decode();
+
+    const root = getComputedStyle(document.documentElement);
+    const tok = (n, d) => root.getPropertyValue(n).trim() || d;
+    const capH = Math.round(18 * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H + capH;
+    const c = canvas.getContext('2d');
+    c.fillStyle = tok('--surface', '#0a0a0a');
+    c.fillRect(0, 0, canvas.width, canvas.height);
+    c.drawImage(img, 0, 0, W, H);
+
+    const pad = Math.round(8 * scale);
+    const y = H + capH / 2;
+    c.textBaseline = 'middle';
+    c.font = `700 ${Math.round(9 * scale)}px 'Fira Code', ui-monospace, monospace`;
+    c.fillStyle = tok('--text', '#e6edf3');
+    c.textAlign = 'left';
+    c.fillText(caption.left, pad, y);
+    c.font = `400 ${Math.round(8 * scale)}px 'Fira Code', ui-monospace, monospace`;
+    c.fillStyle = tok('--muted', '#8b949e');
+    c.textAlign = 'right';
+    c.fillText(caption.right, W - pad, y);
+
+    return await new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('toBlob failed'))), 'image/png'));
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+}
+
+// ---------------------------------------------------------------------
 // Grayline (day/night terminator) -- pure date math, no server round trip,
 // so it's recomputed client-side on the same 1s ticker as the UTC clock
 // (see dashboard()'s `now`). Spencer (1971) Fourier-series approximations
@@ -527,6 +639,7 @@ function dashboard() {
     // really set in init() -- this factory runs before any DOM/storage
     // exists in the tests' sandbox, so it can't read either here.
     showWorldMap: true,
+    mapExporting: false, // exportMap() in flight -- the button reads "Saving…"
     // Band filter for the map: 'all', or one of mapBands()' raw band
     // values. A view choice for right now, so it isn't persisted -- a
     // remembered 40m would silently empty the map in the next contest.
@@ -923,6 +1036,45 @@ function dashboard() {
     // Show/hide the world map card, remembered per viewer. A convenience,
     // not state anyone else needs -- so localStorage, and a storage failure
     // (private window, blocked site data) just means it isn't remembered.
+    // "Save PNG" in the map card header -- see renderMapPng(). Whichever
+    // map is showing (section or world), as it looks right now.
+    async exportMap() {
+      if (this.mapExporting) return;
+      const svg = document.querySelector('#worldmap .map-box svg');
+      if (!svg) return;
+      this.mapExporting = true;
+      try {
+        const date = new Date();
+        const call = this.stationCall();
+        const contest = this.score.contest || (this.qsos[0] && this.qsos[0].contestname) || '';
+        const sec = this.sectionContest() && this.sectionMapData;
+        let detail;
+        if (sec) {
+          const t = this.sectionTally();
+          detail = `${t.worked} / ${t.total} sections`;
+        } else {
+          detail = this.mapBand === 'all' ? 'last 30 QSOs' : `last 30 QSOs on ${bandLabel(this.mapBand)}`;
+        }
+        const blob = await renderMapPng(svg, {
+          caption: {
+            left: [call, contest].filter(Boolean).join('  ·  '),
+            right: `${detail}  ·  ${mapExportStamp(date)}`,
+          },
+        });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = mapExportFilename({ call, contest, kind: sec ? 'sections' : 'worldmap', date });
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      } catch (err) {
+        console.error('Map export failed:', err);
+      } finally {
+        this.mapExporting = false;
+      }
+    },
+
     toggleWorldMap() {
       this.showWorldMap = !this.showWorldMap;
       try { localStorage.setItem(WORLDMAP_KEY, this.showWorldMap ? 'shown' : 'hidden'); } catch { /* not remembered */ }

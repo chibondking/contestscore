@@ -208,11 +208,25 @@
         <!-- Per-viewer show/hide, remembered in localStorage (see
              toggleWorldMap()). Collapses to just this header rather than
              removing the card, so the way back is always right here. -->
+        <!-- x-if, not x-show: a hidden button would still be the sibling
+             that `.card-toggle + .card-toggle` keys off. -->
+        <template x-if="showWorldMap">
+          <button type="button" class="card-toggle" @click="exportMap()"
+                  :disabled="mapExporting" title="Download the map as a PNG image"
+                  x-text="mapExporting ? 'Saving…' : 'Save PNG'"></button>
+        </template>
         <button type="button" class="card-toggle" @click="toggleWorldMap()"
                 :aria-expanded="showWorldMap" aria-controls="worldmap-body"
                 x-text="showWorldMap ? 'Hide' : 'Show'"></button>
       </h2>
       <h2 x-show="sectionContest()">ARRL/RAC Sections <span class="map-subtitle" x-show="sectionMapData" x-text="sectionTally().worked + ' / ' + sectionTally().total + ' worked'"></span>
+        <!-- x-if, not x-show: a hidden button would still be the sibling
+             that `.card-toggle + .card-toggle` keys off. -->
+        <template x-if="showWorldMap">
+          <button type="button" class="card-toggle" @click="exportMap()"
+                  :disabled="mapExporting" title="Download the map as a PNG image"
+                  x-text="mapExporting ? 'Saving…' : 'Save PNG'"></button>
+        </template>
         <button type="button" class="card-toggle" @click="toggleWorldMap()"
                 :aria-expanded="showWorldMap" aria-controls="secmap-body"
                 x-text="showWorldMap ? 'Hide' : 'Show'"></button>
