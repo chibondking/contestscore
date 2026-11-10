@@ -635,9 +635,9 @@ describe('map export (Save PNG)', () => {
     assert.equal(sandbox.mapExportStamp(date), '2026-11-09 1422Z');
   });
 
-  it('the header has a Save PNG button on both maps, wired to exportMap()', () => {
+  it('the map header has a Save PNG button, wired to exportMap()', () => {
     const html = fs.readFileSync(path.join(__dirname, '../../public/index.html'), 'utf8');
-    assert.equal((html.match(/@click="exportMap\(\)"/g) || []).length, 2);
+    assert.equal((html.match(/@click="exportMap\(\)"/g) || []).length, 1);
     assert.equal(typeof dashboard().exportMap, 'function');
   });
 });
@@ -684,33 +684,85 @@ describe('US/VE map view for non-section contests', () => {
     assert.equal(pos(null, null).length, 0);
   });
 
-  it('usveMap(): always for a section contest, else the viewer\'s pick', () => {
+  it('defaults to ARRL for an ARRL domestic contest, World otherwise', () => {
     const d = dashboard();
-    d.score = { contest: 'ARRL-SS-CW' };
     d.qsos = [];
-    assert.equal(d.usveMap(), true);
+    d.score = { contest: 'ARRL-SS-CW' };
+    assert.equal(d.mapView(), 'arrl');
+    assert.equal(d.atlasMode(), 'sections');
     d.score = { contest: 'MST' };
-    assert.equal(d.usveMap(), false);
-    d.mapView = 'na';
-    assert.equal(d.usveMap(), true);
+    assert.equal(d.mapView(), 'world');
+    assert.equal(d.atlasMode(), null);
   });
 
-  it('plots the world map\'s dots on the atlas, and not for a section contest', () => {
+  it('a pick holds for the contest it was made in, then falls back to the default', () => {
+    const d = dashboard();
+    d.qsos = [];
+    d.score = { contest: 'MST' };
+    d.setMapView('na');
+    assert.equal(d.mapView(), 'na');
+    assert.equal(d.atlasMode(), 'regions');
+    d.setMapView('arrl');
+    assert.equal(d.atlasMode(), 'plain'); // sections, but nothing worked: not an ARRL contest
+    d.setMapView('bogus');
+    assert.equal(d.mapView(), 'arrl');
+    d.score = { contest: 'ARRL-SS-CW' };
+    assert.equal(d.mapView(), 'arrl');
+    assert.equal(d.atlasMode(), 'sections');
+    d.setMapView('world');
+    assert.equal(d.mapView(), 'world');
+    d.score = { contest: 'CWT' };
+    assert.equal(d.mapView(), 'world');
+  });
+
+  it('US/VE draws state / province borders and the dots, no sections', () => {
     const d = dashboard();
     d.sectionMapData = m;
     d.sectionImagery = { base: '', lights: '' };
-    d.mapView = 'na';
     d.score = { contest: 'MST' };
     d.qsos = [
       { call: 'K0XYZ', band: '20', mode: 'CW', lat: 38.6, lon: -90.2, logged_at: '2026-11-09 20:00:00' },
       { call: 'F5ABC', band: '20', mode: 'CW', lat: 48.85, lon: 2.35, logged_at: '2026-11-09 19:59:00' },
     ];
-    const svg = d.sectionDotsSvg();
-    assert.equal((svg.match(/<circle /g) || []).length, 1);
-    assert.match(svg, /K0XYZ/);
-    assert.doesNotMatch(d.sectionMapSvg(), /secmap-sec--worked/);
-    assert.match(d.sectionMapSvg(), />QSO</); // dot legend, not Worked/Needed
+    d.setMapView('na');
+    const svg = d.sectionMapSvg();
+    assert.match(svg, /class="secmap-state"/);
+    assert.doesNotMatch(svg, /secmap-sec"|secmap-label|secmap-pill/);
+    assert.match(svg, />QSO</);
+    const dots = d.sectionDotsSvg();
+    assert.equal((dots.match(/<circle /g) || []).length, 1);
+    assert.match(dots, /K0XYZ/);
+    assert.equal(d.mapTitle(), 'US/VE Map');
+  });
+
+  it('ARRL in a non-ARRL contest: sections, nothing worked, with the dots', () => {
+    const d = dashboard();
+    d.sectionMapData = m;
+    d.sectionImagery = { base: '', lights: '' };
+    d.score = { contest: 'MST' };
+    d.qsos = [{ call: 'K0XYZ', band: '20', mode: 'CW', lat: 38.6, lon: -90.2, section: 'MO', logged_at: '2026-11-09 20:00:00' }];
+    d.setMapView('arrl');
+    const svg = d.sectionMapSvg();
+    assert.match(svg, /secmap-label/);
+    assert.doesNotMatch(svg, /secmap-sec--worked|secmap-state/);
+    assert.match(svg, />QSO</);
+    assert.match(d.sectionDotsSvg(), /K0XYZ/);
+    assert.equal(d.mapSubtitle(), 'last 30 QSOs');
+  });
+
+  it('ARRL in an ARRL contest: worked sections and the tally, no dots', () => {
+    const d = dashboard();
+    d.sectionMapData = m;
+    d.sectionImagery = { base: '', lights: '' };
     d.score = { contest: 'ARRL-SS-CW' };
+    d.qsos = [{ call: 'K0XYZ', band: '20', mode: 'CW', lat: 38.6, lon: -90.2, section: 'MO', logged_at: '2026-11-09 20:00:00' }];
+    assert.match(d.sectionMapSvg(), /secmap-sec secmap-sec--worked/);
     assert.equal(d.sectionDotsSvg(), '');
+    assert.equal(d.mapSubtitle(), '1 / 85 worked');
+    assert.equal(d.mapTitle(), 'ARRL/RAC Sections');
+  });
+
+  it('sections.json has state / province borders for every panel', () => {
+    for (const k of ['main', 'AK', 'PAC', 'NE']) assert.ok(m.regions[k] && m.regions[k].startsWith('M'), k);
   });
 });
