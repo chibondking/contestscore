@@ -403,6 +403,14 @@ const MAP_EXPORT_PROPS = [
   'letter-spacing', 'text-transform', 'text-anchor', 'dominant-baseline', 'mix-blend-mode',
 ];
 
+// Alpine's own attributes (`:href`, `@click`, `x-html`, `x-show`...) are
+// dropped from the copy. `:href` and friends aren't valid names in a
+// namespaced XML document, so one left in made the whole exported SVG fail
+// to load as an image -- Save PNG did nothing at all (seen live, v1.12.0).
+function mapExportKeepAttr(name) {
+  return !/^(:|@|x-)/.test(name);
+}
+
 // "WT2P_ARRL-SS-CW_sections_20261109-1422Z.png" -- anything that isn't a
 // letter, digit or dash (a "/8" portable, spaces) becomes a dash.
 function mapExportFilename({ call, contest, kind, date }) {
@@ -444,7 +452,11 @@ async function renderMapPng(svg, { caption, scale = 3 }) {
     }
     const f = cs.getPropertyValue('filter');
     if (f && f !== 'none' && !f.includes('url(')) style += `filter:${f};`;
-    dst[i].setAttribute('style', style);
+    const d = dst[i];
+    for (const a of [...d.attributes]) {
+      if (!mapExportKeepAttr(a.name)) d.removeAttribute(a.name);
+    }
+    d.setAttribute('style', style);
   });
   clone.querySelectorAll('title').forEach((t) => t.remove());
   clone.setAttribute('width', W);
@@ -464,8 +476,11 @@ async function renderMapPng(svg, { caption, scale = 3 }) {
   const svgUrl = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml' }));
   try {
     const img = new Image();
-    img.src = svgUrl;
-    await img.decode();
+    await new Promise((res, rej) => {
+      img.onload = res;
+      img.onerror = () => rej(new Error('exported SVG did not load as an image'));
+      img.src = svgUrl;
+    });
 
     const root = getComputedStyle(document.documentElement);
     const tok = (n, d) => root.getPropertyValue(n).trim() || d;
@@ -639,6 +654,7 @@ function dashboard() {
     // really set in init() -- this factory runs before any DOM/storage
     // exists in the tests' sandbox, so it can't read either here.
     showWorldMap: true,
+    mapExportFailed: false, // the button reads "Save failed" for a few seconds
     mapExporting: false, // exportMap() in flight -- the button reads "Saving…"
     // Band filter for the map: 'all', or one of mapBands()' raw band
     // values. A view choice for right now, so it isn't persisted -- a
@@ -1070,6 +1086,8 @@ function dashboard() {
         setTimeout(() => URL.revokeObjectURL(a.href), 10000);
       } catch (err) {
         console.error('Map export failed:', err);
+        this.mapExportFailed = true;
+        setTimeout(() => { this.mapExportFailed = false; }, 4000);
       } finally {
         this.mapExporting = false;
       }
