@@ -210,8 +210,14 @@ shows this per station_id via `GET /api/bridges` (initial load) and the
 stale/offline itself, which is caught by a periodic sweep since by
 definition no event fires when a station just goes quiet).
 
+The binaries are named **`contestscore-agent-<os>-<arch>`** (CJ,
+2026-11-09: one name with the repo, like station-status's agent; rolling
+`contestscore-agent-latest` pre-release). Releases up to v1.11.0 called
+them `contestpulse-*`. The Go source stays in `contestpulse/`, and the
+dashboard's "ContestPulse" header is unrelated and unchanged.
+
 Binaries are cross-compiled for Windows x86-64, Linux x86-64, Linux ARM64,
-and Linux ARMv7 via `.github/workflows/contestpulse-build.yml` (same target
+and Linux ARMv7 via `.github/workflows/contestscore-agent-build.yml` (same target
 matrix as the sibling station-status project's agent) -- N1MM itself only
 runs on Windows, but ContestPulse doesn't need to run on the same machine,
 just somewhere that can see N1MM's LAN broadcasts.
@@ -645,7 +651,7 @@ Dashboard should be readable on a TV across the room.
   The pure suites also run under Deno on a machine without Node
   (`deno test --allow-read --no-check --unstable-detect-cjs`).
 - ContestPulse has its own Go tests (`contestpulse/*_test.go`, run in CI by
-  `.github/workflows/contestpulse-build.yml`).
+  `.github/workflows/contestscore-agent-build.yml`).
 - No E2E browser tests for now; the frontend is thin enough to test manually.
 
 Run tests: `npm test`

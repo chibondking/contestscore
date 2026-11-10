@@ -672,10 +672,10 @@ or **offline** (`bridge:status` socket event / `GET /api/bridges`) instead
 of just silently going quiet during a lull in QSOs.
 
 Pre-built binaries (Windows x86-64, Linux x86-64, Linux ARM64, Linux ARMv7 —
-see `.github/workflows/contestpulse-build.yml`) are on this repo's Releases
-page under the rolling `contestpulse-latest` tag. Configure
+see `.github/workflows/contestscore-agent-build.yml`) are on this repo's Releases
+page under the rolling `contestscore-agent-latest` tag. Configure
 `contestpulse/config.example.json` (`station_id`, `server_url`, `api_token`)
-and run `contestpulse-<platform> config.json` — nothing else to install.
+and run `contestscore-agent-<platform> config.json` — nothing else to install.
 See `contestpulse/` and `deploy/DEPLOY.md` for details.
 
 The contact relay prints every packet's raw bytes to the console as it
