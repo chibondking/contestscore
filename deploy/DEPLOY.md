@@ -82,7 +82,7 @@ the shack computer already has. It also sends a heartbeat every 10s so the
 dashboard can show the feed as realtime / stale / offline.
 
 1. Download the current build from this repo's Releases page
-   (`contestpulse-latest` tag -- Windows x86-64, Linux x86-64, Linux ARM64,
+   (`contestscore-agent-latest` tag -- Windows x86-64, Linux x86-64, Linux ARM64,
    Linux ARMv7; N1MM itself only runs on Windows, but ContestPulse can run
    on any machine that can see N1MM's LAN broadcasts, not necessarily the
    logging PC itself).
@@ -90,7 +90,7 @@ dashboard can show the feed as realtime / stale / offline.
    `config.json`, and fill in `station_id`, `server_url`
    (`https://scoreboard.wt2p.us`), and `api_token` (the same
    `CONTESTSCORE_API_TOKEN` set on the server -- see step 3 below).
-3. Run it: `contestpulse-windows-amd64.exe config.json` (or the matching
+3. Run it: `contestscore-agent-windows-amd64.exe config.json` (or the matching
    binary for whatever runs it). Nothing else to install.
 
 **"N1MMSpot Port: Port In Use Error" on port 12061, running FlexRadio +
@@ -121,7 +121,7 @@ the tunnel had silently dropped, and kept trying to reuse the dead socket.
 Since the fix in `contestpulse/httpclient.go` (short `IdleConnTimeout` plus
 a one-shot retry on a fresh connection after any transport error) it heals
 itself; a build from before that change needs the manual restart. Grab the
-current binary from the `contestpulse-latest` release.
+current binary from the `contestscore-agent-latest` release.
 
 **One relay (usually score, since it's the quietest -- an RTC broadcast
 every ~10s vs. contact's per-QSO traffic) goes silent for minutes with no
@@ -164,7 +164,7 @@ sends one, either way.
 
 **Still went silent on Windows with a build from before v1.1.5?** Two more
 ways a relay could stop for good with nothing logged, both Windows-specific
-and both fixed in v1.1.5 (run `contestpulse-windows-amd64.exe -version` to
+and both fixed in v1.1.5 (run `contestscore-agent-windows-amd64.exe -version` to
 check which build you have; the startup log line shows it too):
 
 - A UDP datagram bigger than the relay's 8 KB read buffer made the read

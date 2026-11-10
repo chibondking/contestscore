@@ -13,7 +13,7 @@
 //
 // Usage:
 //
-//	contestpulse config.json
+//	contestscore-agent config.json
 package main
 
 import (
@@ -25,14 +25,14 @@ import (
 )
 
 // version is stamped at build time by CI (-ldflags "-X main.version=...",
-// see .github/workflows/contestpulse-build.yml) with the contestscore
+// see .github/workflows/contestscore-agent-build.yml) with the contestscore
 // version from package.json plus the commit, so a running binary can be
 // matched to a release. A local `go build` reports "dev".
 var version = "dev"
 
 func main() {
 	if len(os.Args) == 2 && (os.Args[1] == "-version" || os.Args[1] == "--version") {
-		fmt.Println("contestpulse", version)
+		fmt.Println("contestscore-agent", version)
 		return
 	}
 

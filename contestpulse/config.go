@@ -103,12 +103,12 @@ func loadConfig(path string) (*Config, error) {
 // parseFlags is separated from main() so it's testable without touching
 // os.Args in every test.
 func parseFlags(args []string) (configPath string, err error) {
-	fs := flag.NewFlagSet("contestpulse", flag.ContinueOnError)
+	fs := flag.NewFlagSet("contestscore-agent", flag.ContinueOnError)
 	if err := fs.Parse(args); err != nil {
 		return "", err
 	}
 	if fs.NArg() != 1 {
-		return "", fmt.Errorf("usage: contestpulse config.json")
+		return "", fmt.Errorf("usage: contestscore-agent config.json")
 	}
 	return fs.Arg(0), nil
 }

@@ -176,14 +176,15 @@ serve HTTPS (steps below cover Caddy, nginx, or a Cloudflare Tunnel).
 
 5. **Download the bridge** from the
    [Releases page](https://github.com/chibondking/contestscore/releases) —
-   the latest **ContestPulse vX.Y.Z** release:
+   the latest **contestscore-agent vX.Y.Z** release (releases up to
+   v1.11.0 named the same files `contestpulse-*`):
 
    | File | For |
    |---|---|
-   | `contestpulse-windows-amd64.exe` | Windows (e.g. the N1MM PC itself) |
-   | `contestpulse-linux-arm64` | Raspberry Pi 4/5, 64-bit OS |
-   | `contestpulse-linux-armv7` | Raspberry Pi, 32-bit OS |
-   | `contestpulse-linux-amd64` | Linux PC |
+   | `contestscore-agent-windows-amd64.exe` | Windows (e.g. the N1MM PC itself) |
+   | `contestscore-agent-linux-arm64` | Raspberry Pi 4/5, 64-bit OS |
+   | `contestscore-agent-linux-armv7` | Raspberry Pi, 32-bit OS |
+   | `contestscore-agent-linux-amd64` | Linux PC |
 
    It can run on the logging PC or on any machine that receives N1MM's
    broadcasts.
@@ -203,7 +204,7 @@ serve HTTPS (steps below cover Caddy, nginx, or a Cloudflare Tunnel).
    }
    ```
 
-7. **Run it**: `contestpulse-windows-amd64.exe config.json` (or the Linux
+7. **Run it**: `contestscore-agent-windows-amd64.exe config.json` (or the Linux
    file; `chmod +x` it first). Leave it running during the contest. Point
    N1MM at the bridge's machine exactly as in [section A, step 2](#a-on-your-lan).
 

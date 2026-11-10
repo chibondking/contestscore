@@ -1,9 +1,11 @@
-name: contestpulse-build
+name: contestscore-agent-build
 
 # Builds ContestPulse for every target the sibling station-status agent
 # ships — Windows x86-64, Linux x86-64, Linux ARM64, Linux ARMv7 — on every
 # branch push and every merge to main. Merges to main also refresh a
-# rolling "contestpulse-latest" pre-release with the four binaries attached.
+# rolling "contestscore-agent-latest" pre-release with the four
+# contestscore-agent-* binaries attached (ContestPulse, renamed 2026-11-09 to
+# match the repo; the source stays in contestpulse/).
 #
 # N1MM itself only runs on Windows, so Windows x86-64 is the primary target,
 # but ContestPulse doesn't need to run on the same machine as N1MM -- it
@@ -20,7 +22,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: contestpulse-build-${{ github.ref }}
+  group: contestscore-agent-build-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -48,10 +50,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { goos: windows, goarch: amd64, name: contestpulse-windows-amd64.exe }
-          - { goos: linux,   goarch: amd64, name: contestpulse-linux-amd64 }
-          - { goos: linux,   goarch: arm64, name: contestpulse-linux-arm64 }
-          - { goos: linux,   goarch: arm, goarm: '7', name: contestpulse-linux-armv7 }
+          - { goos: windows, goarch: amd64, name: contestscore-agent-windows-amd64.exe }
+          - { goos: linux,   goarch: amd64, name: contestscore-agent-linux-amd64 }
+          - { goos: linux,   goarch: arm64, name: contestscore-agent-linux-arm64 }
+          - { goos: linux,   goarch: arm, goarm: '7', name: contestscore-agent-linux-armv7 }
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -84,21 +86,21 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
-      - name: Roll the contestpulse-latest tag to this commit
+      - name: Roll the contestscore-agent-latest tag to this commit
         # softprops/action-gh-release won't move an existing published tag,
         # so a rolling "latest" needs the tag repointed by hand first.
         run: |
-          git tag -f contestpulse-latest
-          git push -f origin contestpulse-latest
+          git tag -f contestscore-agent-latest
+          git push -f origin contestscore-agent-latest
       - uses: actions/download-artifact@v7
         with:
           path: dist
           merge-multiple: true
-      - name: Refresh rolling "contestpulse-latest" pre-release
+      - name: Refresh rolling "contestscore-agent-latest" pre-release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: contestpulse-latest
-          name: ContestPulse binaries (latest main)
+          tag_name: contestscore-agent-latest
+          name: contestscore-agent binaries (latest main)
           body: >
             Auto-built from ${{ github.sha }} on
             ${{ github.event.head_commit.timestamp }}.
