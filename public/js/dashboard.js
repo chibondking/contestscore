@@ -1,6 +1,9 @@
 // localStorage key for the world map card's per-viewer show/hide (see
 // toggleWorldMap()). Same contestpulse_ prefix as chrome.js's theme key.
 const WORLDMAP_KEY = 'contestpulse_worldmap';
+// ...and its World | US/VE choice for a contest without the section map
+// (setMapView()): 'world' or 'na'.
+const MAPVIEW_KEY = 'contestpulse_mapview';
 
 // ---------------------------------------------------------------------
 // Mult bell: a desk-bell "ding" when a new multiplier is logged. Per viewer
@@ -250,6 +253,31 @@ function sectionFrameFor(frames, lon, lat) {
   if (frames.length > 2 && lon < -150 && lat < 30) return frames[2];
   if (frames.length > 1 && lon < -129 && lat > 51) return frames[1];
   return frames[0];
+}
+
+// Where a QSO dot goes on the US/VE map (sections.json's frames): its own
+// frame (Alaska and Hawaii in their insets), plus the Northeast close-up
+// when it's in there too. [] for anything off the map -- DX well outside
+// North America (the conic would fold Europe or Asia back somewhere
+// misleading), off the edge, or under an inset panel.
+function sectionDotPositions(frames, W, H, lon, lat) {
+  if (lon == null || lat == null || lon < -180 || lon > -40 || lat < 5 || lat > 85) return [];
+  const f = sectionFrameFor(frames, lon, lat);
+  const p = lccForward(f, lon, lat);
+  const out = [];
+  if (f === frames[0]) {
+    if (p.x >= 0 && p.x <= W && p.y >= 0 && p.y <= H && sectionFrameAt(frames, p.x, p.y) === frames[0]) out.push(p);
+  } else {
+    const [bx, by, bw, bh] = f.box;
+    if (p.x >= bx && p.x <= bx + bw && p.y >= by && p.y <= by + bh) out.push(p);
+  }
+  const ne = frames[3];
+  if (ne) {
+    const q = lccForward(ne, lon, lat);
+    const [bx, by, bw, bh] = ne.box;
+    if (q.x >= bx && q.x <= bx + bw && q.y >= by && q.y <= by + bh) out.push(q);
+  }
+  return out;
 }
 
 // Night side of the terminator as one closed path per frame, in that
@@ -664,6 +692,9 @@ function dashboard() {
     // really set in init() -- this factory runs before any DOM/storage
     // exists in the tests' sandbox, so it can't read either here.
     showWorldMap: true,
+    // 'world' or 'na' (US/VE) for a contest without the section map --
+    // usveMap(). Per viewer, under MAPVIEW_KEY; set in init().
+    mapView: 'world',
     mapExportFailed: false, // the button reads "Save failed" for a few seconds
     mapExporting: false, // exportMap() in flight -- the button reads "Saving…"
     // Band filter for the map: 'all', or one of mapBands()' raw band
@@ -815,6 +846,7 @@ function dashboard() {
       // theme (the theme toggle reloads the page, so reading it once here
       // is enough -- same as the Chart.js colors).
       try { this.showWorldMap = localStorage.getItem(WORLDMAP_KEY) !== 'hidden'; } catch { /* keep shown */ }
+      try { this.mapView = localStorage.getItem(MAPVIEW_KEY) === 'na' ? 'na' : 'world'; } catch { /* world */ }
       try { this.multBell = normalizeMultBell(localStorage.getItem(MULTBELL_KEY)); } catch { /* defaults: off */ }
       // Browsers only start audio after a user gesture. Any click or key on
       // the page counts, so unlock on the first one if the bell is on.
@@ -1074,6 +1106,7 @@ function dashboard() {
         const call = this.stationCall();
         const contest = this.score.contest || (this.qsos[0] && this.qsos[0].contestname) || '';
         const sec = this.sectionContest() && this.sectionMapData;
+        const na = !sec && this.usveMap();
         let detail;
         if (sec) {
           const t = this.sectionTally();
@@ -1089,7 +1122,7 @@ function dashboard() {
         });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = mapExportFilename({ call, contest, kind: sec ? 'sections' : 'worldmap', date });
+        a.download = mapExportFilename({ call, contest, kind: sec ? 'sections' : (na ? 'usve' : 'worldmap'), date });
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -1101,6 +1134,19 @@ function dashboard() {
       } finally {
         this.mapExporting = false;
       }
+    },
+
+    setMapView(v) {
+      this.mapView = v === 'na' ? 'na' : 'world';
+      try { localStorage.setItem(MAPVIEW_KEY, this.mapView); } catch { /* not remembered */ }
+    },
+
+    // The card draws the US/VE atlas (sections.json) rather than the world
+    // map: always for a section contest (sections filled in), and on the
+    // viewer's World | US/VE choice for any other (QSO dots, like the world
+    // map's).
+    usveMap() {
+      return this.sectionContest() || this.mapView === 'na';
     },
 
     toggleWorldMap() {
@@ -1246,7 +1292,7 @@ function dashboard() {
         if (!g) {
           g = {
             key: q.ext_id ?? q.id ?? (q.call + q.band + q.mode + q.logged_at),
-            call: q.call, band: q.band, mode: q.mode, mult: false, qsos: [], ...pt,
+            call: q.call, band: q.band, mode: q.mode, mult: false, qsos: [], lat: q.lat, lon: q.lon, ...pt,
           };
           groups.set(id, g);
         }
@@ -1292,18 +1338,31 @@ function dashboard() {
     // verified the same way. Escaped by hand since this is raw HTML now,
     // not Alpine's own auto-escaped x-text.
     mapDotsSvg() {
-      return this.mapPoints().map((p) => {
-        const title = escapeHtml(`${p.call} — ${p.qsos.map((q) => `${bandLabel(q.band)} ${q.mode}${q.mult ? ' MULT' : ''}`).join(', ')}`);
-        const cls = p.mult ? 'worldmap-dot worldmap-dot--mult' : 'worldmap-dot';
-        const r = p.mult ? 4 : 3;
-        // A nested <title> child, not a `title` attribute -- confirmed
-        // that's what actually matters: a bare attribute only feeds the
-        // accessible-name computation (which is why the earlier
-        // getByTitle() check falsely looked like a pass), it does not
-        // trigger a real hover tooltip. <title> is SVG's own, standard
-        // tooltip mechanism.
-        return `<circle cx="${p.x}" cy="${p.y}" r="${r}" class="${cls}"><title>${title}</title></circle>`;
-      }).join('');
+      return this.mapPoints().map((p) => this.mapDotSvg(p, p.x, p.y)).join('');
+    },
+
+    // The same dots on the US/VE map (a non-section contest with US/VE
+    // picked): each reprojected into the atlas, DX off the map dropped.
+    sectionDotsSvg() {
+      const m = this.sectionMapData;
+      if (!m || this.sectionContest()) return '';
+      return this.mapPoints()
+        .map((p) => sectionDotPositions(m.frames, m.width, m.height, p.lon, p.lat)
+          .map((q) => this.mapDotSvg(p, q.x.toFixed(1), q.y.toFixed(1))).join(''))
+        .join('');
+    },
+
+    mapDotSvg(p, x, y) {
+      const title = escapeHtml(`${p.call} — ${p.qsos.map((q) => `${bandLabel(q.band)} ${q.mode}${q.mult ? ' MULT' : ''}`).join(', ')}`);
+      const cls = p.mult ? 'worldmap-dot worldmap-dot--mult' : 'worldmap-dot';
+      const r = p.mult ? 4 : 3;
+      // A nested <title> child, not a `title` attribute -- confirmed
+      // that's what actually matters: a bare attribute only feeds the
+      // accessible-name computation (which is why the earlier
+      // getByTitle() check falsely looked like a pass), it does not
+      // trigger a real hover tooltip. <title> is SVG's own, standard
+      // tooltip mechanism.
+      return `<circle cx="${x}" cy="${y}" r="${r}" class="${cls}"><title>${title}</title></circle>`;
     },
 
     // A section contest (see SECTION_CONTEST_RE) gets the section map in
@@ -1426,14 +1485,18 @@ function dashboard() {
     sectionMapSvg() {
       const m = this.sectionMapData;
       if (!m) return '';
-      const worked = this.workedSections();
-      const fresh = this.newestNewSection();
+      // Plain: the US/VE view of a non-section contest -- the same atlas,
+      // nothing worked or needed, QSO dots on top (sectionDotsSvg()).
+      const plain = !this.sectionContest();
+      const worked = plain ? new Map() : this.workedSections();
+      const fresh = plain ? null : this.newestNewSection();
       const codes = Object.keys(m.sections);
       const flat = !this.sectionImagery.base; // flat land until the imagery is built
       const out = [];
       const shape = (code, d) => {
         const n = worked.get(code) || 0;
-        const tip = escapeHtml(`${code} — ${m.sections[code].name}: ${n ? `${n} QSO${n === 1 ? '' : 's'}` : 'needed'}`);
+        const tip = escapeHtml(plain ? `${code} — ${m.sections[code].name}`
+          : `${code} — ${m.sections[code].name}: ${n ? `${n} QSO${n === 1 ? '' : 's'}` : 'needed'}`);
         const cls = `secmap-sec${n ? ' secmap-sec--worked' : ''}${code === fresh ? ' secmap-sec--new' : ''}`;
         return `<path d="${d}" class="${cls}"><title>${tip}</title></path>`;
       };
@@ -1479,7 +1542,14 @@ function dashboard() {
       }
 
       // Legend.
-      if (m.legend) {
+      if (m.legend && plain) {
+        const [lx, ly] = m.legend;
+        out.push(`<g class="secmap-legend" transform="translate(${lx} ${ly})">`
+          + '<circle cx="4" cy="0" r="3" class="worldmap-dot"></circle><text x="13" y="0">QSO</text>'
+          + '<circle cx="54" cy="0" r="4" class="worldmap-dot worldmap-dot--mult"></circle><text x="63" y="0">Mult</text>'
+          + '<circle cx="104" cy="0" r="4" class="worldmap-home"></circle><text x="112" y="0">Transmitter</text>'
+          + '</g>');
+      } else if (m.legend) {
         const [lx, ly] = m.legend;
         out.push(`<g class="secmap-legend" transform="translate(${lx} ${ly})">`
           + '<rect x="0" y="-4" width="9" height="8" class="secmap-sec secmap-sec--worked"></rect><text x="13" y="0">Worked</text>'

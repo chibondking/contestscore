@@ -514,6 +514,7 @@ describe('section map (ARRL Sweepstakes / Field Day)', () => {
   it('marks worked sections in the SVG', () => {
     const d = dashboard();
     d.sectionMapData = sectionMap;
+    d.score = { contest: 'ARRL-SS-CW' };
     d.qsos = [qso({ section: 'PR' })];
     const svg = d.sectionMapSvg();
     assert.match(svg, /class="secmap-sec secmap-sec--worked"><title>PR — Puerto Rico: 1 QSO<\/title>/);
@@ -649,5 +650,67 @@ describe('map export: Alpine attributes are dropped from the copy', () => {
     for (const n of ['href', 'width', 'd', 'mask', 'class', 'viewBox', 'xlink:href', 'preserveAspectRatio']) {
       assert.equal(sandbox.mapExportKeepAttr(n), true, n);
     }
+  });
+});
+
+describe('US/VE map view for non-section contests', () => {
+  const m = JSON.parse(fs.readFileSync(path.join(__dirname, '../../public/img/map/sections.json'), 'utf8'));
+  const pos = (lon, lat) => sandbox.sectionDotPositions(m.frames, m.width, m.height, lon, lat);
+
+  it('places a CONUS station once on the main map', () => {
+    const p = pos(-90.2, 38.6); // St. Louis
+    assert.equal(p.length, 1);
+    assert.ok(p[0].x > 0 && p[0].x < m.width && p[0].y > 0 && p[0].y < m.height);
+  });
+
+  it('a Northeast station shows on the main map and again in the close-up', () => {
+    assert.equal(pos(-72.7, 41.7).length, 2); // Hartford
+  });
+
+  it('Alaska and Hawaii land in their insets', () => {
+    const ak = pos(-149.9, 61.2);
+    const hi = pos(-157.9, 21.3);
+    assert.equal(ak.length, 1);
+    assert.equal(hi.length, 1);
+    const inBox = (p, f) => p.x >= f.box[0] && p.x <= f.box[0] + f.box[2] && p.y >= f.box[1] && p.y <= f.box[1] + f.box[3];
+    assert.ok(inBox(ak[0], m.frames[1]));
+    assert.ok(inBox(hi[0], m.frames[2]));
+  });
+
+  it('DX off North America gets no dot', () => {
+    assert.equal(pos(2.35, 48.85).length, 0); // Paris
+    assert.equal(pos(139.7, 35.7).length, 0); // Tokyo
+    assert.equal(pos(-58.4, -34.6).length, 0); // Buenos Aires
+    assert.equal(pos(null, null).length, 0);
+  });
+
+  it('usveMap(): always for a section contest, else the viewer\'s pick', () => {
+    const d = dashboard();
+    d.score = { contest: 'ARRL-SS-CW' };
+    d.qsos = [];
+    assert.equal(d.usveMap(), true);
+    d.score = { contest: 'MST' };
+    assert.equal(d.usveMap(), false);
+    d.mapView = 'na';
+    assert.equal(d.usveMap(), true);
+  });
+
+  it('plots the world map\'s dots on the atlas, and not for a section contest', () => {
+    const d = dashboard();
+    d.sectionMapData = m;
+    d.sectionImagery = { base: '', lights: '' };
+    d.mapView = 'na';
+    d.score = { contest: 'MST' };
+    d.qsos = [
+      { call: 'K0XYZ', band: '20', mode: 'CW', lat: 38.6, lon: -90.2, logged_at: '2026-11-09 20:00:00' },
+      { call: 'F5ABC', band: '20', mode: 'CW', lat: 48.85, lon: 2.35, logged_at: '2026-11-09 19:59:00' },
+    ];
+    const svg = d.sectionDotsSvg();
+    assert.equal((svg.match(/<circle /g) || []).length, 1);
+    assert.match(svg, /K0XYZ/);
+    assert.doesNotMatch(d.sectionMapSvg(), /secmap-sec--worked/);
+    assert.match(d.sectionMapSvg(), />QSO</); // dot legend, not Worked/Needed
+    d.score = { contest: 'ARRL-SS-CW' };
+    assert.equal(d.sectionDotsSvg(), '');
   });
 });

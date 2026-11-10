@@ -204,10 +204,18 @@
       <!-- ARRL Sweepstakes and Field Day (dashboard.js SECTION_CONTEST_RE)
            swap the world map for the ARRL/RAC section map, worked sections
            filled in. Same card, same Show/Hide, same 2:1 shape. -->
-      <h2 x-show="!sectionContest()">World Map <span class="map-subtitle" x-text="mapBand === 'all' ? 'last 30 QSOs' : ('last 30 QSOs on ' + bandLabel(mapBand))"></span>
+      <h2 x-show="!sectionContest()"><span x-text="mapView === 'na' ? 'US/VE Map' : 'World Map'"></span> <span class="map-subtitle" x-text="mapBand === 'all' ? 'last 30 QSOs' : ('last 30 QSOs on ' + bandLabel(mapBand))"></span>
         <!-- Per-viewer show/hide, remembered in localStorage (see
              toggleWorldMap()). Collapses to just this header rather than
              removing the card, so the way back is always right here. -->
+        <!-- World | US/VE (setMapView(), per viewer): any contest without
+             the section map can draw its QSO dots on the US/VE atlas. -->
+        <template x-if="showWorldMap">
+          <span class="map-views" role="group" aria-label="Map view">
+            <button type="button" class="map-band" :aria-pressed="mapView === 'world'" @click="setMapView('world')">World</button>
+            <button type="button" class="map-band" :aria-pressed="mapView === 'na'" @click="setMapView('na')">US/VE</button>
+          </span>
+        </template>
         <!-- x-if, not x-show: a hidden button would still be the sibling
              that `.card-toggle + .card-toggle` keys off. -->
         <template x-if="showWorldMap">
@@ -233,7 +241,18 @@
       </h2>
       <!-- x-if, not x-show: a hidden map shouldn't keep recomputing the
            terminator every second or hold its images in the layout. -->
-      <template x-if="showWorldMap && sectionContest()">
+      <!-- The US/VE atlas: a section contest's map, or any other contest's
+           QSO dots with US/VE picked (usveMap()). -->
+      <!-- Band filter: All, or one band. Only offered once the log has more
+           than one band (with one, All already is that band). Dots only, so
+           not for a section contest. -->
+      <div class="map-bands" role="group" aria-label="Show QSOs on band" x-show="showWorldMap && !sectionContest() && qsos.length > 0 && mapBands().length > 1">
+        <button type="button" class="map-band" :aria-pressed="mapBand === 'all'" @click="mapBand = 'all'">All</button>
+        <template x-for="b in mapBands()" :key="b">
+          <button type="button" class="map-band" :aria-pressed="mapBand === b" @click="mapBand = b" x-text="bandLabel(b)"></button>
+        </template>
+      </div>
+      <template x-if="showWorldMap && usveMap()">
       <div id="secmap-body" x-init="loadSectionMap()">
         <div class="map-box secmap-box" x-show="sectionMapData">
           <!-- Same layering as the world map: ocean + relief, then the
@@ -269,27 +288,20 @@
             <!-- x-html on a <g>, like the world map's dots -- see
                  sectionMapSvg() in dashboard.js. -->
             <g x-html="sectionMapSvg()"></g>
+            <g x-html="sectionDotsSvg()"></g>
             <g x-html="sectionHomeSvg()"></g>
           </svg>
         </div>
-        <p class="secmap-needed" x-show="sectionMapData && sectionTally().needed.length">
+        <p class="secmap-needed" x-show="sectionContest() && sectionMapData && sectionTally().needed.length">
           <span class="secmap-needed-label" x-text="'Needed (' + sectionTally().needed.length + ')'"></span>
           <span x-text="sectionTally().needed.join(' ')"></span>
         </p>
-        <p class="secmap-needed secmap-sweep" x-show="sectionMapData && sectionTally().total && !sectionTally().needed.length">Clean sweep -- every section worked</p>
+        <p class="secmap-needed secmap-sweep" x-show="sectionContest() && sectionMapData && sectionTally().total && !sectionTally().needed.length">Clean sweep -- every section worked</p>
         <p class="empty" x-show="!sectionMapData">Loading section map…</p>
       </div>
       </template>
-      <template x-if="showWorldMap && !sectionContest()">
+      <template x-if="showWorldMap && !usveMap()">
       <div id="worldmap-body">
-      <!-- Band filter: All, or one band. Only offered once the log has more
-           than one band (with one, All already is that band). -->
-      <div class="map-bands" role="group" aria-label="Show QSOs on band" x-show="mapBands().length > 1">
-        <button type="button" class="map-band" :aria-pressed="mapBand === 'all'" @click="mapBand = 'all'">All</button>
-        <template x-for="b in mapBands()" :key="b">
-          <button type="button" class="map-band" :aria-pressed="mapBand === b" @click="mapBand = b" x-text="bandLabel(b)"></button>
-        </template>
-      </div>
       <!-- x-if, not x-show: with no QSOs there's nothing to plot, so the
            map (and its every-second terminator recompute) isn't rendered at
            all -- the empty-state line below takes its place. -->
