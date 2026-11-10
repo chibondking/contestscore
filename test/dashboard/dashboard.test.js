@@ -640,3 +640,14 @@ describe('map export (Save PNG)', () => {
     assert.equal(typeof dashboard().exportMap, 'function');
   });
 });
+
+describe('map export: Alpine attributes are dropped from the copy', () => {
+  it('drops :bound, @event and x- attributes; keeps real SVG ones', () => {
+    for (const n of [':href', ':width', ':d', '@click', 'x-html', 'x-show']) {
+      assert.equal(sandbox.mapExportKeepAttr(n), false, n);
+    }
+    for (const n of ['href', 'width', 'd', 'mask', 'class', 'viewBox', 'xlink:href', 'preserveAspectRatio']) {
+      assert.equal(sandbox.mapExportKeepAttr(n), true, n);
+    }
+  });
+});
