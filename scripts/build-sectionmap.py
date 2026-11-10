@@ -24,6 +24,9 @@ downloaded into SRC_DIR (default ./mapsrc):
     / lakes.geojson, for the background (Mexico, Greenland, the Caribbean,
     the Great Lakes) -- github.com/nvkelso/natural-earth-vector, geojson/
 
+The US/VE view (no sections) also gets plain state and province outlines
+(`regions`, one path per panel) from the same county and province data.
+
 Section boundaries: ARRL's https://www.arrl.org/section-boundaries for the
 split US states (county lists below), RAC for Ontario (2012 four-way split,
 Hamilton + Niagara moved to GH in 2020). Each split state names every
@@ -539,8 +542,10 @@ def main_build():
             for name in names.split(', '):
                 lookup[(st, name)] = sec
 
+    states = defaultdict(list)       # state / province -> raw rings, for the US/VE view
     for row, rings in shapefile('cb_2023_us_county_20m'):
         st, name = row['STUSPS'], row['NAME']
+        states[st].extend(rings)
         sec = lookup.get((st, name)) or DEFAULT_SECTION.get(st, st)
         if (st, name) in lookup:
             used[st].add(name)
@@ -552,6 +557,7 @@ def main_build():
     for row, rings in shapefile('cb_2023_us_state_5m'):
         if row['STUSPS'] == 'VI':
             groups['VI'].extend(rings)
+            states['VI'].extend(rings)
 
     on_lookup = {}
     for sec, names in ONTARIO.items():
@@ -569,6 +575,7 @@ def main_build():
         sys.exit('Ontario census division(s) not found: %s' % ', '.join(sorted(missing)))
 
     for feat in json.load(open(src('prov.geojson')))['features']:
+        states['CA' + feat['properties']['PRUID']].extend(geojson_rings(feat['geometry']))
         sec = PROVINCE.get(feat['properties']['PRUID'])
         if sec:
             groups[sec].extend(geojson_rings(feat['geometry']))
@@ -650,6 +657,25 @@ def main_build():
     for e in sections.values():
         del e['_anchor']
 
+    # The US/VE view (no ARRL sections): state and province outlines, one
+    # path per panel -- borders to stroke, nothing to fill or label.
+    regions = defaultdict(list)
+    for code in sorted(states):
+        rings = outline(states[code])
+        if code in ('CA60', 'CA61', 'CA62'):
+            tol, min_area = COARSE['TER']
+        elif code.startswith('CA') and code not in ('CA11', 'CA12', 'CA13'):
+            tol, min_area = 0.6, 0.6
+        else:
+            tol, min_area = SIMPLIFY, 0.15
+        if code in ('AK', 'HI'):
+            key = 'AK' if code == 'AK' else 'PAC'
+            regions[key] += project_into(rings, INSETS[key], frame_box(INSETS[key]), SIMPLIFY, 0.15, pad=40)
+            continue
+        regions['main'] += project_into(rings, main, full, tol, min_area)
+        if any(w_ <= lon <= e_ and s_ <= lat <= n_ for r in rings for lon, lat in r[::3]):
+            regions['NE'] += project_into(rings, ne_frame, frame_box(ne_frame), SIMPLIFY, 0.1)
+
     def background(name, frame, box, min_area):
         out = []
         for feat in json.load(open(src(name)))['features']:
@@ -688,6 +714,7 @@ def main_build():
         'neRegion': ne_region,
         'legend': legend,
         'sections': sections,
+        'regions': {k: path(v) for k, v in regions.items()},
     }
     with open(OUT, 'w') as f:
         json.dump(out, f, separators=(',', ':'))

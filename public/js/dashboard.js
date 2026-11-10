@@ -1,9 +1,11 @@
 // localStorage key for the world map card's per-viewer show/hide (see
 // toggleWorldMap()). Same contestpulse_ prefix as chrome.js's theme key.
 const WORLDMAP_KEY = 'contestpulse_worldmap';
-// ...and its World | US/VE choice for a contest without the section map
-// (setMapView()): 'world' or 'na'.
+// ...and its World | US/VE | ARRL pick (setMapView()), as
+// {"contest": <name>, "view": "world"|"na"|"arrl"} -- it holds only for the
+// contest it was picked in, so the next contest opens on its own default.
 const MAPVIEW_KEY = 'contestpulse_mapview';
+const MAP_VIEWS = ['world', 'na', 'arrl'];
 
 // ---------------------------------------------------------------------
 // Mult bell: a desk-bell "ding" when a new multiplier is logged. Per viewer
@@ -692,9 +694,9 @@ function dashboard() {
     // really set in init() -- this factory runs before any DOM/storage
     // exists in the tests' sandbox, so it can't read either here.
     showWorldMap: true,
-    // 'world' or 'na' (US/VE) for a contest without the section map --
-    // usveMap(). Per viewer, under MAPVIEW_KEY; set in init().
-    mapView: 'world',
+    // The viewer's map pick, { contest, view } or null -- see mapView().
+    // Per viewer, under MAPVIEW_KEY; set in init().
+    mapViewPick: null,
     mapExportFailed: false, // the button reads "Save failed" for a few seconds
     mapExporting: false, // exportMap() in flight -- the button reads "Saving…"
     // Band filter for the map: 'all', or one of mapBands()' raw band
@@ -846,7 +848,7 @@ function dashboard() {
       // theme (the theme toggle reloads the page, so reading it once here
       // is enough -- same as the Chart.js colors).
       try { this.showWorldMap = localStorage.getItem(WORLDMAP_KEY) !== 'hidden'; } catch { /* keep shown */ }
-      try { this.mapView = localStorage.getItem(MAPVIEW_KEY) === 'na' ? 'na' : 'world'; } catch { /* world */ }
+      try { this.mapViewPick = JSON.parse(localStorage.getItem(MAPVIEW_KEY)); } catch { /* the default */ }
       try { this.multBell = normalizeMultBell(localStorage.getItem(MULTBELL_KEY)); } catch { /* defaults: off */ }
       // Browsers only start audio after a user gesture. Any click or key on
       // the page counts, so unlock on the first one if the bell is on.
@@ -1105,10 +1107,9 @@ function dashboard() {
         const date = new Date();
         const call = this.stationCall();
         const contest = this.score.contest || (this.qsos[0] && this.qsos[0].contestname) || '';
-        const sec = this.sectionContest() && this.sectionMapData;
-        const na = !sec && this.usveMap();
+        const mode = this.atlasMode();
         let detail;
-        if (sec) {
+        if (mode === 'sections' && this.sectionMapData) {
           const t = this.sectionTally();
           detail = `${t.worked} / ${t.total} sections`;
         } else {
@@ -1122,7 +1123,7 @@ function dashboard() {
         });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = mapExportFilename({ call, contest, kind: sec ? 'sections' : (na ? 'usve' : 'worldmap'), date });
+        a.download = mapExportFilename({ call, contest, kind: { regions: 'usve', sections: 'sections', plain: 'sections' }[mode] || 'worldmap', date });
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -1136,17 +1137,48 @@ function dashboard() {
       }
     },
 
-    setMapView(v) {
-      this.mapView = v === 'na' ? 'na' : 'world';
-      try { localStorage.setItem(MAPVIEW_KEY, this.mapView); } catch { /* not remembered */ }
+    mapContestKey() {
+      return this.score.contest || (this.qsos[0] && this.qsos[0].contestname) || '';
     },
 
-    // The card draws the US/VE atlas (sections.json) rather than the world
-    // map: always for a section contest (sections filled in), and on the
-    // viewer's World | US/VE choice for any other (QSO dots, like the world
-    // map's).
-    usveMap() {
-      return this.sectionContest() || this.mapView === 'na';
+    // Which map the card draws: 'world', 'na' (US/VE: states and
+    // provinces) or 'arrl' (the sections). The viewer's pick while it's
+    // the contest they picked it in; otherwise ARRL for an ARRL domestic
+    // contest (SECTION_CONTEST_RE), World for anything else (CJ, 2026-11-09).
+    mapView() {
+      const p = this.mapViewPick;
+      if (p && MAP_VIEWS.includes(p.view) && p.contest === this.mapContestKey()) return p.view;
+      return this.sectionContest() ? 'arrl' : 'world';
+    },
+
+    setMapView(v) {
+      if (!MAP_VIEWS.includes(v)) return;
+      this.mapViewPick = { contest: this.mapContestKey(), view: v };
+      try { localStorage.setItem(MAPVIEW_KEY, JSON.stringify(this.mapViewPick)); } catch { /* not remembered */ }
+    },
+
+    // How the atlas (sections.json) is drawn, or null for the world map:
+    // 'sections' -- ARRL in an ARRL contest: worked / needed, no dots;
+    // 'plain'    -- ARRL in any other contest: section outlines + QSO dots;
+    // 'regions'  -- US/VE: state / province outlines + QSO dots.
+    atlasMode() {
+      const v = this.mapView();
+      if (v === 'world') return null;
+      if (v === 'na') return 'regions';
+      return this.sectionContest() ? 'sections' : 'plain';
+    },
+
+    mapTitle() {
+      return { world: 'World Map', na: 'US/VE Map', arrl: 'ARRL/RAC Sections' }[this.mapView()];
+    },
+
+    mapSubtitle() {
+      if (this.atlasMode() === 'sections') {
+        if (!this.sectionMapData) return '';
+        const t = this.sectionTally();
+        return `${t.worked} / ${t.total} worked`;
+      }
+      return this.mapBand === 'all' ? 'last 30 QSOs' : `last 30 QSOs on ${bandLabel(this.mapBand)}`;
     },
 
     toggleWorldMap() {
@@ -1345,7 +1377,7 @@ function dashboard() {
     // picked): each reprojected into the atlas, DX off the map dropped.
     sectionDotsSvg() {
       const m = this.sectionMapData;
-      if (!m || this.sectionContest()) return '';
+      if (!m || this.atlasMode() === 'sections') return '';
       return this.mapPoints()
         .map((p) => sectionDotPositions(m.frames, m.width, m.height, p.lon, p.lat)
           .map((q) => this.mapDotSvg(p, q.x.toFixed(1), q.y.toFixed(1))).join(''))
@@ -1485,9 +1517,13 @@ function dashboard() {
     sectionMapSvg() {
       const m = this.sectionMapData;
       if (!m) return '';
-      // Plain: the US/VE view of a non-section contest -- the same atlas,
-      // nothing worked or needed, QSO dots on top (sectionDotsSvg()).
-      const plain = !this.sectionContest();
+      // atlasMode(): 'sections' fills in worked sections; 'plain' and
+      // 'regions' show nothing worked or needed, with the QSO dots on top
+      // (sectionDotsSvg()), and 'regions' draws states / provinces in place
+      // of the sections.
+      const mode = this.atlasMode() || 'sections';
+      const plain = mode !== 'sections';
+      const regions = mode === 'regions' && m.regions;
       const worked = plain ? new Map() : this.workedSections();
       const fresh = plain ? null : this.newestNewSection();
       const codes = Object.keys(m.sections);
@@ -1509,11 +1545,12 @@ function dashboard() {
       if (flat) {
         out.push(`<path d="${m.land}" class="secmap-land"></path>`, `<path d="${m.lakes}" class="secmap-lake"></path>`);
       }
-      for (const code of codes) if (m.sections[code].frame === 0) out.push(shape(code, m.sections[code].d));
+      if (regions) out.push(`<path d="${regions.main}" class="secmap-state"></path>`);
+      else for (const code of codes) if (m.sections[code].frame === 0) out.push(shape(code, m.sections[code].d));
       out.push(`<path d="${m.neRegion}" class="secmap-region"></path>`);
 
       // Main-map labels and callouts, after every shape so no fill covers one.
-      for (const code of codes) {
+      for (const code of regions ? [] : codes) {
         const s = m.sections[code];
         if (s.frame !== 0 || s.lx == null) continue;
         if (s.ax != null) {
@@ -1530,7 +1567,8 @@ function dashboard() {
       for (const b of m.insets) {
         out.push(`<g clip-path="url(#secmap-box-${b.key})">`);
         if (flat) out.push(`<path d="${b.land}" class="secmap-land"></path>`, `<path d="${b.lakes}" class="secmap-lake"></path>`);
-        const inPanel = codes.filter((c) => (b.key === 'NE' ? m.sections[c].ne : m.sections[c].frame === b.frame));
+        if (regions) out.push(`<path d="${regions[b.key] || ''}" class="secmap-state"></path>`);
+        const inPanel = regions ? [] : codes.filter((c) => (b.key === 'NE' ? m.sections[c].ne : m.sections[c].frame === b.frame));
         for (const code of inPanel) out.push(shape(code, b.key === 'NE' ? m.sections[code].ne.d : m.sections[code].d));
         for (const code of inPanel) {
           const s = b.key === 'NE' ? m.sections[code].ne : m.sections[code];

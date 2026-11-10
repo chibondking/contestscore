@@ -809,6 +809,13 @@ body {
   stroke-linejoin: round;
 }
 .secmap-sec--worked { fill: var(--sec-worked); }
+/* US/VE view: state and province borders, nothing to fill. */
+.secmap-state {
+  fill: none;
+  stroke: var(--sec-edge);
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+}
 .secmap-sec:hover { fill: rgba(255, 201, 77, 0.4); }
 /* Newly worked: a minute of amber pulse, so the room sees it land. */
 .secmap-sec--new { animation: secmap-new 1.4s ease-in-out 40; }
