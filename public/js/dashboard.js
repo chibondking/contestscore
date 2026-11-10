@@ -459,6 +459,13 @@ async function renderMapPng(svg, { caption, scale = 3 }) {
     d.setAttribute('style', style);
   });
   clone.querySelectorAll('title').forEach((t) => t.remove());
+  // index.html's comments inside the <svg> use "--" freely, which XML
+  // forbids in a comment -- one left in and the copy won't parse (seen
+  // live, v1.12.0, after the attribute fix). The copy needs none of them.
+  const walker = document.createTreeWalker(clone, NodeFilter.SHOW_COMMENT);
+  const comments = [];
+  while (walker.nextNode()) comments.push(walker.currentNode);
+  comments.forEach((n) => n.remove());
   clone.setAttribute('width', W);
   clone.setAttribute('height', H);
 
@@ -473,6 +480,9 @@ async function renderMapPng(svg, { caption, scale = 3 }) {
   }
 
   const xml = new XMLSerializer().serializeToString(clone);
+  // An <img> only says "error"; the XML parser says why.
+  const bad = new DOMParser().parseFromString(xml, 'image/svg+xml').querySelector('parsererror');
+  if (bad) throw new Error(`exported SVG is not well-formed: ${bad.textContent.trim().slice(0, 300)}`);
   const svgUrl = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml' }));
   try {
     const img = new Image();
