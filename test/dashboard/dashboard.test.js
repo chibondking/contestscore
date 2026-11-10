@@ -614,3 +614,29 @@ describe('section map: layout (2:1, insets, labels)', () => {
     assert.equal(d.newestNewSection(), null);
   });
 });
+
+describe('map export (Save PNG)', () => {
+  const date = new Date('2026-11-09T14:22:41Z');
+
+  it('names the file call_contest_kind_UTCstamp.png', () => {
+    assert.equal(sandbox.mapExportFilename({ call: 'WT2P', contest: 'ARRL-SS-CW', kind: 'sections', date }),
+      'WT2P_ARRL-SS-CW_sections_20261109-1422Z.png');
+  });
+
+  it('turns a portable stroke or spaces into dashes and drops blanks', () => {
+    assert.equal(sandbox.mapExportFilename({ call: 'WT2P/8', contest: 'CQ WW', kind: 'worldmap', date }),
+      'WT2P-8_CQ-WW_worldmap_20261109-1422Z.png');
+    assert.equal(sandbox.mapExportFilename({ call: '', contest: '', kind: 'worldmap', date }),
+      'worldmap_20261109-1422Z.png');
+  });
+
+  it('captions with a UTC stamp', () => {
+    assert.equal(sandbox.mapExportStamp(date), '2026-11-09 1422Z');
+  });
+
+  it('the header has a Save PNG button on both maps, wired to exportMap()', () => {
+    const html = fs.readFileSync(path.join(__dirname, '../../public/index.html'), 'utf8');
+    assert.equal((html.match(/@click="exportMap\(\)"/g) || []).length, 2);
+    assert.equal(typeof dashboard().exportMap, 'function');
+  });
+});

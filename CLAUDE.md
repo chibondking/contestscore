@@ -57,7 +57,11 @@ passed that test so far:
   `scripts/build-sectionmap.py` from Census counties + StatCan census
   divisions using ARRL's/RAC's county lists; the browser reprojects the
   world map's own ocean/relief/lights imagery into it once
-  (`buildSectionImagery()`) and draws the same blurred grayline;
+  (`buildSectionImagery()`) and draws the same blurred grayline.
+  Both maps have a **Save PNG** button in the card header (`exportMap()` /
+  `renderMapPng()`): the SVG on screen with computed styles and images
+  inlined, drawn at 3x (3000x1500) with a caption strip -- station,
+  contest, count, UTC time. Client-side only, nothing new on the server;
 - the **TUI** (`tui/`, 2026-10-09) -- the same results core in a
   terminal, for watching a contest over SSH on the box itself with no
   browser in the way (`npm run tui`, defaults to `http://localhost:3000`;

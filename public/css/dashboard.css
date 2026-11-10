@@ -626,6 +626,10 @@ body {
   cursor: pointer;
 }
 .card-toggle:hover { color: var(--text); border-color: var(--muted); }
+/* A second header button (the map's Save PNG, then Show/Hide) sits next to
+   the first instead of being pushed apart from it. */
+.card-toggle + .card-toggle { margin-left: 0; }
+.card-toggle:disabled { opacity: 0.6; cursor: progress; }
 
 /* Mult bell (header): a small toggle-looking button that opens a settings
    popover. Lit in --accent when the bell is on, so a glance at the header
