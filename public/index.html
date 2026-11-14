@@ -308,12 +308,21 @@
             <mask id="worldmap-night-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="500">
               <path :d="nightPolygonPath()" fill="#fff" filter="url(#worldmap-soft)"></path>
             </mask>
+            <!-- Lakes: land.webp's source (ne_50m_land) counts lakes as land,
+                 so the Great Lakes etc. are cut out of it here and the ocean
+                 shows through, same as the section map's lake cut.
+                 lakes.svg is black lakes on transparent; see
+                 scripts/build-worldmap.py. -->
+            <mask id="worldmap-lakes-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="500">
+              <rect x="0" y="0" width="1000" height="500" fill="#fff"></rect>
+              <image href="/img/map/lakes.svg" x="0" y="0" width="1000" height="500" preserveAspectRatio="none"></image>
+            </mask>
           </defs>
           <!-- Ocean: per-theme image (dark navy / lighter blues), picked once
                in init() -- the theme toggle reloads the page, and binding
                the href means only one of the two is ever downloaded. -->
           <image :href="mapOceanHref" x="0" y="0" width="1000" height="500" preserveAspectRatio="none"></image>
-          <image href="/img/map/land.webp" class="worldmap-land" x="0" y="0" width="1000" height="500" preserveAspectRatio="none"></image>
+          <image href="/img/map/land.webp" class="worldmap-land" mask="url(#worldmap-lakes-mask)" x="0" y="0" width="1000" height="500" preserveAspectRatio="none"></image>
           <image href="/img/map/borders.svg" x="0" y="0" width="1000" height="500" preserveAspectRatio="none"></image>
           <!-- Grayline: a tint plus city lights, both only where the mask
                says it's night. Over the land so night reads as night, under

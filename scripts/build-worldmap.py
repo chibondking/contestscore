@@ -11,6 +11,7 @@ downloaded into SRC_DIR (default ./mapsrc):
     OB_50M/OB_50M.tif  50m ocean-bottom shaded relief (bathymetry)
                      https://naciscdn.org/naturalearth/50m/raster/OB_50M.zip
     land.geojson     ne_50m_land            (github.com/nvkelso/natural-earth-vector)
+    lakes.geojson    ne_50m_lakes           (same repo, geojson/)
     borders.geojson  ne_110m_admin_0_boundary_lines_land
   NASA Earth Observatory "Black Marble" 2016, 0.1 deg grayscale (public domain)
     blackmarble.jpg  https://eoimages.gsfc.nasa.gov/images/imagerecords/144000/144897/BlackMarble_2016_01deg_gray.jpg
@@ -20,21 +21,25 @@ projection as dashboard.js's projectLatLon(), so they stack in the map's
 1000x500 viewBox with no reprojection. Rasters are 2000x1000 (2x the
 viewBox) so they stay sharp on a high-DPI screen.
 
-  python3 scripts/build-worldmap.py [SRC_DIR]
+ne_50m_land counts lakes as land, so the land mask cuts ne_50m_lakes back
+out (the Great Lakes, Great Slave, Baikal, ...). lakes.svg carries the same
+lakes as a vector the dashboard masks the land image with, so the shoreline
+stays sharp and a land.webp built before the lake cut still shows them.
+
+  python3 scripts/build-worldmap.py [SRC_DIR]             # everything
+  python3 scripts/build-worldmap.py [SRC_DIR] --vectors   # borders.svg +
+      lakes.svg only: stdlib, needs just the two geojson files
 """
 import json
 import os
 import sys
 
-import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
-
-SRC = sys.argv[1] if len(sys.argv) > 1 else 'mapsrc'
+ARGS = [a for a in sys.argv[1:] if not a.startswith('--')]
+VECTORS_ONLY = '--vectors' in sys.argv[1:]
+SRC = ARGS[0] if ARGS else 'mapsrc'
 OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'img', 'map')
 W, H = 2000, 1000
 SS = 4  # supersampling for the rasterized land mask's coastline edge
-
-Image.MAX_IMAGE_PIXELS = None
 
 
 def src(name):
@@ -52,20 +57,78 @@ def rings(geom):
 
 
 def land_mask():
-    """ne_50m_land rasterized to an antialiased 0-255 alpha mask."""
+    """ne_50m_land minus ne_50m_lakes, rasterized to an antialiased 0-255
+    alpha mask. Lakes are drawn after all land so a lake can't be refilled
+    by a later land polygon; a lake's own holes are its islands."""
+    from PIL import Image, ImageDraw
     w, h = W * SS, H * SS
     mask = Image.new('L', (w, h), 0)
     draw = ImageDraw.Draw(mask)
-    for feat in json.load(open(src('land.geojson')))['features']:
-        for outer, holes in rings(feat['geometry']):
-            draw.polygon([xy(lon, lat, w, h) for lon, lat in outer], fill=255)
-            for hole in holes:
-                draw.polygon([xy(lon, lat, w, h) for lon, lat in hole], fill=0)
+    for name, fill in (('land.geojson', 255), ('lakes.geojson', 0)):
+        for feat in json.load(open(src(name)))['features']:
+            for outer, holes in rings(feat['geometry']):
+                draw.polygon([xy(lon, lat, w, h) for lon, lat in outer], fill=fill)
+                for hole in holes:
+                    draw.polygon([xy(lon, lat, w, h) for lon, lat in hole], fill=255 - fill)
     return mask.resize((W, H), Image.LANCZOS)
+
+
+def svg_path(lines, closed, min_size=0, step=0):
+    """Lon/lat point lists as one path in the 1000x500 viewBox, rounded to
+    0.1 and with repeated points dropped (at 50m most lake vertices collapse
+    onto each other at this scale). Closed rings under min_size viewBox
+    units across are skipped: smaller than a raster pixel. With step, a
+    point within step units of the last one kept is dropped too."""
+    parts = []
+    for line in lines:
+        pts = []
+        for lon, lat in line:
+            x, y = xy(lon, lat, 1000, 500)
+            p = f'{x:.1f},{y:.1f}'
+            if pts and (pts[-1] == p or (step and abs(x - lx) < step and abs(y - ly) < step)):
+                continue
+            pts.append(p)
+            lx, ly = x, y
+        if len(pts) < (3 if closed else 2):
+            continue
+        if closed and min_size:
+            xs = [float(q.split(',')[0]) for q in pts]
+            ys = [float(q.split(',')[1]) for q in pts]
+            if max(max(xs) - min(xs), max(ys) - min(ys)) < min_size:
+                continue
+        parts.append('M' + 'L'.join(pts) + ('Z' if closed else ''))
+    return ''.join(parts)
+
+
+def write_vectors():
+    # Country borders: vector, in the 1000x500 viewBox space, one path. The
+    # dashboard draws this file as an <image>, which page CSS can't reach
+    # into, so the stroke is set here -- a translucent near-black that reads
+    # on the relief colors in both themes.
+    lines = []
+    for feat in json.load(open(src('borders.geojson')))['features']:
+        g = feat['geometry']
+        lines += [g['coordinates']] if g['type'] == 'LineString' else g['coordinates']
+    with open(os.path.join(OUT, 'borders.svg'), 'w') as f:
+        f.write('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500">\n'
+                '<path fill="none" stroke="#141414" stroke-opacity="0.5" stroke-width="0.6" '
+                f'stroke-linejoin="round" d="{svg_path(lines, False)}"/>\n</svg>\n')
+
+    # Lakes: black on transparent, for the dashboard's land mask (a mask
+    # reads luminance, so black = cut). evenodd keeps lake islands
+    # (Manitoulin, Isle Royale) as land.
+    rings_ = []
+    for feat in json.load(open(src('lakes.geojson')))['features']:
+        for outer, holes in rings(feat['geometry']):
+            rings_ += [outer, *holes]
+    with open(os.path.join(OUT, 'lakes.svg'), 'w') as f:
+        f.write('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500">\n'
+                f'<path fill="#000" fill-rule="evenodd" d="{svg_path(rings_, True, 0.5, 0.2)}"/>\n</svg>\n')
 
 
 def ramp(lum, stops):
     """Map a 0..1 luminance array onto a list of (pos, (r,g,b)) color stops."""
+    import numpy as np
     pos = np.array([p for p, _ in stops])
     out = np.zeros(lum.shape + (3,), dtype=np.float32)
     for c in range(3):
@@ -75,6 +138,14 @@ def ramp(lum, stops):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
+    write_vectors()
+    if VECTORS_ONLY:
+        report()
+        return
+
+    import numpy as np
+    from PIL import Image
+    Image.MAX_IMAGE_PIXELS = None
 
     # Land: relief colors, ocean cut away to transparent so the theme's own
     # ocean layer shows through (and so the coastline follows the vector
@@ -107,22 +178,10 @@ def main():
     lights[..., 3] = alpha
     Image.fromarray(lights, 'RGBA').save(os.path.join(OUT, 'lights.webp'), quality=80, method=6)
 
-    # Country borders: vector, in the 1000x500 viewBox space, one path. The
-    # dashboard draws this file as an <image>, which page CSS can't reach
-    # into, so the stroke is set here -- a translucent near-black that reads
-    # on the relief colors in both themes.
-    parts = []
-    for feat in json.load(open(src('borders.geojson')))['features']:
-        g = feat['geometry']
-        lines = [g['coordinates']] if g['type'] == 'LineString' else g['coordinates']
-        for line in lines:
-            pts = [xy(lon, lat, 1000, 500) for lon, lat in line]
-            parts.append('M' + 'L'.join(f'{x:.1f},{y:.1f}' for x, y in pts))
-    with open(os.path.join(OUT, 'borders.svg'), 'w') as f:
-        f.write('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 500">\n'
-                '<path fill="none" stroke="#141414" stroke-opacity="0.5" stroke-width="0.6" '
-                f'stroke-linejoin="round" d="{"".join(parts)}"/>\n</svg>\n')
+    report()
 
+
+def report():
     for name in sorted(os.listdir(OUT)):
         print(f'{name:18} {os.path.getsize(os.path.join(OUT, name)) // 1024:5d} KB')
 
