@@ -49,6 +49,16 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 
+	// Before anything else logs, so the file has the startup line too.
+	logPath := resolveLogPath(cfg.LogFile, configPath)
+	if logPath != "" {
+		if f, err := openLogFile(logPath, os.Stderr); err != nil {
+			log.Printf("log_file %q: %v -- logging to the console only", logPath, err)
+		} else {
+			defer f.Close()
+		}
+	}
+
 	base := strings.TrimRight(cfg.ServerURL, "/") + "/api/ingest"
 	// Contact traffic (QSOs, edits, deletes) is held until the server
 	// takes it, so a server restart or a network blip doesn't lose QSOs --
@@ -69,6 +79,9 @@ func main() {
 
 	log.Printf("ContestPulse %s starting: station=%q server=%s (radio :%d, contact :%d, score :%d, heartbeat every %.0fs)",
 		version, cfg.StationID, cfg.ServerURL, cfg.RadioPort, cfg.ContactPort, cfg.ScorePort, cfg.HeartbeatIntervalSeconds)
+	if logPath != "" {
+		log.Printf("also logging to %s", logPath)
+	}
 	for _, r := range relays {
 		go r.run()
 	}
