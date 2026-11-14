@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { contactPacket } = require('../../tools/n1mm-backfill');
+const { contactPacket, qtcKind, rowSummary } = require('../../tools/n1mm-backfill');
 const { parseContact } = require('../../src/parsers/contact');
 
 // A real DXLOG row (N1MM+ .s3db, ICWC-MST 2026-09-29), as node:sqlite returns it.
@@ -40,5 +40,39 @@ describe('n1mm-backfill contactPacket', () => {
   it('only a backfill packet sets logged_at; a live N1MM one leaves it to the server', async () => {
     const live = contactPacket(ROW, { mycall: 'K9CT' }).replace(/<app>[^<]*<\/app>/, '<app>N1MM</app>');
     assert.equal((await parseContact(Buffer.from(live))).logged_at, null);
+  });
+});
+
+// Real DXLOG QTC row shape (WT2P WAE SSB 2026-09-13): each QTC is its own
+// row with its own ID; Exchange1 says which way it went.
+const QTC = {
+  ...ROW, TS: '2026-09-13 16:20:53', Call: 'LZ5R', Band: 21, Freq: 21250, QSXFreq: 21250, Mode: 'USB',
+  ContestName: 'WAESSB', ContestNR: 27, Exchange1: 'SQTC', MiscText: '5/9', SentNr: 326, NR: 25,
+  Points: 1, IsMultiplier1: 0, ID: '4c741a1c56af4af9a52e188fba230955',
+};
+
+describe('n1mm-backfill QTCs', () => {
+  for (const kind of ['SQTC', 'RQTC']) {
+    it(`a ${kind} row reaches the server as a QTC with its own ID`, async () => {
+      const q = await parseContact(Buffer.from(contactPacket({ ...QTC, Exchange1: kind }, { mycall: 'WT2P' })));
+      assert.equal(q.exchange1, kind);
+      assert.match(q.exchange1, /QTC/i); // the dashboard's isQtc()
+      assert.equal(q.ext_id, '4c741a1c56af4af9a52e188fba230955');
+      assert.equal(q.call, 'LZ5R');
+      assert.equal(q.points, 1);
+    });
+  }
+
+  it('qtcKind tells sent from received, and a QSO from either', () => {
+    assert.equal(qtcKind({ Exchange1: 'SQTC' }), 'sent');
+    assert.equal(qtcKind({ Exchange1: 'rqtc ' }), 'received');
+    assert.equal(qtcKind({ Exchange1: '' }), null);
+    assert.equal(qtcKind({ Exchange1: null }), null);
+  });
+
+  it('rowSummary counts QSOs and QTCs separately', () => {
+    assert.equal(rowSummary([ROW, ROW]), '2 QSOs');
+    assert.equal(rowSummary([ROW, { Exchange1: 'SQTC' }, { Exchange1: 'RQTC' }, { Exchange1: 'RQTC' }]),
+      '1 QSOs + 3 QTCs (1 sent, 2 received)');
   });
 });
