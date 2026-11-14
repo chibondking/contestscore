@@ -15,6 +15,14 @@
  * and later live edits/deletes still find it. Deleted QSOs aren't sent:
  * N1MM moves those to its DELETEDQS contest (ContestNR -1).
  *
+ * WAE QTCs come along: N1MM stores each one in DXLOG as its own row (own
+ * ID, Exchange1 "SQTC" sent / "RQTC" received), so they're sent like any
+ * other row and the board shows them as QTCs. This is the way to get
+ * received QTCs onto the board at all -- N1MM broadcasts the QTCs you send
+ * but, as seen live in WAE RTTY 2026-11-14, not the ones you receive.
+ * --dry-run prints the sent/received counts and a sample QTC packet, so
+ * you can check a log actually holds them before sending.
+ *
  * Packets are tagged <app>ContestScore-Backfill</app>, which tells the
  * server to keep N1MM's own timestamp as the QSO's logged_at (see
  * src/parsers/contact.js) so the rate meter and charts aren't spiked with
@@ -117,6 +125,23 @@ function contactPacket(r, { mycall, sentExchange }) {
 </contactinfo>`;
 }
 
+// Same test as the dashboard's isQtc(): N1MM's Exchange1 "SQTC" / "RQTC".
+function qtcKind(r) {
+  const x = String(r.Exchange1 || '').trim().toUpperCase();
+  return x === 'SQTC' ? 'sent' : x === 'RQTC' ? 'received' : /QTC/.test(x) ? 'other' : null;
+}
+
+// "120 QSOs" or "120 QSOs + 14 QTCs (10 sent, 4 received)".
+function rowSummary(rows) {
+  const k = { sent: 0, received: 0, other: 0 };
+  for (const r of rows) { const q = qtcKind(r); if (q) k[q]++; }
+  const qtcs = k.sent + k.received + k.other;
+  const qsos = rows.length - qtcs;
+  if (!qtcs) return `${qsos} QSOs`;
+  const parts = [`${k.sent} sent`, `${k.received} received`, ...(k.other ? [`${k.other} other`] : [])];
+  return `${qsos} QSOs + ${qtcs} QTCs (${parts.join(', ')})`;
+}
+
 function listContests(db) {
   return db.prepare(`
     SELECT ci.ContestNR AS nr, ci.ContestName AS name, ci.StartDate AS start,
@@ -163,11 +188,13 @@ async function main() {
   const sentExchange = instance ? instance.SentExchange : '';
   const rows = db.prepare('SELECT * FROM DXLOG WHERE ContestNR = ? ORDER BY TS').all(contest.nr);
 
-  console.log(`${contest.name} (ContestNR ${contest.nr}): ${rows.length} QSOs, ${contest.first} -> ${contest.last} UTC, mycall ${mycall}`);
+  console.log(`${contest.name} (ContestNR ${contest.nr}): ${rowSummary(rows)}, ${contest.first} -> ${contest.last} UTC, mycall ${mycall}`);
   if (!rows.length) return;
 
   if (flag('dry-run')) {
     console.log('\nFirst packet:\n' + contactPacket(rows[0], { mycall, sentExchange }));
+    const qtc = rows.find((r) => qtcKind(r) === 'received') || rows.find((r) => qtcKind(r));
+    if (qtc && qtc !== rows[0]) console.log(`\nFirst ${qtcKind(qtc)} QTC packet:\n` + contactPacket(qtc, { mycall, sentExchange }));
     return;
   }
 
@@ -208,4 +235,4 @@ if (require.main === module) {
   main().catch((err) => { console.error(err.message || err); process.exit(1); });
 }
 
-module.exports = { contactPacket, BACKFILL_APP };
+module.exports = { contactPacket, qtcKind, rowSummary, BACKFILL_APP };

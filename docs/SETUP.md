@@ -227,6 +227,12 @@ node tools/n1mm-backfill.js WT2P.s3db --contest latest \
      --api https://scoreboard.example.org --token <the same token>
 ```
 
+WAE QTCs are included, sent and received. N1MM broadcasts the QTCs you
+send but not the ones you receive, so in WAE RTTY (where QTCs go both
+ways) this is how received QTCs get onto the board. It's safe to re-run
+during the contest: QSOs already on the board are updated, not doubled.
+`--dry-run` shows how many of each the log holds.
+
 Pick the right contest from the listing first: one database holds every
 contest it has ever logged. It's safe to run while the bridge is live,
 and to run again: QSOs already on the board are updated, not duplicated,
