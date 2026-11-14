@@ -6,5 +6,6 @@
   "contact_port": 12061,
   "score_port": 12062,
   "heartbeat_interval_seconds": 10,
-  "log_contact_packets": true
+  "log_contact_packets": true,
+  "log_file": "contestscore-agent.log"
 }

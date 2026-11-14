@@ -200,9 +200,16 @@ serve HTTPS (steps below cover Caddy, nginx, or a Cloudflare Tunnel).
      "contact_port": 12061,
      "score_port": 12062,
      "heartbeat_interval_seconds": 10,
-     "log_contact_packets": true
+     "log_contact_packets": true,
+     "log_file": "contestscore-agent.log"
    }
    ```
+
+   `log_file` is optional: everything the bridge prints is also appended
+   to that file (next to `config.json` unless you give a full path).
+   The Windows console doesn't allow selecting text, so the file is the
+   place to search or copy from. With `log_contact_packets` on, it shows
+   every packet N1MM sent, e.g. whether a WAE QTC was broadcast at all.
 
 7. **Run it**: `contestscore-agent-windows-amd64.exe config.json` (or the Linux
    file; `chmod +x` it first). Leave it running during the contest. Point

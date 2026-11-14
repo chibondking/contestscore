@@ -53,6 +53,11 @@ type Config struct {
 	// exactly as it does today; set it to false once you don't want the
 	// noise anymore.
 	LogContactPackets *bool `json:"log_contact_packets"`
+
+	// LogFile, when set, appends everything the agent prints to this file
+	// as well as the console -- see logfile.go. A relative path is taken
+	// from this config file's folder. Empty (the default) = console only.
+	LogFile string `json:"log_file"`
 }
 
 const (
