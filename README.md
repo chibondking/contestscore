@@ -433,6 +433,17 @@ of what the page chooses to render. The exact value still lives in
 `radio_state` server-side (useful for a future authenticated view); it just
 never gets forwarded to a client.
 
+The same goes for each logged QSO: the newest QSO's frequency is the
+running frequency a few seconds later, so `rx_freq`/`tx_freq` are stripped
+from `GET /api/qsos` and the `contact:new` socket payload too
+(`publicQso()`, same file), leaving the logger's own `band`. The `qsos`
+table keeps the exact value. A from-live analyzer snapshot doesn't copy
+the frequency columns either.
+
+A dashboard that loses its connection (a server restart, a Wi-Fi blip on a
+wall display) reloads its whole state when it reconnects, so QSOs logged
+in the gap appear without a manual page reload.
+
 ## REST API
 
 | Method | Path                    | Description                                          |
@@ -440,7 +451,7 @@ never gets forwarded to a client.
 | GET    | `/api/version`          | Commit + deploy timestamp, for spotting a stale/cached page |
 | GET    | `/api/features`         | Optional-feature switches the dashboard reads (`lookup.enabled`, `solar.enabled`) |
 | GET    | `/api/solar`            | Latest space-weather reading (`sfi/a/k/sunspots/updated`), or `{ updated: null }` |
-| GET    | `/api/qsos`             | All QSOs. Filters: `?band=20&mode=CW&operator=W1OP`  |
+| GET    | `/api/qsos`             | All QSOs (`band`, never the exact frequency). Filters: `?band=20&mode=CW&operator=W1OP`  |
 | GET    | `/api/score`            | Latest score snapshot (`total`/`score_total` both present) |
 | GET    | `/api/score/history`    | Full score time series                               |
 | GET    | `/api/radios`           | Current state of all radios (`band`, never the exact frequency) |
@@ -467,7 +478,7 @@ curl -X DELETE http://localhost:3000/api/db -H "X-Confirm: yes"
 | Event            | Payload                                          |
 |------------------|---------------------------------------------------|
 | `radio:update`   | Latest state for one radio (`band`, never the exact frequency) |
-| `contact:new`    | New QSO logged (also fires on a `contactreplace` edit-in-place) |
+| `contact:new`    | New QSO logged (also fires on a `contactreplace` edit-in-place); `band`, never the exact frequency |
 | `contact:delete` | QSO deleted in N1MM+                             |
 | `score:update`   | Current score snapshot, including `grid6`        |
 | `lookup:result`  | Callsign lookup result (N1MM `<lookupinfo>` or HamQTH) |

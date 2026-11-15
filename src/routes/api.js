@@ -12,7 +12,7 @@ const { getVersionInfo } = require('../version');
 const { resolveLookupConfig, stripSuffix } = require('../lookup');
 const { getLookupService, getUdpListeners } = require('../udp');
 const { resolveSolarConfig, latestSolar } = require('../solar');
-const { freqToBand } = require('../parsers/util');
+const { freqToBand, publicQso } = require('../parsers/util');
 const { getDb } = require('../db');
 const { resolveLatLonEnriched, ctyInfo } = require('../analyze/geo');
 const { getTenant } = require('../tenant');
@@ -221,7 +221,8 @@ router.get('/qsos', (req, res) => {
 // to know which of those cases it is.
 function withLatLon(qso) {
   const cached = qso.call ? getCachedLocation(stripSuffix(qso.call)) : null;
-  return { ...qso, ...(resolveLatLonEnriched(qso, cached) || {}) };
+  // publicQso: never the exact rx_freq/tx_freq -- see src/parsers/util.js.
+  return { ...publicQso(qso), ...(resolveLatLonEnriched(qso, cached) || {}) };
 }
 
 // GET /api/score

@@ -42,4 +42,15 @@ function freqToBand(freqHz) {
   return match ? match[2] : null;
 }
 
-module.exports = { tensOfHzToHz, freqToBand };
+// A QSO row as a public viewer may see it: without rx_freq/tx_freq. The
+// newest QSO's frequency IS the running frequency, a few seconds old, so
+// leaving it on /api/qsos or the contact:new socket payload undoes the
+// radio-side scrub above. `band` (the logger's own field) stays. The exact
+// value still lives in the qsos table, server-side only.
+function publicQso(qso) {
+  if (!qso) return qso;
+  const { rx_freq, tx_freq, ...rest } = qso;
+  return rest;
+}
+
+module.exports = { tensOfHzToHz, freqToBand, publicQso };

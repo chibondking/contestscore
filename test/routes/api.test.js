@@ -182,6 +182,22 @@ describe('GET /api/qsos (world map lat/lon)', () => {
   });
 });
 
+describe('GET /api/qsos frequency scrub', () => {
+  it('never returns a QSO\'s exact rx_freq/tx_freq -- only its band', async () => {
+    upsertQso({
+      ext_id: 'freq1', call: 'DL1ABC', band: '21', mode: 'RTTY',
+      rx_freq: '21120300', tx_freq: '21120300',
+    });
+    const res = await fetch(`${baseUrl}/api/qsos`);
+    const q = (await res.json()).find((r) => r.ext_id === 'freq1');
+    assert.ok(q);
+    assert.equal('rx_freq' in q, false);
+    assert.equal('tx_freq' in q, false);
+    assert.equal(q.band, '21');
+    assert.equal(JSON.stringify(q).includes('21120300'), false);
+  });
+});
+
 describe('GET /api/radios', () => {
   it('never returns the exact freq/tx_freq -- only the derived band', async () => {
     upsertRadio({

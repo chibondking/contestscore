@@ -745,7 +745,7 @@ function dashboard() {
     init() {
       const socket = io();
 
-      socket.on('connect',    () => { this.connected = true; this.touch(); });
+      socket.on('connect',    () => this.onSocketConnect());
       socket.on('disconnect', () => { this.connected = false; });
 
       socket.on('radio:update', (data) => {
@@ -1650,6 +1650,21 @@ function dashboard() {
       pts[0] = `M-40,${edgeY}L${pts[0].slice(1)}`;
       pts.push(`L1040,${edgeY}`, `L1040,${padPoleY}`, `L-40,${padPoleY}`, 'Z');
       return pts.join('');
+    },
+
+    // Events emitted while this page was disconnected (a server restart, a
+    // Wi-Fi blip on a wall display) are gone for good -- socket.io doesn't
+    // replay them. So every connect after the first reloads the whole state
+    // over REST, same as the TUI's `connects > 1` (tui/index.js). The first
+    // connect doesn't: init() has already called fetchInitialState().
+    onSocketConnect() {
+      this.connected = true;
+      this.socketConnects = (this.socketConnects || 0) + 1;
+      if (this.socketConnects > 1) {
+        this.fetchInitialState();
+        this.fetchBusts();
+      }
+      this.touch();
     },
 
     async fetchInitialState() {
