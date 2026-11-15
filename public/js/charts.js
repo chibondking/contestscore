@@ -290,7 +290,10 @@ function charts() {
       const stamps = this.scoreHistory.map((s) => new Date(s.captured_at).getTime());
       const multiDay = stamps.length > 1 && stamps[stamps.length - 1] - stamps[0] >= 24 * 3600000;
       const labels = stamps.map((t) => utcLabel(t, multiDay));
-      const values = this.scoreHistory.map((s) => (s.score_total != null ? s.score_total : s.points));
+      // A logger that sends no <score> leaves score_total at 0 throughout;
+      // fall back to the points line for it rather than a flat zero.
+      const hasScore = this.scoreHistory.some((s) => Number(s.score_total) > 0);
+      const values = this.scoreHistory.map((s) => (hasScore ? Number(s.score_total) || 0 : s.points));
 
       if (scoreChart) {
         scoreChart.data.labels = labels;

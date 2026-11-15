@@ -807,9 +807,28 @@ describe('scoreSparklineValues', () => {
     assert.deepEqual([...d.scoreSparklineValues()], [2, 10626]);
   });
 
-  it('falls back to points for a row with no score_total', () => {
+  it('falls back to points for a logger that never sends a score', () => {
     const d = dashboard();
-    d.scoreHistory = [{ points: 7 }, { points: 9, score_total: 0 }];
-    assert.deepEqual([...d.scoreSparklineValues()], [7, 0]);
+    d.scoreHistory = [{ points: 7, score_total: 0 }, { points: 9, score_total: 0 }];
+    assert.deepEqual([...d.scoreSparklineValues()], [7, 9]);
+  });
+
+  it('keeps a real zero at the start of a scored contest (no mult yet)', () => {
+    const d = dashboard();
+    d.scoreHistory = [{ points: 3, score_total: 0 }, { points: 5, score_total: 10 }];
+    assert.deepEqual([...d.scoreSparklineValues()], [0, 10]);
+  });
+
+  it('plots a DXLog score the same way -- it sends <score> on its timer posts', () => {
+    const d = dashboard();
+    d.scoreHistory = [
+      { soft: 'DXLog', points: 11, mults: 10, score_total: 110, captured_at: '2026-10-01T00:00:00.000Z' },
+      { soft: 'DXLog', points: 11, mults: 10, score_total: 110, captured_at: '2026-10-01T00:05:00.000Z' },
+      { soft: 'DXLog', points: 14, mults: 11, score_total: 154, captured_at: '2026-10-01T00:10:00.000Z' },
+    ];
+    assert.deepEqual([...d.scoreSparklineValues()], [110, 110, 154]);
+    // ...and the interval is still measured from every post, including the
+    // one where the score didn't move.
+    assert.equal(d.scoreIntervalMinutes(), 5);
   });
 });
