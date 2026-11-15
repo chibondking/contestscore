@@ -180,6 +180,30 @@ function prepare() {
     SELECT * FROM score_snapshots WHERE is_total = 1 ORDER BY captured_at ASC
   `);
 
+  // The same series with the repeats dropped: only the first total row and
+  // each one whose contest / score / QSO / point / mult figures differ from
+  // the row before it. A logger re-broadcasts its score every few seconds
+  // whether or not anything changed (N1MM: ~8,600 rows a day), so the full
+  // history is thousands of identical rows between QSOs -- fine for a
+  // "when did we last hear a score" check, wasteful for drawing a line.
+  const _getScoreChanges = db.prepare(`
+    SELECT * FROM (
+      SELECT s.*,
+        LAG(contest)     OVER w AS _pc,
+        LAG(score_total) OVER w AS _pt,
+        LAG(qsos)        OVER w AS _pq,
+        LAG(points)      OVER w AS _pp,
+        LAG(mults)       OVER w AS _pm,
+        ROW_NUMBER()     OVER w AS _rn
+      FROM score_snapshots s
+      WHERE is_total = 1
+      WINDOW w AS (ORDER BY captured_at, id)
+    )
+    WHERE _rn = 1 OR _pc IS NOT contest OR _pt IS NOT score_total
+       OR _pq IS NOT qsos OR _pp IS NOT points OR _pm IS NOT mults
+    ORDER BY captured_at ASC, id ASC
+  `);
+
   const _getScoreBreakdown = db.prepare(`
     SELECT * FROM score_snapshots
     WHERE is_total = 0 AND id IN (
@@ -239,6 +263,7 @@ function prepare() {
     insertScoreBreakdown: _insertScoreBreakdown,
     getLatestScore: _getLatestScore,
     getScoreHistory: _getScoreHistory,
+    getScoreChanges: _getScoreChanges,
     getScoreBreakdown: _getScoreBreakdown,
 
     getSetting: db.prepare('SELECT value FROM settings WHERE key = ?'),
@@ -436,7 +461,11 @@ function insertScoreBreakdown(score) {
 }
 
 function getLatestScore()    { return prepare().getLatestScore.get() || null; }
-function getScoreHistory()   { return prepare().getScoreHistory.all(); }
+// changesOnly: drop rows identical to the one before (see _getScoreChanges).
+function getScoreHistory({ changesOnly = false } = {}) {
+  if (!changesOnly) return prepare().getScoreHistory.all();
+  return prepare().getScoreChanges.all().map(({ _pc, _pt, _pq, _pp, _pm, _rn, ...row }) => row);
+}
 function getScoreBreakdown() { return prepare().getScoreBreakdown.all(); }
 
 function getSetting(key) {

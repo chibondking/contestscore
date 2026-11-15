@@ -114,6 +114,22 @@
       </section>
     </template>
 
+    <!-- Conditions: space weather over the session (see conditions.js). Only
+         when readings cover the log. -->
+    <template x-if="hasData && conditions.length">
+      <section class="card card--wide">
+        <h2>Conditions</h2>
+        <dl class="defn-grid">
+          <template x-for="r in conditions" :key="r.label">
+            <div class="defn">
+              <dt x-text="r.label"></dt>
+              <dd x-text="r.value"></dd>
+            </div>
+          </template>
+        </dl>
+      </section>
+    </template>
+
     <!-- Every matrix-shaped breakdown, rendered through one generic table.
          `barKey` names the column that gets an inline horizontal bar;
          `row._cls` marks a highlighted row (the peak hour). -->
@@ -188,6 +204,7 @@
   <footer class="footer"></footer>
 
   <script src="/js/chrome.js"></script>
+  <script src="/js/conditions.js"></script>
   <script src="/js/stats.js"></script>
 </body>
 </html>

@@ -267,6 +267,22 @@ describe('score_snapshots', () => {
     }
   });
 
+  it('getScoreHistory({ changesOnly }) drops broadcasts that repeat the one before', () => {
+    const before = q.getScoreHistory({ changesOnly: true });
+    // The same score three more times, then one that moved.
+    q.insertScoreBreakdown(scoreBatch(50, 100));
+    q.insertScoreBreakdown(scoreBatch(50, 100));
+    q.insertScoreBreakdown(scoreBatch(50, 100));
+    q.insertScoreBreakdown(scoreBatch(51, 102));
+    const after = q.getScoreHistory({ changesOnly: true });
+    assert.equal(after.length, before.length + 1);
+    assert.equal(after.at(-1).qsos, 51);
+    assert.ok(after.every((h) => h.is_total === 1));
+    assert.ok(after.every((h) => !('_rn' in h) && !('_pt' in h)), 'helper columns are stripped');
+    // The full history still has every broadcast.
+    assert.ok(q.getScoreHistory().length >= after.length + 3);
+  });
+
   it('clearQsos also clears score_snapshots', () => {
     q.clearQsos();
     assert.equal(q.getLatestScore(), null);

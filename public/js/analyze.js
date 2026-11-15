@@ -109,7 +109,7 @@ function analyze() {
     async downloadReport() {
       try {
         const body = await fetch(`/api/analyze/${encodeURIComponent(this.logId)}`).then((r) => r.json());
-        const html = renderReport({ meta: body.meta, qsos: body.qsos });
+        const html = renderReport({ meta: body.meta, qsos: body.qsos, solar: await ContestConditions.forSavedLog(body, qTime) });
         const blob = new Blob([html], { type: 'text/html' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -281,7 +281,7 @@ function analyze() {
     async copySummary() {
       try {
         const body = await fetch(`/api/analyze/${encodeURIComponent(this.logId)}`).then((r) => r.json());
-        const text = renderReportText({ meta: body.meta, qsos: body.qsos });
+        const text = renderReportText({ meta: body.meta, qsos: body.qsos, solar: await ContestConditions.forSavedLog(body, qTime) });
         const ok = await copyToClipboard(text);
         this.summaryState = ok ? 'copied' : 'failed';
       } catch (err) {

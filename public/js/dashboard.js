@@ -1698,6 +1698,11 @@ function dashboard() {
       }
     },
 
+    // The full history on purpose, not ?changes=1 (which Charts uses):
+    // scoreIntervalMinutes() measures DXLog's posting interval from the gaps
+    // between consecutive broadcasts, and DXLog posts on a timer whether or
+    // not the score moved -- dropping the unchanged ones would stretch the
+    // measured interval and skew the "score is delayed" note.
     async fetchScoreHistory() {
       try {
         this.scoreHistory = await fetch('/api/score/history').then((r) => r.json());
@@ -1741,10 +1746,23 @@ function dashboard() {
     // the header. Chart.js instances are kept in the closure variables
     // above dashboard()'s return, not on `this` -- see the top-of-file
     // comment for why.
+    // The Score card's trend line: the contest score at each broadcast.
+    // score_total is the score (points x mults); `points` on the same row is
+    // QSO points alone, which this used to plot -- a different shape, and
+    // flat whenever a new multiplier was what moved the score.
+    // A logger whose Score broadcast carries no <score> at all leaves
+    // score_total at 0 on every row; for that one the points line is still
+    // the best trend there is, so fall back to it rather than draw a flat
+    // zero. (N1MM and DXLog both send <score>.)
+    scoreSparklineValues() {
+      const hasScore = this.scoreHistory.some((s) => Number(s.score_total) > 0);
+      return this.scoreHistory.map((s) => (hasScore ? Number(s.score_total) || 0 : s.points));
+    },
+
     renderScoreSparkline() {
       const canvas = document.getElementById('scoreSparkline');
       if (!canvas || typeof Chart === 'undefined') return;
-      const values = this.scoreHistory.map((s) => s.points);
+      const values = this.scoreSparklineValues();
 
       if (scoreSparkline) {
         scoreSparkline.data.labels = values.map((_, i) => i);

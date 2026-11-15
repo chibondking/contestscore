@@ -343,7 +343,11 @@ look of [wt2p.us](https://wt2p.us)). It's remembered per browser.
   (`src/analyze/geo.js`), fill-only, never overriding the packet.
 - **`/charts.html` (Charts)** — the visual counterpart to the Stats page.
   Top of page: QSO rate and score over time, plus a QSOs-by-operator bar
-  chart. A **Detailed view** toggle (off by default, remembered per-browser)
+  chart. Time axes are UTC (`13:40z`, with the date once a chart spans a
+  day), and a break in operating shows as a rate of zero. When space-weather
+  readings cover the log, the grid below leads with **QSO Rate vs. K-index**:
+  rate as bars, K stepped across them on its own 0–9 axis, SFI and A in the
+  tooltip. A **Detailed view** toggle (off by default, remembered per-browser)
   reveals three per-operator time series: rate, score contribution, and
   multiplier contribution. Below that, always shown once there's data, a
   "more charts" grid: cumulative QSOs / points / multipliers; QSOs by band,
@@ -367,7 +371,12 @@ look of [wt2p.us](https://wt2p.us)). It's remembered per browser.
   mults, run %, best 60′, bands, DXCC, pts/Q); an **Hourly Breakdown** with
   cumulative columns and the peak hour highlighted; **Run vs. S&P** by band;
   **Multipliers by Band**; **QSOs by Continent & Band**; **Top DXCC
-  Entities**; **Points-per-QSO** and **Callsign Length** distributions; and
+  Entities**; and, when space-weather readings cover the log, **Conditions**
+  (the current reading, and the SFI / sunspot / A / K range over the
+  session), SFI / A / K columns on every hour of the Hourly Breakdown, and
+  two **Rate by K-index** tables (QSOs per active hour at each K seen, split
+  by continent and by band — `public/js/conditions.js`, shared with Charts
+  and the analyzer report); **Points-per-QSO** and **Callsign Length** distributions; and
   **CQ Zones** / **Sections** worked. The header dropdown scopes every
   section (except the leaderboard) to one operator. All computed client-side
   from `/api/qsos` and live-refreshed via the same socket events the main
@@ -403,7 +412,11 @@ look of [wt2p.us](https://wt2p.us)). It's remembered per browser.
   (`X-QSO`, or ADIF `APP_N1MM_ISCLAIMEDQSO=0`) lines are surfaced but kept
   out of every count. `/compare?a=<id>&b=<id>` puts two saved analyses side
   by side with per-metric and per-band deltas; a **Download report** button
-  saves a self-contained HTML summary; and with the admin token the upload
+  saves a self-contained HTML summary; the Stats and Charts conditions
+  views (above) apply to a saved analysis too, and the report carries the
+  same Conditions section — from the readings a from-live snapshot was
+  saved with, or, for any other log, whatever this server recorded over the
+  log's own time span; and with the admin token the upload
   page lists every saved analysis with open/delete. An ADIF export from
   N1MM also
   carries points, multipliers, per-operator and run/S&P data; a bare
@@ -451,9 +464,10 @@ in the gap appear without a manual page reload.
 | GET    | `/api/version`          | Commit + deploy timestamp, for spotting a stale/cached page |
 | GET    | `/api/features`         | Optional-feature switches the dashboard reads (`lookup.enabled`, `solar.enabled`) |
 | GET    | `/api/solar`            | Latest space-weather reading (`sfi/a/k/sunspots/updated`), or `{ updated: null }` |
+| GET    | `/api/solar/history`    | Readings covering `?from=&to=` (UTC `YYYY-MM-DD HH:MM:SS`), led by the one in effect at `from` |
 | GET    | `/api/qsos`             | All QSOs (`band`, never the exact frequency). Filters: `?band=20&mode=CW&operator=W1OP`  |
 | GET    | `/api/score`            | Latest score snapshot (`total`/`score_total` both present) |
-| GET    | `/api/score/history`    | Full score time series                               |
+| GET    | `/api/score/history`    | Full score time series; `?changes=1` returns only the broadcasts where the score moved |
 | GET    | `/api/radios`           | Current state of all radios (`band`, never the exact frequency) |
 | GET    | `/api/rate`             | N1MM-style rate meter: QSOs/hr for trailing 10/30/60 min |
 | GET    | `/api/bridges`          | Realtime/stale/offline status per ContestPulse station |
