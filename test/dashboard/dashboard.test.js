@@ -766,3 +766,33 @@ describe('US/VE map view for non-section contests', () => {
     for (const k of ['main', 'AK', 'PAC', 'NE']) assert.ok(m.regions[k] && m.regions[k].startsWith('M'), k);
   });
 });
+
+describe('onSocketConnect', () => {
+  function stub() {
+    const d = dashboard();
+    const calls = { state: 0, busts: 0 };
+    d.fetchInitialState = () => { calls.state += 1; };
+    d.fetchBusts = () => { calls.busts += 1; };
+    d.touch = () => {};
+    return { d, calls };
+  }
+
+  it('does not reload on the first connect -- init() already loaded the state', () => {
+    const { d, calls } = stub();
+    d.onSocketConnect();
+    assert.equal(d.connected, true);
+    assert.equal(calls.state, 0);
+  });
+
+  it('reloads the whole state on every reconnect, since missed events are not replayed', () => {
+    const { d, calls } = stub();
+    d.onSocketConnect();
+    d.connected = false; // disconnect
+    d.onSocketConnect();
+    assert.equal(d.connected, true);
+    assert.equal(calls.state, 1);
+    assert.equal(calls.busts, 1);
+    d.onSocketConnect();
+    assert.equal(calls.state, 2);
+  });
+});

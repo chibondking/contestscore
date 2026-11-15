@@ -117,6 +117,8 @@ describe('contact pipeline', () => {
   <operator>K1TTT</operator>
   <mode>CW</mode>
   <call>DL1ABC</call>
+  <rxfreq>1402500</rxfreq>
+  <txfreq>1402500</txfreq>
   <points>1</points>
   <radionr>1</radionr>
   <ID>pipeline-test-0001</ID>
@@ -134,10 +136,18 @@ describe('contact pipeline', () => {
     assert.equal(row.continent, 'EU');
     assert.equal(row.countryprefix, 'DL');
 
+    // The exact frequency is stored...
+    assert.equal(row.rx_freq, '14025000');
+
     const evt = io.events.find((e) => e.name === 'contact:new');
     assert.ok(evt);
     assert.equal(evt.payload.call, 'DL1ABC');
     assert.equal(evt.payload.continent, 'EU');
+    // ...but never emitted: the newest QSO's frequency is the running
+    // frequency (publicQso, src/parsers/util.js).
+    assert.equal('rx_freq' in evt.payload, false);
+    assert.equal('tx_freq' in evt.payload, false);
+    assert.equal(evt.payload.band, '14');
     // The emitted payload is the stored row, so it carries the DB-assigned
     // columns the parsed packet never had -- the dashboard's per-operator
     // peak-rate buckets depend on logged_at being present here.

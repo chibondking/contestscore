@@ -166,6 +166,11 @@ const esc = (v) => String(v == null ? '' : v)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const tensOfHz = (hz) => (hz ? Math.round(Number(hz) / 10) : 0);
 const boolX = (v) => (v ? 'True' : 'False');
+// A snapshot taken from /api/qsos no longer carries rx_freq (the server
+// strips it from public responses), so fall back to the bottom of the
+// QSO's band -- N1MM's <band> is MHz ("21", "3.5") -- which is all the
+// radio card needs to show a band.
+const qsoFreq = (q) => q.rx_freq || (Number(q.band) ? Number(q.band) * 1e6 : 0);
 
 function contactPacket(q) {
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -254,7 +259,7 @@ const pick = (list) => list[Math.floor(Math.random() * list.length)];
 // fixed delay onto every QSO regardless of how compressed the replay is.
 async function emitFkeyPulse(q, speed) {
   const rn = q.radio_nr == null ? 1 : q.radio_nr;
-  const station = { station_name: q.station_name || q.netbios_name || q.mycall, radio_nr: rn, freq: q.rx_freq, mode: q.mode, op_call: q.operator };
+  const station = { station_name: q.station_name || q.netbios_name || q.mycall, radio_nr: rn, freq: qsoFreq(q), mode: q.mode, op_call: q.operator };
   const openCaption = pick(q.is_run_qso ? RUN_OPEN : SP_OPEN);
   const closeCaption = pick(CLOSE);
   const pulseMs = Math.max(20, Math.round(180 / speed));
@@ -370,7 +375,7 @@ async function replayOnce() {
         await send(radioPacket({
           station_name: q.station_name || q.netbios_name || q.mycall,
           radio_nr: rn,
-          freq: q.rx_freq,
+          freq: qsoFreq(q),
           mode: q.mode,
           op_call: q.operator,
           is_running: q.is_run_qso ? 1 : 0,

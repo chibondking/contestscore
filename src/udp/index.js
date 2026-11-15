@@ -6,7 +6,7 @@ const {
   upsertRadio, upsertQso, getPersistedQso, deleteQso, insertScoreBreakdown, cacheCallsign,
   getCachedLocation,
 } = require('../db/queries');
-const { freqToBand } = require('../parsers/util');
+const { freqToBand, publicQso } = require('../parsers/util');
 const { enrichGeo, gridToLatLon, resolveLatLonEnriched } = require('../analyze/geo');
 const { createLookupService, stripSuffix } = require('../lookup');
 const { getTenant } = require('../tenant');
@@ -90,7 +90,8 @@ function startListeners(io) {
     if (toEmit.call) {
       try { cached = getCachedLocation(stripSuffix(toEmit.call)); } catch { cached = null; }
     }
-    io.emit('contact:new', { ...toEmit, ...(resolveLatLonEnriched(toEmit, cached) || {}) });
+    // publicQso: never the exact rx_freq/tx_freq -- see src/parsers/util.js.
+    io.emit('contact:new', { ...publicQso(toEmit), ...(resolveLatLonEnriched(toEmit, cached) || {}) });
     if (data.call) lookup.enqueue(data.call);
   });
 
