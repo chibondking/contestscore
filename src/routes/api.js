@@ -238,9 +238,11 @@ router.get('/score', (req, res) => {
   res.json({ ...score, total: score.score_total });
 });
 
-// GET /api/score/history
+// GET /api/score/history            every total-score broadcast, oldest first
+// GET /api/score/history?changes=1  only the ones where the score moved --
+// what a chart needs (see getScoreHistory's changesOnly).
 router.get('/score/history', (req, res) => {
-  res.json(getScoreHistory());
+  res.json(getScoreHistory({ changesOnly: req.query.changes === '1' }));
 });
 
 // GET /api/radios

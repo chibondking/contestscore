@@ -7,11 +7,21 @@
 // Both are built from the same aggregation helpers (summaryTiles /
 // bandModeData / hourlyData / dxccData / multiBandData / sectionsData) so the HTML and the
 // text never drift apart. Loaded by analyze.js as a plain global (browser)
-// and exported for tests (node). No dependencies.
+// and exported for tests (node). One dependency: conditions.js, for the
+// optional space-weather section (pass `solar` alongside meta/qsos).
 
+// conditions.js: a global in the browser (analyze.html loads it first), a
+// require() under node (the tests).
+const reportConditions = typeof ContestConditions !== 'undefined'
+  ? ContestConditions
+  : (typeof require === 'function' ? require('./conditions') : null);
+
+// data: { meta, qsos, solar? } -- `solar` is the space-weather readings
+// covering the log (raw /api/solar/history rows), when there are any.
 function renderReport(data) {
   const meta = data.meta || {};
   const qsos = data.qsos || [];
+  const solar = data.solar || [];
   const tiles = summaryTiles(qsos, meta);
   const realCount = dedupeQsos(qsos.filter((q) => !isQtc(q))).length;
   const qtcCount = qsos.filter(isQtc).length;
@@ -61,7 +71,9 @@ function renderReport(data) {
 ${bandModeTable(qsos, meta)}
 
 <h2>Hourly</h2>
-${hourlyTable(qsos)}
+${hourlyTable(qsos, solar)}
+
+${conditionsBlock(qsos, solar)}
 
 <h2>Top DXCC entities</h2>
 ${dxccTable(qsos)}
@@ -80,6 +92,7 @@ ${sectionsBlock(qsos)}
 function renderReportText(data) {
   const meta = data.meta || {};
   const qsos = data.qsos || [];
+  const solar = data.solar || [];
   const out = [];
   const realCount = dedupeQsos(qsos.filter((q) => !isQtc(q))).length;
   const qtcCount = qsos.filter(isQtc).length;
@@ -114,11 +127,23 @@ function renderReportText(data) {
   const bm = bandModeData(qsos, meta);
   out.push(...textTable(bm.head, bm.rows, bm.totalRow));
 
-  const hr = hourlyData(qsos);
+  const hr = hourlyData(qsos, solar);
   if (hr) {
     out.push('');
     out.push('Hourly');
     out.push(...textTable(hr.head, hr.rows, hr.totalRow));
+  }
+
+  const cond = conditionsData(qsos, solar);
+  if (cond) {
+    out.push('');
+    out.push('Conditions');
+    out.push(...dotList(cond.pairs));
+    if (cond.table) {
+      out.push('');
+      out.push('Rate by K-index (per active hour)');
+      out.push(...textTable(cond.table.head, cond.table.rows, cond.table.totalRow, cond.table.textCols));
+    }
   }
 
   const dx = dxccData(qsos);
@@ -293,8 +318,11 @@ function bandModeData(qsos, meta) {
 // QTCs excluded (isQtc()): a burst of them to one already-worked station in
 // a handful of seconds would otherwise read as a pile of new contacts,
 // producing a fake hourly spike / rate record that isn't real contact rate.
-function hourlyData(qsos) {
+function hourlyData(qsos, solar) {
   const real = dedupeQsos(qsos.filter((q) => !isQtc(q)));
+  // With readings covering the log, each hour also gets the SFI / A / K in
+  // effect -- same columns as the Stats page's Hourly Breakdown.
+  const readings = reportConditions ? reportConditions.normalize(solar) : [];
   const by = new Map();
   for (const q of real) {
     const t = qTime(q);
@@ -315,9 +343,70 @@ function hourlyData(qsos) {
     const label = multiDay
       ? `${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())} ${pad(d.getUTCHours())}z`
       : `${pad(d.getUTCHours())}:00z`;
-    rows.push([label, n, cum]);
+    const row = [label, n, cum];
+    if (readings.length) {
+      const rd = reportConditions.readingForHour(readings, h);
+      const v = (x) => (rd && x != null ? x : '—');
+      row.push(v(rd && rd.sfi), v(rd && rd.a), v(rd && rd.k));
+    }
+    rows.push(row);
   }
-  return { head: ['Hour (UTC)', 'Q', 'Cum'], rows, totalRow: ['Total', real.length, ''] };
+  const head = ['Hour (UTC)', 'Q', 'Cum'];
+  const totalRow = ['Total', real.length, ''];
+  if (readings.length) { head.push('SFI', 'A', 'K'); totalRow.push('', '', ''); }
+  return { head, rows, totalRow };
+}
+
+// The space weather the log ran in, and the rate against the K-index --
+// the report's version of the Stats page's Conditions and Rate by K-index
+// cards (see conditions.js). QTCs and dupes are left out, as everywhere in
+// this report. null when no reading covers the log.
+function conditionsData(qsos, solar) {
+  const CC = reportConditions;
+  if (!CC) return null;
+  const readings = CC.normalize(solar);
+  if (!readings.length) return null;
+  const real = dedupeQsos(qsos.filter((q) => !isQtc(q)));
+  const times = sortedTimes(real);
+  if (!times.length) return null;
+  const s = CC.summary(readings, times[0], times[times.length - 1]);
+  if (!s) return null;
+
+  const withLevel = (r, levelFn) => {
+    if (!r) return '—';
+    const lvl = levelFn(r.max);
+    return `${CC.fmtRange(r)}${lvl ? ` (${r.min === r.max ? '' : 'peak: '}${lvl})` : ''}`;
+  };
+  const pairs = [
+    ['SFI', CC.fmtRange(s.sfi)],
+    ['Sunspots', CC.fmtRange(s.sunspots)],
+    ['A-index', withLevel(s.a, CC.aLevel)],
+    ['K-index', withLevel(s.k, CC.kLevel)],
+  ];
+
+  const byK = CC.rateByK(real, readings, { timeFn: qTime });
+  let table = null;
+  if (byK.rows.length) {
+    const d = CC.disturbedHours(byK);
+    pairs.push(['Active hours at K >= 4', `${d.hours} of ${d.of}`]);
+    table = {
+      head: ['K', 'Level', 'Hours', 'Q', 'Q/h'],
+      rows: byK.rows.map((r) => [String(r.k), r.level, r.hours, r.q, r.qph.toFixed(1)]),
+      totalRow: ['All', '', byK.total.hours, byK.total.q, byK.total.qph.toFixed(1)],
+      textCols: [1],
+    };
+  }
+  return { pairs, table };
+}
+
+function conditionsBlock(qsos, solar) {
+  const d = conditionsData(qsos, solar);
+  if (!d) return '';
+  const chips = d.pairs.map(([k, v]) => `<span class="chip">${esc(k)} <b>${esc(v)}</b></span>`).join('');
+  const table = d.table
+    ? `<h2>Rate by K-index (per active hour)</h2>\n${htmlTable(d.table.head, d.table.rows, d.table.totalRow, d.table.textCols)}`
+    : '';
+  return `<h2>Conditions</h2>\n<div class="chips">${chips}</div>\n${table}`;
 }
 
 // QTCs excluded: not a new DXCC entity worked, just traffic to one already
@@ -405,8 +494,8 @@ function bandModeTable(qsos, meta) {
   return htmlTable(head, rows, totalRow);
 }
 
-function hourlyTable(qsos) {
-  const d = hourlyData(qsos);
+function hourlyTable(qsos, solar) {
+  const d = hourlyData(qsos, solar);
   if (!d) return '<p class="chip">no timestamps</p>';
   return htmlTable(d.head, d.rows, d.totalRow);
 }
@@ -648,5 +737,5 @@ function reportOrigin() {
 function pad(n) { return String(n).padStart(2, '0'); }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { renderReport, renderReportText, dedupeQsos };
+  module.exports = { renderReport, renderReportText, dedupeQsos, conditionsData };
 }

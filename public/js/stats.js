@@ -29,17 +29,33 @@ function stats() {
     // score (Cabrillo CLAIMED-SCORE, or the N1MM score captured by a
     // from-live snapshot) for a saved analysis. null = not known.
     scoreTotal: null,
+    // Space-weather readings covering the log (ContestConditions.normalize()d,
+    // see conditions.js): live, the server's readings from the first QSO to
+    // now; for a saved analysis, the ones it was saved with or the ones
+    // this server recorded over its time span. [] = none known, and every
+    // conditions card and column simply isn't shown.
+    solar: [],
+    solarFrom: null,   // first-QSO time the live readings were fetched for
+    solarFetchedAt: 0, // Date.now() of that fetch
 
     async init() {
       this.logId = new URLSearchParams(location.search).get('log');
       await this.fetchData();
       if (this.logId) return;
       const socket = io();
-      const refresh = () => this.fetchData();
+      // A QTC series is ten rows in ten seconds and a backfill is the whole
+      // log at once; each used to cost a full reload of /api/qsos. Coalesce
+      // a burst into one reload shortly after it starts.
+      let pending = null;
+      const refresh = () => {
+        if (pending) return;
+        pending = setTimeout(() => { pending = null; this.fetchData(); }, 1500);
+      };
       socket.on('contact:new', refresh);
       socket.on('contact:delete', refresh);
       socket.on('db:cleared', refresh);
       socket.on('score:update', (s) => { this.scoreTotal = s && s.total != null ? s.total : this.scoreTotal; });
+      socket.on('solar:update', () => this.refreshSolar(true));
       setInterval(() => this.fetchData(), 30000);
     },
 
@@ -52,6 +68,7 @@ function stats() {
           this.qsos = body.qsos || [];
           this.logMeta = body.meta || null;
           this.scoreTotal = this.logMeta ? this.logMeta.claimed_score : null;
+          this.solar = ContestConditions.normalize(await ContestConditions.forSavedLog(body, qsoTime));
           return;
         }
         const [qsos, score] = await Promise.all([
@@ -60,9 +77,25 @@ function stats() {
         ]);
         this.qsos = qsos.filter(isCountedQso);
         this.scoreTotal = score && score.total != null ? score.total : null;
+        this.refreshSolar(false);
       } catch (err) {
         console.error('Failed to load stats data:', err);
       }
+    },
+
+    // Live only. Readings change every couple of hours, so this refetches
+    // when the session's start moves (first load, a reset, a backfill of
+    // earlier QSOs), every 10 minutes otherwise, or when forced by the
+    // server's solar:update event -- not on every QSO.
+    async refreshSolar(force) {
+      const times = sortedTimes(this.qsos);
+      if (!times.length) { this.solar = []; this.solarFrom = null; return; }
+      const from = times[0];
+      const fresh = Date.now() - this.solarFetchedAt < 10 * 60000;
+      if (!force && fresh && this.solarFrom === from) return;
+      this.solarFrom = from;
+      this.solarFetchedAt = Date.now();
+      this.solar = ContestConditions.normalize(await ContestConditions.fetchForSpan(from, Date.now()));
     },
 
     get hasData() { return this.qsos.length > 0; },
@@ -221,6 +254,117 @@ function stats() {
     },
 
     // ================================================================
+    // Conditions -- the space weather the session ran in. Label/value rows
+    // for the same defn-grid Rate Records uses; [] hides the card.
+    // ================================================================
+    get conditions() {
+      if (!this.solar.length) return [];
+      const CC = ContestConditions;
+      const times = sortedTimes(this.scopedQsos);
+      if (!times.length) return [];
+      const live = !this.logId;
+      const s = CC.summary(this.solar, times[0], live ? Date.now() : times[times.length - 1]);
+      if (!s) return [];
+
+      const withLevel = (r, levelFn) => {
+        if (!r) return '—';
+        const lvl = levelFn(r.max);
+        return `${CC.fmtRange(r)}${lvl ? `  (${r.min === r.max ? '' : 'peak: '}${lvl})` : ''}`;
+      };
+      const out = [];
+      if (live) {
+        const n = s.latest;
+        const parts = [
+          n.sfi != null ? `SFI ${n.sfi}` : null,
+          n.a != null ? `A ${n.a}` : null,
+          n.k != null ? `K ${n.k}${CC.kLevel(n.k) ? ` (${CC.kLevel(n.k)})` : ''}` : null,
+        ].filter(Boolean);
+        out.push({ label: 'Now', value: `${parts.join(' · ') || '—'}  (as of ${fmtStamp(n.t)})` });
+      }
+      out.push({ label: 'SFI', value: CC.fmtRange(s.sfi) });
+      out.push({ label: 'Sunspots', value: CC.fmtRange(s.sunspots) });
+      out.push({ label: 'A-index', value: withLevel(s.a, CC.aLevel) });
+      out.push({ label: 'K-index', value: withLevel(s.k, CC.kLevel) });
+      const byK = this.kRate(null);
+      if (byK && byK.total.hours) {
+        const d = CC.disturbedHours(byK);
+        out.push({ label: 'Active hours at K ≥ 4', value: `${d.hours} of ${d.of}` });
+      }
+      out.push({ label: 'Readings', value: String(s.count) });
+      return out;
+    },
+
+    // ContestConditions.rateByK() over the scoped QSOs, optionally broken
+    // down by keyFn. null when there are no readings.
+    kRate(keyFn) {
+      if (!this.solar.length) return null;
+      return ContestConditions.rateByK(this.scopedQsos, this.solar, {
+        timeFn: qsoTime,
+        pointsFn: (q) => Number(q.points) || 0,
+        keyFn,
+      });
+    },
+
+    // One "Rate by K-index" card: a row per K value seen during the log,
+    // with the overall rate and the rate for each breakdown key (continent
+    // or band) in the hours at that K.
+    kRateCard(title, keyFn, keyLabel, keyOrder) {
+      const byK = this.kRate(keyFn);
+      if (!byK || !byK.rows.length) return null;
+      const CC = ContestConditions;
+      const keys = keyOrder ? keyOrder(byK.keys) : byK.keys;
+
+      const columns = [
+        { key: 'k', label: 'K' },
+        { key: 'level', label: 'Level' },
+        { key: 'hours', label: 'Hours', num: true },
+        { key: 'q', label: 'Q', num: true },
+        { key: 'qph', label: 'Q/h', num: true },
+      ];
+      if (this.caps.points) columns.push({ key: 'pph', label: 'Pts/h', num: true });
+      for (const key of keys) columns.push({ key: `x_${key}`, label: `${keyLabel(key)}/h`, num: true });
+
+      const maxRate = Math.max(...byK.rows.map((r) => r.qph));
+      const rows = byK.rows.map((r) => {
+        const row = {
+          key: String(r.k), k: r.k, level: r.level, hours: r.hours, q: r.q,
+          qph: r.qph.toFixed(1), pph: r.pph.toFixed(1),
+          _bar: maxRate ? Math.round((r.qph / maxRate) * 100) : 0,
+        };
+        for (const key of keys) row[`x_${key}`] = CC.perHour(r.byKey[key] || 0, r.hours).toFixed(1);
+        return row;
+      });
+
+      const t = byK.total;
+      const totalRow = { k: 'All', level: '', hours: t.hours, q: t.q, qph: t.qph.toFixed(1), pph: t.pph.toFixed(1) };
+      for (const key of keys) {
+        const n = byK.rows.reduce((s, r) => s + (r.byKey[key] || 0), 0);
+        totalRow[`x_${key}`] = CC.perHour(n, t.hours).toFixed(1);
+      }
+
+      const notes = ['Per active clock hour (an hour with at least one QSO), grouped by the K-index in effect that hour. Time of day, band and operator move the rate too, so read it next to the hourly table.'];
+      if (byK.unknownHours) notes.push(`${byK.unknownHours} active hour${byK.unknownHours === 1 ? '' : 's'} (${byK.unknownQ} Q) had no reading and are left out.`);
+      return { title, note: notes.join(' '), columns, rows, barKey: 'qph', totalRow };
+    },
+
+    get kRateContinentCard() {
+      return this.kRateCard(
+        'Rate by K-index — by Continent',
+        (q) => (q.continent || '—').toUpperCase(),
+        (c) => c,
+      );
+    },
+
+    get kRateBandCard() {
+      return this.kRateCard(
+        'Rate by K-index — by Band',
+        (q) => q.band || '—',
+        bandLabel,
+        (keys) => [...keys].sort((a, b) => bandSortKey(a) - bandSortKey(b)),
+      );
+    },
+
+    // ================================================================
     // Rate records -- best sliding windows, first/last, longest gap
     // ================================================================
     get rateRecords() {
@@ -263,6 +407,8 @@ function stats() {
         this.summaryCard,
         this.leaderboardCard,
         this.hourly,
+        this.kRateContinentCard,
+        this.kRateBandCard,
         this.runSpCard,
         this.multBandsCard,
         this.continentCard,
@@ -428,6 +574,21 @@ function stats() {
           _cls: e.q === maxQ && e.q > 0 ? 'is-best' : '',
           q: e.q, cq, pts: e.pts, cpts, mults: e.mults, cmults,
         });
+      }
+
+      // Conditions in effect each hour, when any readings cover the log.
+      if (this.solar.length) {
+        columns.push(
+          { key: 'sfi', label: 'SFI', num: true },
+          { key: 'a', label: 'A', num: true },
+          { key: 'k', label: 'K', num: true },
+        );
+        for (const r of rows) {
+          const rd = ContestConditions.readingForHour(this.solar, Number(r.key));
+          r.sfi = rd && rd.sfi != null ? rd.sfi : '—';
+          r.a = rd && rd.a != null ? rd.a : '—';
+          r.k = rd && rd.k != null ? rd.k : '—';
+        }
       }
 
       const tot = [...buckets.values()].reduce(

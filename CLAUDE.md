@@ -27,6 +27,14 @@ passed that test so far:
   panel it feeds -- a live data-quality signal on the log;
 - **space-weather indices** (SFI / A / K, `src/solar/`) in the header --
   propagation context for the operator;
+- **conditions against the log** (2026-11-15) -- the same readings joined
+  to the QSOs on Stats and Charts, live and for a saved analysis
+  (`?log=`): a Conditions card, SFI / A / K on each hour of the Hourly
+  Breakdown, QSOs per active hour at each K-index (by continent, by band),
+  and a rate-vs-K chart; the analyzer report carries the same section. One
+  shared classic script, `public/js/conditions.js` (global
+  `ContestConditions`), so the live and post-contest views can't drift.
+  Nothing is shown when no reading covers the log;
 - the **mult bell** (2026-10-09) -- an optional desk-bell ding on the
   dashboard when a new multiplier is logged (N1MM's `is_mult1/2/3`). Per
   viewer (localStorage `contestpulse_multbell`), **off by default**, with a

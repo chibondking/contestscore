@@ -214,8 +214,15 @@ The pure suites run under Deno on a machine without Node
 - **No callsign lookup.** `src/lookup/` (HamQTH) is a live-dashboard
   feature; the analyzer never calls it, so a saved analysis stays
   reproducible offline. Geo enrichment here is the bundled `cty.csv` only.
-- **Rate-vs-solar is a conditions chart, not yet overlaid on rate.**
-  `/compare` now charts SFI/K-index for the span of a from-live analysis
+- **Rate vs. conditions for one log** is on the Stats and Charts pages
+  (live and `?log=<id>`) and in the downloaded report: SFI / A / K per
+  hour, the session's ranges, QSOs per active hour at each K-index, and a
+  rate-vs-K chart (`public/js/conditions.js`). Any saved log gets it when
+  readings exist for its time span -- a from-live snapshot's own, otherwise
+  a `GET /api/solar/history` lookup, which finds something only if this
+  server was polling through that contest.
+- **On `/compare`, rate-vs-solar is still a separate conditions chart.**
+  `/compare` charts SFI/K-index for the span of a from-live analysis
   (`GET /api/solar/history?from=&to=`, added alongside this), but as its
   own dual-axis chart next to the rate chart rather than one combined
   rate-vs-K plot -- the two use different x-axes (rate is elapsed-time-

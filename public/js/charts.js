@@ -36,6 +36,11 @@ function charts() {
     // contest, with no socket/poll wiring (an uploaded log never changes).
     logId: null,
     logMeta: null,
+    // Space-weather readings covering the log -- see stats.js's `solar`,
+    // same rules. [] hides the conditions chart.
+    solar: [],
+    solarFrom: null,
+    solarFetchedAt: 0,
 
     async init() {
       try {
@@ -51,12 +56,42 @@ function charts() {
       // move. The interval stays as a fallback in case an event is missed
       // (e.g. a brief disconnect), not as the primary update path anymore.
       const socket = io();
-      const refresh = () => this.fetchData();
+      // Coalesce a burst of events (a QTC series, a backfill) into one
+      // reload shortly after it starts, instead of one full reload each.
+      let pending = null;
+      const refresh = () => {
+        if (pending) return;
+        pending = setTimeout(() => { pending = null; this.fetchData(); }, 1500);
+      };
       socket.on('contact:new', refresh);
       socket.on('contact:delete', refresh);
-      socket.on('score:update', refresh);
       socket.on('db:cleared', refresh);
+      // A logger re-broadcasts its score every few seconds whether or not
+      // it changed. Only a score that actually moved is worth a reload.
+      let lastTotal = null;
+      socket.on('score:update', (s) => {
+        const total = s && s.total != null ? s.total : null;
+        if (total === lastTotal) return;
+        lastTotal = total;
+        refresh();
+      });
+      socket.on('solar:update', () => this.refreshSolar(true));
       setInterval(() => this.fetchData(), 30000);
+    },
+
+    // Live only; same policy as stats.js refreshSolar().
+    async refreshSolar(force) {
+      let from = Infinity;
+      for (const q of this.qsos) {
+        const t = qLoggedTime(q);
+        if (t < from) from = t;
+      }
+      if (!Number.isFinite(from)) { this.solar = []; this.solarFrom = null; return; }
+      const fresh = Date.now() - this.solarFetchedAt < 10 * 60000;
+      if (!force && fresh && this.solarFrom === from) return;
+      this.solarFrom = from;
+      this.solarFetchedAt = Date.now();
+      this.solar = ContestConditions.normalize(await ContestConditions.fetchForSpan(from, Date.now()));
     },
 
     saveDetailed() {
@@ -92,14 +127,20 @@ function charts() {
           // An uploaded log has no score-broadcast history; the Score Over
           // Time card falls back to its own "no score data yet" empty state.
           this.scoreHistory = [];
+          this.solar = body
+            ? ContestConditions.normalize(await ContestConditions.forSavedLog(body, qLoggedTime))
+            : [];
           return;
         }
         const [qsos, scoreHistory] = await Promise.all([
           fetch('/api/qsos').then((r) => r.json()),
-          fetch('/api/score/history').then((r) => r.json()),
+          // changes=1: only the broadcasts where the score moved, not the
+          // thousands of identical repeats in between.
+          fetch('/api/score/history?changes=1').then((r) => r.json()),
         ]);
         this.qsos = dedupeForCharting(qsos.filter(isCountedQso));
         this.scoreHistory = scoreHistory;
+        this.refreshSolar(false);
       } catch (err) {
         console.error('Failed to load chart data:', err);
       }
@@ -111,21 +152,19 @@ function charts() {
     // Computed client-side from the already-loaded qsos array rather than a
     // new backend endpoint.
     rateOverTime(bucketMinutes = this.autoBucketMinutes()) {
-      const bucketMs = bucketMinutes * 60000;
-      const counts = new Map();
+      // timeAxis() gives every bucket from the first QSO to the last,
+      // including the empty ones -- a break in operating has to read as a
+      // rate of zero, not be skipped so the line runs straight across it.
+      const { buckets, bucketMs, label } = timeAxis(this.qsos, bucketMinutes);
+      const counts = new Map(buckets.map((b) => [b, 0]));
       for (const q of this.qsos) {
-        // logged_at is SQLite's datetime('now') format ("YYYY-MM-DD HH:MM:SS",
-        // UTC, no separator/offset marker) -- needs both fixed up for Date to
-        // parse it as UTC reliably.
-        const t = new Date(q.logged_at.replace(' ', 'T') + 'Z').getTime();
+        const t = qLoggedTime(q);
         if (Number.isNaN(t)) continue;
         const bucket = Math.floor(t / bucketMs) * bucketMs;
-        counts.set(bucket, (counts.get(bucket) || 0) + 1);
+        if (counts.has(bucket)) counts.set(bucket, counts.get(bucket) + 1);
       }
       const perHour = 60 / bucketMinutes;
-      return [...counts.entries()]
-        .sort((a, b) => a[0] - b[0])
-        .map(([bucket, count]) => ({ t: bucket, rate: Math.round(count * perHour) }));
+      return buckets.map((b) => ({ t: b, label: label(b), rate: Math.round(counts.get(b) * perHour) }));
     },
 
     renderRateChart() {
@@ -133,7 +172,7 @@ function charts() {
       if (!canvas || typeof Chart === 'undefined') return;
 
       const points = this.rateOverTime();
-      const labels = points.map((p) => new Date(p.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      const labels = points.map((p) => p.label);
       const values = points.map((p) => p.rate);
 
       if (rateChart) {
@@ -245,8 +284,13 @@ function charts() {
       const canvas = document.getElementById('scoreChart');
       if (!canvas || typeof Chart === 'undefined') return;
 
-      const labels = this.scoreHistory.map((s) => new Date(s.captured_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      const values = this.scoreHistory.map((s) => s.points);
+      // score_total is the contest score (points x mults); `points` on the
+      // same row is QSO points alone, which is what this chart used to plot
+      // under the name "Score".
+      const stamps = this.scoreHistory.map((s) => new Date(s.captured_at).getTime());
+      const multiDay = stamps.length > 1 && stamps[stamps.length - 1] - stamps[0] >= 24 * 3600000;
+      const labels = stamps.map((t) => utcLabel(t, multiDay));
+      const values = this.scoreHistory.map((s) => (s.score_total != null ? s.score_total : s.points));
 
       if (scoreChart) {
         scoreChart.data.labels = labels;
@@ -260,7 +304,7 @@ function charts() {
         data: {
           labels,
           datasets: [{
-            label: 'Points',
+            label: 'Score',
             data: values,
             borderColor: '#eb6834', // dataviz reference palette, dark-mode slot 2 (orange) -- a distinct hue from the rate chart, shown on a separate panel
             backgroundColor: 'rgba(235, 104, 52, 0.15)',
@@ -288,16 +332,19 @@ function charts() {
       // When viewing an uploaded log, drop the charts whose data the source
       // format didn't carry (a bare Cabrillo has no points / mults / run
       // flag), rather than drawing an all-zeros chart.
+      // A spec marked `solar` needs space-weather readings covering the log.
       const m = this.logMeta;
-      if (!m) return EXTRA_CHART_SPECS;
-      return EXTRA_CHART_SPECS.filter((s) => !s.need || m[`has_${s.need}`]);
+      const haveSolar = this.solar.length > 0;
+      return EXTRA_CHART_SPECS.filter((s) => (
+        (!s.solar || haveSolar) && (!m || !s.need || m[`has_${s.need}`])
+      ));
     },
 
     renderExtra(spec) {
       const canvas = document.getElementById(spec.id);
       if (!canvas || typeof Chart === 'undefined') return;
 
-      const cfg = spec.build(this.qsos, this.scoreHistory, this.autoBucketMinutes());
+      const cfg = spec.build(this.qsos, this.scoreHistory, this.autoBucketMinutes(), this.solar);
       const current = extra.get(spec.id);
 
       if (!cfg) {
@@ -465,9 +512,9 @@ function primarySeries() {
 
 function themeColors() {
   const theme = document.documentElement.getAttribute('data-theme');
-  if (theme === 'light') return { muted: '#5b5a52', text: '#1a1a1a', grid: '#c7c2a8' };
-  if (theme === 'wt2p') return { muted: '#cc7a00', text: '#e8d6b8', grid: '#3a2700' }; // dashboard.css's wt2p tokens
-  return { muted: '#8b949e', text: '#e6edf3', grid: '#262626' };
+  if (theme === 'light') return { muted: '#5b5a52', text: '#1a1a1a', grid: '#c7c2a8', surface: '#ffffff' };
+  if (theme === 'wt2p') return { muted: '#cc7a00', text: '#e8d6b8', grid: '#3a2700', surface: '#121212' }; // dashboard.css's wt2p tokens
+  return { muted: '#8b949e', text: '#e6edf3', grid: '#262626', surface: '#0a0a0a' };
 }
 
 // A categorical bar per operator, direct-labeled on the x-axis -- color
@@ -655,6 +702,97 @@ function continentColor(c) {
   return CATEGORICAL_COLORS[(i < 0 ? 7 : i) % CATEGORICAL_COLORS.length];
 }
 
+// Axis label for a moment in time, always UTC -- contest time -- with the
+// date in front once the chart spans more than a day. "13:40z" /
+// "11/15 13:40z", the same style the Stats page uses.
+function utcLabel(ms, withDate) {
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, '0');
+  const hm = `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}z`;
+  return withDate ? `${p(d.getUTCMonth() + 1)}/${p(d.getUTCDate())} ${hm}` : hm;
+}
+
+// QSO rate as bars with the K-index stepped across them on its own
+// right-hand 0-9 axis, both on the one contest timeline. `solar` is
+// ContestConditions.normalize()d readings; each bucket takes the reading in
+// effect at its end. The tooltip adds that reading's SFI and A-index.
+// null (no chart) when there are no QSOs or no K reading covers them.
+function buildRateVsK(qsos, bucketMin, solar) {
+  if (!qsos.length || !solar || !solar.length) return null;
+  const { buckets, bucketMs, label: fmt } = timeAxis(qsos, bucketMin);
+  if (!buckets.length) return null;
+
+  const counts = new Map(buckets.map((b) => [b, 0]));
+  for (const q of qsos) {
+    const t = qLoggedTime(q);
+    if (Number.isNaN(t)) continue;
+    const b = Math.floor(t / bucketMs) * bucketMs;
+    if (counts.has(b)) counts.set(b, counts.get(b) + 1);
+  }
+  const perHour = 60 / Math.max(1, bucketMin);
+  const readings = buckets.map((b) => ContestConditions.readingAt(solar, b + bucketMs - 1));
+  if (!readings.some((r) => r && r.k != null)) return null;
+
+  const c = themeColors();
+  const o = trendChartOptions();
+  o.plugins.legend = { display: true, labels: { color: c.text, boxWidth: 12 } };
+  o.interaction = { mode: 'index', intersect: false };
+  o.plugins.tooltip = {
+    callbacks: {
+      afterBody: (items) => {
+        const r = items.length ? readings[items[0].dataIndex] : null;
+        if (!r) return 'No solar reading';
+        const parts = [
+          r.sfi != null ? `SFI ${r.sfi}` : null,
+          r.a != null ? `A ${r.a}` : null,
+        ].filter(Boolean);
+        return parts.join(' · ');
+      },
+    },
+  };
+  o.scales.y.title = { display: true, text: 'QSOs/hr', color: c.muted };
+  o.scales.yK = {
+    position: 'right',
+    min: 0,
+    max: 9,
+    ticks: { color: c.text, stepSize: 1 },
+    grid: { drawOnChartArea: false },
+    title: { display: true, text: 'K-index', color: c.muted },
+  };
+
+  return {
+    type: 'bar',
+    data: {
+      labels: buckets.map(fmt),
+      datasets: [
+        {
+          type: 'line',
+          label: 'K-index',
+          data: readings.map((r) => (r && r.k != null ? r.k : null)),
+          yAxisID: 'yK',
+          stepped: true,
+          spanGaps: false,
+          borderColor: '#9085e9', // the Solar page's K-index color
+          backgroundColor: '#9085e9',
+          pointRadius: 0,
+          borderWidth: 2,
+          order: 0,
+        },
+        {
+          type: 'bar',
+          label: 'QSOs/hr',
+          data: buckets.map((b) => Math.round(counts.get(b) * perHour)),
+          yAxisID: 'y',
+          backgroundColor: hexA(primarySeries().line, 0.6),
+          borderWidth: 0,
+          order: 1,
+        },
+      ],
+    },
+    options: o,
+  };
+}
+
 // Even bucket timeline across the full span of logged QSOs, plus a label
 // formatter that adds the date once a contest runs past 24h. Min/max by
 // loop, not Math.min(...times), so a big log can't blow the call stack.
@@ -677,12 +815,7 @@ function timeAxis(qsos, bucketMin) {
   for (let b = start; b <= end && buckets.length < 2000; b += bucketMs) buckets.push(b);
 
   const multiDay = end - start >= 24 * 3600000;
-  const pad = (n) => String(n).padStart(2, '0');
-  const label = (ms) => {
-    const d = new Date(ms);
-    const hm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return multiDay ? `${pad(d.getUTCMonth() + 1)}/${pad(d.getUTCDate())} ${hm}` : hm;
-  };
+  const label = (ms) => utcLabel(ms, multiDay);
   return { buckets, bucketMs, label };
 }
 
@@ -798,7 +931,7 @@ function buildDoughnut(qsos, keyFn, orderedKeys, colorFn) {
       datasets: [{
         data: keys.map((k) => counts.get(k)),
         backgroundColor: keys.map(colorFn),
-        borderColor: '#0a0a0a',
+        borderColor: themeColors().surface,
         borderWidth: 2,
       }],
     },
@@ -906,6 +1039,10 @@ function buildRateHistogram(qsos) {
 }
 
 const EXTRA_CHART_SPECS = [
+  {
+    id: 'cx-rate-k', title: 'QSO Rate vs. K-index', wide: true, solar: true,
+    build: (q, sh, bm, solar) => buildRateVsK(q, bm, solar),
+  },
   {
     id: 'cx-cum-qsos', title: 'Cumulative QSOs', wide: true,
     build: (q, sh, bm) => buildCumulative(q, bm, () => 1, 'QSOs', CATEGORICAL_COLORS[0]),

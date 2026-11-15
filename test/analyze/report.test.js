@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { renderReport, renderReportText, dedupeQsos } = require('../../public/js/report');
+const { renderReport, renderReportText, dedupeQsos, conditionsData } = require('../../public/js/report');
 
 function qso(o) {
   return {
@@ -442,5 +442,56 @@ describe('renderReportText sign-off', () => {
         delete globalThis.location;
       }
     }
+  });
+});
+
+describe('conditions in the report', () => {
+  const qsos = [
+    qso({ call: 'K3LR', n1mm_timestamp: '2025-05-24 12:05:00' }),
+    qso({ call: 'DL1XYZ', n1mm_timestamp: '2025-05-24 12:40:00' }),
+    qso({ call: 'JA1ABC', n1mm_timestamp: '2025-05-24 14:10:00' }),
+  ];
+  const solar = [
+    { sfi: 150, a_index: 6, k_index: 2, sunspots: 120, fetched_at: '2025-05-24 11:00:00' },
+    { sfi: 155, a_index: 22, k_index: 5, sunspots: 130, fetched_at: '2025-05-24 14:00:00' },
+  ];
+
+  it('is left out entirely when no readings cover the log', () => {
+    const html = renderReport({ meta: { station_call: 'K3LR' }, qsos });
+    assert.doesNotMatch(html, /Conditions|K-index/);
+    assert.doesNotMatch(renderReportText({ meta: {}, qsos }), /Conditions|K-index/);
+    assert.equal(conditionsData(qsos, []), null);
+    assert.equal(conditionsData(qsos, undefined), null);
+  });
+
+  it('summarises SFI / A / K and the rate at each K', () => {
+    const d = conditionsData(qsos, solar);
+    assert.deepEqual(d.pairs, [
+      ['SFI', '150–155'],
+      ['Sunspots', '120–130'],
+      ['A-index', '6–22 (peak: active)'],
+      ['K-index', '2–5 (peak: G1 storm)'],
+      ['Active hours at K >= 4', '1 of 2'],
+    ]);
+    assert.deepEqual(d.table.rows, [
+      ['2', 'quiet', 1, 2, '2.0'],
+      ['5', 'G1 storm', 1, 1, '1.0'],
+    ]);
+    assert.deepEqual(d.table.totalRow, ['All', '', 2, 3, '1.5']);
+  });
+
+  it('adds the section and the hourly SFI / A / K columns to both renderers', () => {
+    const html = renderReport({ meta: { station_call: 'K3LR' }, qsos, solar });
+    assert.match(html, /<h2>Conditions<\/h2>/);
+    assert.match(html, /<h2>Rate by K-index \(per active hour\)<\/h2>/);
+    assert.match(html, /SFI <b>150–155<\/b>/);
+    assert.match(html, /<th class="n">K<\/th>/); // hourly column
+    assert.doesNotMatch(html, /<link|<script/i); // still self-contained
+
+    const text = renderReportText({ meta: { station_call: 'K3LR' }, qsos, solar });
+    assert.match(text, /\nConditions\n/);
+    assert.match(text, /K-index \.+ 2–5 \(peak: G1 storm\)/);
+    assert.match(text, /Hour \(UTC\)\s+Q\s+Cum\s+SFI\s+A\s+K/);
+    assert.match(text, /13:00z\s+0\s+2\s+150\s+6\s+2/); // idle hour still carries its reading
   });
 });
