@@ -1741,10 +1741,18 @@ function dashboard() {
     // the header. Chart.js instances are kept in the closure variables
     // above dashboard()'s return, not on `this` -- see the top-of-file
     // comment for why.
+    // The Score card's trend line: the contest score at each broadcast.
+    // score_total is the score (points x mults); `points` on the same row is
+    // QSO points alone, which this used to plot -- a different shape, and
+    // flat whenever a new multiplier was what moved the score.
+    scoreSparklineValues() {
+      return this.scoreHistory.map((s) => (s.score_total != null ? s.score_total : s.points));
+    },
+
     renderScoreSparkline() {
       const canvas = document.getElementById('scoreSparkline');
       if (!canvas || typeof Chart === 'undefined') return;
-      const values = this.scoreHistory.map((s) => s.points);
+      const values = this.scoreSparklineValues();
 
       if (scoreSparkline) {
         scoreSparkline.data.labels = values.map((_, i) => i);

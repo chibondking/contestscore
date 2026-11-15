@@ -796,3 +796,20 @@ describe('onSocketConnect', () => {
     assert.equal(calls.state, 2);
   });
 });
+
+describe('scoreSparklineValues', () => {
+  it('plots the contest score, not QSO points', () => {
+    const d = dashboard();
+    d.scoreHistory = [
+      { points: 1, mults: 2, score_total: 2 },
+      { points: 154, mults: 69, score_total: 10626 },
+    ];
+    assert.deepEqual([...d.scoreSparklineValues()], [2, 10626]);
+  });
+
+  it('falls back to points for a row with no score_total', () => {
+    const d = dashboard();
+    d.scoreHistory = [{ points: 7 }, { points: 9, score_total: 0 }];
+    assert.deepEqual([...d.scoreSparklineValues()], [7, 0]);
+  });
+});
