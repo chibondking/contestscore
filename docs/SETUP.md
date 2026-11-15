@@ -234,11 +234,21 @@ node tools/n1mm-backfill.js WT2P.s3db --contest latest \
      --api https://scoreboard.example.org --token <the same token>
 ```
 
-WAE QTCs are included, sent and received. N1MM broadcasts the QTCs you
-send but not the ones you receive, so in WAE RTTY (where QTCs go both
-ways) this is how received QTCs get onto the board. It's safe to re-run
-during the contest: QSOs already on the board are updated, not doubled.
-`--dry-run` shows how many of each the log holds.
+WAE QTCs are included, sent and received. What N1MM broadcasts live
+depends on the mode (checked November 2026):
+
+- **WAE CW:** sent QTCs are broadcast as you send them, one packet per
+  QTC line, so they appear on the board live. Received QTCs untested.
+- **WAE RTTY:** no QTCs are broadcast, sent or received. Deleting one
+  does send a delete, but adding one sends nothing. This is an N1MM
+  bug; until it's fixed, the backfill is the only way RTTY QTCs reach
+  the board.
+- **WAE SSB:** untested. N1MM does save SSB QTCs to the log database,
+  so the backfill picks them up either way.
+
+In RTTY, re-run the backfill every so often during the contest: QSOs
+and QTCs already on the board are updated, not doubled. `--dry-run`
+shows how many of each the log holds.
 
 Pick the right contest from the listing first: one database holds every
 contest it has ever logged. It's safe to run while the bridge is live,
