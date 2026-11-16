@@ -1,9 +1,12 @@
-/* Fira Code is the preferred face. Loaded from Google Fonts (same "CDN, no
-   build step" approach as Alpine/Chart.js); @import here rather than a
-   <link> in four separate <head>s keeps it in one place. If the viewing
-   device has no internet (a LAN-only Pi install), this just no-ops and the
-   system monospace stack on `body` takes over -- graceful, not broken. */
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap');
+/* Type: IBM Plex Sans for the page, IBM Plex Mono for callsigns, numbers,
+   times and table values (CJ, 2026-11-16, matching the ops dashboard's
+   console redesign and station-status; was Fira Code everywhere). Loaded
+   from Google Fonts (same "CDN, no build step" approach as Alpine/Chart.js);
+   @import here rather than a <link> in every page's <head> keeps it in one
+   place. If the viewing device has no internet (a LAN-only Pi install),
+   this just no-ops and the fallback stacks in --font-ui / --font-mono take
+   over -- graceful, not broken. Colours and themes are unchanged. */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
 :root {
   --bg:       #000000;
@@ -15,6 +18,10 @@
   --red:      #f85149;
   --accent:   #58a6ff;
   --run:      #d29922;
+  /* Not themed: every theme uses the same two faces. The fallbacks matter
+     for an offline viewer -- see body below. */
+  --font-ui:   'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'DejaVu Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, 'Roboto Mono', 'DejaVu Sans Mono', monospace;
   color-scheme: dark;
 }
 
@@ -69,15 +76,17 @@
 body {
   background: var(--bg);
   color: var(--text);
-  /* Fira Code (loaded via @import above) first; the rest is the offline
-     fallback stack. Do NOT drop back to bare 'Courier New'/`monospace`
-     here: Windows ships Courier New and Chromium maps the generic monospace
-     family to it too, so without an explicit modern stack a machine that
-     can't reach Google Fonts renders the old thin typewriter face -- which
-     is exactly the cross-machine inconsistency this replaced. Consolas
-     covers every Windows since Vista, ui-monospace covers ChromeOS/macOS,
-     Roboto Mono most Linux/Pi installs. */
-  font-family: 'Fira Code', ui-monospace, 'Cascadia Mono', Consolas, 'Roboto Mono', 'DejaVu Sans Mono', monospace;
+  /* IBM Plex (loaded via @import above) first; the rest of --font-ui /
+     --font-mono is the offline fallback stack. Do NOT drop the mono stack
+     back to bare 'Courier New'/`monospace`: Windows ships Courier New and
+     Chromium maps the generic monospace family to it too, so without an
+     explicit modern stack a machine that can't reach Google Fonts renders
+     the old thin typewriter face. Consolas covers every Windows since
+     Vista, ui-monospace covers ChromeOS/macOS, Roboto Mono most Linux/Pi
+     installs. tabular-nums so live numbers don't jitter as they tick. */
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
   font-size: 1rem;
   min-height: 100vh;
 }
@@ -225,7 +234,7 @@ body {
    dashboard (see CLAUDE.md). */
 .utc-clock {
   flex: 0 0 auto;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: 1.1rem;
   font-weight: bold;
@@ -238,7 +247,7 @@ body {
 .station-call {
   flex: 0 0 auto;
   white-space: nowrap;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: var(--font-mono);
   font-size: 1.4rem;
   font-weight: bold;
   letter-spacing: 0.05em;
@@ -1215,3 +1224,16 @@ body {
     width: 100%;
   }
 }
+
+/* Values in the mono face (IBM Plex Mono) so callsigns, bands, scores,
+   times and table columns line up and read as data; labels, headings,
+   buttons and prose stay in Plex Sans (body). The map labels are section
+   and zone abbreviations, so they're values too. */
+.header h1, .metric__value, .radio-nr, .radio-freq, .radio-mode, .radio-op,
+.grid-locator, .solar-chip, .qso-table td, .stats-table td,
+.bust-call, .continent-row__count, .solar-tile__value, .defn dd,
+.multbell__num, .chip b, .secmap-needed, .secmap-label,
+.worldmap-zone-badge text, .analyze-field textarea {
+  font-family: var(--font-mono);
+}
+.secmap-needed-label { font-family: var(--font-ui); }

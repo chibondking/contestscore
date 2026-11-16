@@ -536,11 +536,11 @@ async function renderMapPng(svg, { caption, scale = 3 }) {
     const pad = Math.round(8 * scale);
     const y = H + capH / 2;
     c.textBaseline = 'middle';
-    c.font = `700 ${Math.round(9 * scale)}px 'Fira Code', ui-monospace, monospace`;
+    c.font = `700 ${Math.round(9 * scale)}px 'IBM Plex Mono', ui-monospace, monospace`;
     c.fillStyle = tok('--text', '#e6edf3');
     c.textAlign = 'left';
     c.fillText(caption.left, pad, y);
-    c.font = `400 ${Math.round(8 * scale)}px 'Fira Code', ui-monospace, monospace`;
+    c.font = `400 ${Math.round(8 * scale)}px 'IBM Plex Mono', ui-monospace, monospace`;
     c.fillStyle = tok('--muted', '#8b949e');
     c.textAlign = 'right';
     c.fillText(caption.right, W - pad, y);
