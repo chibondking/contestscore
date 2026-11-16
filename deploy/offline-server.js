@@ -32,8 +32,9 @@ const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>'
 
 // Colours are wt2p.us's own :root tokens (--bg/--panel/--accent/--text/
 // --muted/--border), the same set public/css/dashboard.css's "wt2p" theme
-// reads -- change one, consider the other. Fira Code from Google Fonts with
-// the usual monospace fallback stack, so a viewer with no internet still
+// reads -- change one, consider the other. Type is the dashboard's: IBM Plex
+// Sans, with Plex Mono for the headline and the station call, from Google
+// Fonts with the usual fallback stacks, so a viewer with no internet still
 // gets a sane face.
 const page = (station) => `<!doctype html>
 <html lang="en">
@@ -46,7 +47,7 @@ const page = (station) => `<!doctype html>
 <meta http-equiv="refresh" content="60">
 <title>Temporarily offline &middot; ContestPulse</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans:wght@400;700&display=swap');
   :root {
     --bg: #0d0d0d;
     --panel: #121212;
@@ -60,7 +61,7 @@ const page = (station) => `<!doctype html>
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: 'Fira Code', ui-monospace, 'Cascadia Mono', Consolas, 'Roboto Mono', 'DejaVu Sans Mono', monospace;
+    font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, 'DejaVu Sans', sans-serif;
     display: flex; align-items: center; justify-content: center;
     padding: 1.5rem; line-height: 1.6;
   }
@@ -85,6 +86,7 @@ const page = (station) => `<!doctype html>
   }
   .card p { margin: 0; color: var(--muted); font-size: .95rem; }
   .card p + p { margin-top: .6rem; }
+  h1, .station { font-family: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, 'Roboto Mono', 'DejaVu Sans Mono', monospace; }
   .station { color: var(--accent); }
   footer { color: var(--muted); font-size: .8rem; }
   footer a { color: var(--muted); }

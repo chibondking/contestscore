@@ -79,4 +79,18 @@ const THEME_KEY = 'contestpulse_theme';
         '<a href="https://github.com/chibondking/contestscore" target="_blank" rel="noopener">GitHub</a></span>',
     );
   }
+  // Chart.js draws on a canvas, so it never sees the CSS font: give it the
+  // mono face (dashboard.css --font-mono) -- chart text is axis numbers,
+  // bands and calls. Chart.js loads before this script on every page that
+  // has charts. The web font may still be downloading when the first chart
+  // draws, so redraw every chart once it's ready.
+  if (window.Chart) {
+    const mono = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim();
+    if (mono) Chart.defaults.font.family = mono;
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => {
+        Object.values(Chart.instances || {}).forEach((c) => c.update('none'));
+      });
+    }
+  }
 })();
