@@ -1228,8 +1228,9 @@ body {
 /* Values in the mono face (IBM Plex Mono) so callsigns, bands, scores,
    times and table columns line up and read as data; labels, headings,
    buttons and prose stay in Plex Sans (body). The map labels are section
-   and zone abbreviations, so they're values too. */
-.header h1, .metric__value, .radio-nr, .radio-freq, .radio-mode, .radio-op,
+   and zone abbreviations, so they're values too. The "ContestPulse" title
+   is a heading, so it stays in Plex Sans with the nav beside it. */
+.metric__value, .radio-nr, .radio-freq, .radio-mode, .radio-op,
 .grid-locator, .solar-chip, .qso-table td, .stats-table td,
 .bust-call, .continent-row__count, .solar-tile__value, .defn dd,
 .multbell__num, .chip b, .secmap-needed, .secmap-label,
