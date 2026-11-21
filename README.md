@@ -784,3 +784,5 @@ initialize entirely. See `CLAUDE.md` for this and other gotchas hit along
 the way (N1MM's frequency fields being in tens of Hz, not Hz; Chart.js
 instances needing to live outside Alpine's reactive Proxy to keep working
 past their first render).
+
+<!-- runner check 2026-11-21: test PR, not for merge -->
