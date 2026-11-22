@@ -18,6 +18,12 @@ function admin() {
     // GET /api/cty: the country file this server resolves continents with.
     cty: {},
 
+    // Possible Busts switch (GET /api/busts `hidden`). null until loaded.
+    bustsHidden: null,
+    bustsBusy: false,
+    bustsMessage: '',
+    bustsMessageIsError: false,
+
     cacheBusy: false,
     cacheMessage: '',
     cacheMessageIsError: false,
@@ -31,6 +37,42 @@ function admin() {
       this.fetchCounts();
       this.fetchLookupStatus();
       this.fetchCty();
+      this.fetchBustsHidden();
+    },
+
+    async fetchBustsHidden() {
+      try {
+        const body = await fetch('/api/busts').then((r) => r.json());
+        this.bustsHidden = Boolean(body.hidden);
+      } catch (err) {
+        console.error('Failed to load Possible Busts setting:', err);
+      }
+    },
+
+    async setBustsHidden(hidden) {
+      if (!this.token || this.bustsBusy) return;
+      this.bustsBusy = true;
+      this.bustsMessage = '';
+      try {
+        const res = await fetch(`/api/busts/${hidden ? 'hide' : 'show'}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.token}` },
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) {
+          this.bustsHidden = Boolean(body.hidden);
+          this.bustsMessage = hidden ? 'Possible Busts hidden.' : 'Possible Busts shown.';
+          this.bustsMessageIsError = false;
+        } else {
+          this.bustsMessage = `Save failed: ${body.error || res.status}`;
+          this.bustsMessageIsError = true;
+        }
+      } catch (err) {
+        this.bustsMessage = `Save failed: ${err.message}`;
+        this.bustsMessageIsError = true;
+      } finally {
+        this.bustsBusy = false;
+      }
     },
 
     async fetchCty() {

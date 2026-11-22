@@ -438,6 +438,13 @@
     <section class="card card--wide" id="busts"
              x-show="features.lookup && features.lookup.enabled && busts.length > 0">
       <h2 x-text="'Possible Busts (' + busts.length + ')'"></h2>
+      <!-- Log-washing note: a real-time aid only. See the Admin page's
+           Possible Busts switch for clubs that want it off entirely. -->
+      <p class="empty busts-note">
+        For checking during the contest only. Correcting the log from this
+        list after the contest is log washing under some contests' rules
+        (CQ WW Section IX.9) and can get an entry disqualified.
+      </p>
       <table class="qso-table">
         <thead>
           <tr><th>Call</th><th>Band</th><th>Mode</th><th>Operator</th><th>Logged</th></tr>
