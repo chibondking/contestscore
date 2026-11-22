@@ -133,6 +133,39 @@
       <p x-show="lookupMessage" :style="'margin-top:1rem; color:' + (lookupMessageIsError ? 'var(--red)' : 'var(--green)')" x-text="lookupMessage"></p>
     </section>
 
+    <section class="card card--wide" id="busts-switch">
+      <h2>Possible Busts Panel</h2>
+      <p class="empty" style="margin-bottom:1rem">
+        The Possible Busts panel is for checking calls while the contest is
+        running. Some contests forbid correcting a log from a database
+        after the contest -- CQ WW calls it log washing (Section IX.9) and
+        can disqualify the entry. If your club is entering one of those, or
+        just doesn't want the list around once the contest ends, hide it
+        here. Hidden means hidden everywhere: the dashboard and the API
+        both stop showing the list. Lookups keep running, and showing it
+        again is instant. This setting stays as it is after a restart or a
+        database reset.
+      </p>
+
+      <div class="score-row" style="margin-bottom:1rem">
+        <div class="metric">
+          <span class="metric__value" x-text="bustsHidden === null ? '—' : (bustsHidden ? 'Hidden' : 'Shown')"></span>
+          <span class="metric__label">Possible Busts panel</span>
+        </div>
+      </div>
+
+      <button
+        @click="setBustsHidden(!bustsHidden)"
+        :disabled="!token || bustsBusy || bustsHidden === null"
+        style="padding:0.6em 1.2em; border-radius:4px; border:none; font-family:inherit; font-weight:bold; cursor:pointer;"
+        :style="(!token || bustsBusy || bustsHidden === null) ? 'background:var(--border); color:var(--muted); cursor:not-allowed;' : (bustsHidden ? 'background:var(--green); color:#000;' : 'background:var(--red); color:#fff;')"
+      >
+        <span x-text="bustsBusy ? 'Saving…' : (bustsHidden ? 'Show Possible Busts' : 'Hide Possible Busts')"></span>
+      </button>
+      <p x-show="!token" class="empty" style="margin-top:0.5rem">Paste the admin token above to enable this.</p>
+      <p x-show="bustsMessage" :style="'margin-top:1rem; color:' + (bustsMessageIsError ? 'var(--red)' : 'var(--green)')" x-text="bustsMessage"></p>
+    </section>
+
     <section class="card card--wide" id="cache">
       <h2>Callsign Lookup Cache</h2>
       <p class="empty" style="margin-bottom:1rem">

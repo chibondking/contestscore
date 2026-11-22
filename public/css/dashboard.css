@@ -544,6 +544,7 @@ body {
    flag) rather than the red reserved for hard failure states. */
 #busts h2 { color: var(--run); }
 .bust-call { color: var(--run); font-weight: 700; }
+.busts-note { font-size: 0.8rem; margin: -0.25rem 0 0.75rem; }
 
 /* Recent QSOs + continent breakdown side panel */
 .log-layout {

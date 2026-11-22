@@ -6,6 +6,7 @@ const {
   getNotFoundCalls, clearCallsignCache, countCallsignCache,
   getSolarForSession,
   getCachedLocation,
+  getSetting, setSetting,
 } = require('../db/queries');
 const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
@@ -277,8 +278,20 @@ router.get('/bridges', (req, res) => {
 // current qsos + cache, so a call corrected in the logger simply stops
 // matching on the next fetch. Matches on the suffix-stripped call, since
 // that's what the lookup queue keys the cache by.
+//
+// `hidden: true` (and an empty list) when the club has switched the panel
+// off on the Admin page (settings.busts_hidden). Withheld here, not just
+// hidden in the page, so the list can't be read off the API either -- the
+// point is a club entering a contest where correcting calls from a database
+// counts as log washing (CQ WW, Section IX.9) can make sure nobody uses
+// this list to fix the log after the contest. Lookups keep running (the map
+// uses their grids); only the bust list is withheld.
+const BUSTS_HIDDEN_KEY = 'busts_hidden';
+const bustsHidden = () => getSetting(BUSTS_HIDDEN_KEY) === '1';
+
 router.get('/busts', (req, res) => {
-  if (!resolveLookupConfig().enabled) return res.json({ enabled: false, busts: [] });
+  if (!resolveLookupConfig().enabled) return res.json({ enabled: false, hidden: bustsHidden(), busts: [] });
+  if (bustsHidden()) return res.json({ enabled: true, hidden: true, busts: [] });
 
   const notFound = new Set(getNotFoundCalls());
   const seen = new Set();
@@ -297,8 +310,22 @@ router.get('/busts', (req, res) => {
       });
     }
   }
-  res.json({ enabled: true, busts });
+  res.json({ enabled: true, hidden: false, busts });
 });
+
+// POST /api/busts/hide | /api/busts/show -- the Admin page's Possible Busts
+// switch. Same optional-token posture as pausing lookups (reversible, so no
+// X-Confirm). Persisted in settings, so it survives a restart and a
+// DELETE /api/db -- it's the club's choice, not contest data.
+function setBustsHidden(hidden) {
+  return (req, res) => {
+    if (!checkToken(req, res)) return;
+    setSetting(BUSTS_HIDDEN_KEY, hidden ? '1' : '0');
+    res.json({ hidden });
+  };
+}
+router.post('/busts/hide', setBustsHidden(true));
+router.post('/busts/show', setBustsHidden(false));
 
 // DELETE /api/db  requires X-Confirm: yes, plus a bearer token whenever
 // CONTESTSCORE_API_TOKEN is set. On a LAN-only install with no token

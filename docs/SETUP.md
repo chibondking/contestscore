@@ -83,6 +83,13 @@ That's the whole LAN setup — no token, no HTTPS, no bridge.
   HAMQTH_PASSWORD=yourpassword
   ```
   and restart. Lookups are cached for about six months.
+
+  The panel is for checking calls **during** the contest. Some contests
+  forbid correcting a log from a database after the contest -- CQ WW
+  calls it log washing (Section IX.9) and can disqualify the entry. To
+  take the list away entirely (dashboard and API), use **Admin** →
+  Possible Busts Panel → Hide. It stays hidden through restarts and
+  database resets until you show it again.
 - *Space weather* (SFI / A / K in the header, the Solar page) is on by
   default and needs internet access from the machine. Readings are kept
   forever.

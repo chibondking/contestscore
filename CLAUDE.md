@@ -548,9 +548,11 @@ setup, ports, paths or a tenant/hamdata command, update them too.
   `{ sfi, a, k, sunspots, xray, geomag, updated }`, or `{ updated: null }`
   before the first fetch. Backed by `solar_snapshots`; live updates arrive
   on the `solar:update` socket event.
-- `GET /api/busts` -- `{ enabled, busts: [{ call, band, mode, operator,
-  logged_at }] }`: logged QSOs whose suffix-stripped call the HamQTH lookup
-  marked not-found. `enabled: false` (empty list) when lookup is off, so the
+- `GET /api/busts` -- `{ enabled, hidden, busts: [{ call, band, mode,
+  operator, logged_at }] }`: logged QSOs whose suffix-stripped call the
+  HamQTH lookup marked not-found. `hidden: true` (empty list) when the
+  Admin page's Possible Busts switch is off; `POST /api/busts/hide|show`
+  flip it (see "Log washing" below). `enabled: false` (empty list) when lookup is off, so the
   dashboard hides the panel. Derived fresh from `qsos` + `callsign_cache`
   each call -- a call corrected in the logger stops matching on the next
   fetch. No new socket event: the dashboard re-fetches this on any
@@ -804,6 +806,19 @@ lookup is on and something is actually flagged. Deliberately not a stored
 flag table -- deriving it fresh means a correction in the logger clears it
 with no extra bookkeeping. It empties when the QSOs go (`DELETE /api/db`)
 or the cache does. Dashboard only; the analyzer has no equivalent.
+
+**Log washing** (2026-11-21, after CQ WW's statement of the same date):
+CQ WW Section IX.9 forbids correcting calls/exchanges *after* the contest
+from any database, and the busts list stays up after the contest ends --
+exactly the list a log-washer wants. So: the panel carries a "during the
+contest only" note, and the Admin page has a **Possible Busts Panel**
+hide/show switch (`POST /api/busts/hide|show`, optional bearer token like
+lookup pause, no `X-Confirm`; persisted as `settings.busts_hidden`, so it
+survives restarts and `DELETE /api/db`). Hidden is enforced server-side:
+`GET /api/busts` returns `{ enabled, hidden: true, busts: [] }`, so the
+list can't be read off the API either. Lookups keep running (the map uses
+their grids). Don't add a "corrections" view or anything that makes
+post-contest fixing easier.
 
 ## Space Weather
 

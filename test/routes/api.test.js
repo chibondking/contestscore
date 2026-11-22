@@ -297,7 +297,7 @@ describe('GET /api/busts', () => {
 
   it('is disabled (and empty) when lookup is off', async () => {
     const body = await (await fetch(`${baseUrl}/api/busts`)).json();
-    assert.deepEqual(body, { enabled: false, busts: [] });
+    assert.deepEqual(body, { enabled: false, hidden: false, busts: [] });
   });
 
   it('lists logged QSOs whose base call HamQTH did not find', async () => {
@@ -337,7 +337,54 @@ describe('GET /api/busts', () => {
     enableLookup();
     upsertQso({ ext_id: 'e', call: 'W1AW', band: '20', mode: 'CW', operator: 'WT2P' });
     const body = await (await fetch(`${baseUrl}/api/busts`)).json();
-    assert.deepEqual(body, { enabled: true, busts: [] });
+    assert.deepEqual(body, { enabled: true, hidden: false, busts: [] });
+  });
+
+  describe('hide / show switch', () => {
+    const flagOne = () => {
+      enableLookup();
+      cacheCallsign('WT2ZZZ', { call: 'WT2ZZZ', source: 'hamqth', found: false }, 'hamqth');
+      upsertQso({ ext_id: 'h1', call: 'WT2ZZZ', band: '20', mode: 'CW', operator: 'WT2P' });
+    };
+    afterEach(async () => { await fetch(`${baseUrl}/api/busts/show`, { method: 'POST' }); });
+
+    it('withholds the list from the API while hidden, and restores it on show', async () => {
+      flagOne();
+      let res = await fetch(`${baseUrl}/api/busts/hide`, { method: 'POST' });
+      assert.equal(res.status, 200);
+      assert.deepEqual(await res.json(), { hidden: true });
+      let body = await (await fetch(`${baseUrl}/api/busts`)).json();
+      assert.deepEqual(body, { enabled: true, hidden: true, busts: [] });
+
+      res = await fetch(`${baseUrl}/api/busts/show`, { method: 'POST' });
+      assert.deepEqual(await res.json(), { hidden: false });
+      body = await (await fetch(`${baseUrl}/api/busts`)).json();
+      assert.equal(body.hidden, false);
+      assert.deepEqual(body.busts.map((b) => b.call), ['WT2ZZZ']);
+    });
+
+    it('needs the bearer token when one is configured', async () => {
+      process.env.CONTESTSCORE_API_TOKEN = 'sekrit';
+      let res = await fetch(`${baseUrl}/api/busts/hide`, { method: 'POST' });
+      assert.equal(res.status, 401);
+      res = await fetch(`${baseUrl}/api/busts/hide`, {
+        method: 'POST', headers: { Authorization: 'Bearer sekrit' },
+      });
+      assert.equal(res.status, 200);
+      res = await fetch(`${baseUrl}/api/busts/show`, {
+        method: 'POST', headers: { Authorization: 'Bearer sekrit' },
+      });
+      assert.equal(res.status, 200);
+    });
+
+    it('survives a database reset', async () => {
+      await fetch(`${baseUrl}/api/busts/hide`, { method: 'POST' });
+      await fetch(`${baseUrl}/api/db`, { method: 'DELETE', headers: { 'X-Confirm': 'yes' } });
+      flagOne();
+      const body = await (await fetch(`${baseUrl}/api/busts`)).json();
+      assert.equal(body.hidden, true);
+      assert.deepEqual(body.busts, []);
+    });
   });
 });
 
