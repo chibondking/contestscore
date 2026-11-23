@@ -17,6 +17,14 @@
 #                                              "temporarily offline" page
 #   contestscore-tenant resume <id>
 #   contestscore-tenant export <id> <out.db>   consistent SQLite snapshot
+#   contestscore-tenant migrate-out <id>      stop writes (offline page), then a tar.gz of
+#                                              the tenant (env + db snapshot + manifest)
+#                                              on STDOUT; resumed again if that fails
+#   contestscore-tenant migrate-in <id>       recreate it from that tar.gz on STDIN
+#                                              (same token and data, a free port here,
+#                                              suspended again if it was); JSON on
+#                                              stdout, never the token (ops repo
+#                                              docs/design/55, "Migrate")
 #   contestscore-tenant delete <id> --confirm <id>
 #                                              stop, disable, move the dir to
 #                                              tenants/.deleted/<id>-<ts> (not rm)
@@ -284,6 +292,83 @@ cmd_export() {
   echo "exported tenant $id to $out"
 }
 
+# --- migrate (ops repo docs/design/55): the tenant travels as a tar.gz
+# through pipes -- stdout here, stdin on the other box -- so neither this
+# tool nor contestscore-tenant-agent ever takes a file path for it.
+MIGRATE_FILES=(meta.env tenant.env qsos.db)
+
+cmd_migrate_out() {
+  local id; id=$(need_id "${1:-}")
+  local dir="$ROOT/$id"
+  [[ -f "$dir/tenant.env" ]] || die "no tenant $id"
+  [[ ! -t 1 ]] || die "migrate-out writes a tar.gz to stdout -- redirect it"
+  local live=0
+  [[ "$(systemctl is-enabled "$(unit "$id")" 2>/dev/null || true)" == enabled ]] && live=1
+  local tmp; tmp=$(mktemp -d /tmp/cstenant-out.XXXXXX)
+  chown contestscore:contestscore "$tmp"; chmod 700 "$tmp"
+  # Nothing may be written after the snapshot: stop the instance first (the
+  # offline page holds its port meanwhile).
+  ((live)) && cmd_suspend "$id" >&2
+  if [[ -f "$dir/data/qsos.db" ]] && ! snapshot "$dir/data/qsos.db" "$tmp/qsos.db"; then
+    ((live)) && cmd_resume "$id" >&2
+    rm -rf "$tmp"
+    die "migrate-out: snapshot of tenant $id failed -- nothing sent$( ((live)) && echo ', tenant resumed')"
+  fi
+  install -m 600 "$dir/tenant.env" "$tmp/tenant.env"
+  {
+    echo "META_ID=$id"
+    echo "META_WAS_LIVE=$live"
+    echo "META_FROM=$(hostname -s)"
+    echo "META_AT=$(date -u +%FT%TZ)"
+    echo "META_HAS_DB=$([[ -f "$tmp/qsos.db" ]] && echo 1 || echo 0)"
+  } > "$tmp/meta.env"
+  local files=(meta.env tenant.env); [[ -f "$tmp/qsos.db" ]] && files+=(qsos.db)
+  if ! tar -C "$tmp" -czf - "${files[@]}"; then
+    ((live)) && cmd_resume "$id" >&2
+    rm -rf "$tmp"
+    die "migrate-out: packing tenant $id failed$( ((live)) && echo ' -- tenant resumed')"
+  fi
+  rm -rf "$tmp"
+  echo "tenant $id packed for migration (was $( ((live)) && echo live || echo suspended); stopped here, data kept until it is deleted)" >&2
+}
+
+cmd_migrate_in() {
+  local id; id=$(need_id "${1:-}")
+  [[ ! -e "$ROOT/$id" ]] || die "tenant $id already exists on this box"
+  [[ ! -t 0 ]] || die "migrate-in reads the tar.gz from stdin"
+  local tmp; tmp=$(mktemp -d /tmp/cstenant-in.XXXXXX)
+  chown contestscore:contestscore "$tmp"; chmod 700 "$tmp"
+  local raw="$tmp/bundle.tgz"
+  cat > "$raw"
+  # Only the expected members, as plain files -- nothing else is extracted.
+  local listing; listing=$(tar -tvzf "$raw") || { rm -rf "$tmp"; die "migrate-in: not a tar.gz"; }
+  local names; names=$(tar -tzf "$raw" | sort | tr '\n' ' ')
+  case "$names" in
+    "meta.env qsos.db tenant.env "|"meta.env tenant.env ") ;;
+    *) rm -rf "$tmp"; die "migrate-in: unexpected contents: $names" ;;
+  esac
+  grep -qvE '^-' <<<"$listing" && { rm -rf "$tmp"; die "migrate-in: only plain files are accepted"; }
+  tar -C "$tmp" --no-same-owner -xzf "$raw" "${MIGRATE_FILES[@]:0:2}" $([[ "$names" == *qsos.db* ]] && echo qsos.db)
+  rm -f "$raw"
+  chown -R contestscore:contestscore "$tmp"
+  local mid live
+  mid=$(env_get "$tmp/meta.env" META_ID); live=$(env_get "$tmp/meta.env" META_WAS_LIVE)
+  [[ "$mid" == "$id" ]] || { rm -rf "$tmp"; die "migrate-in: this is tenant '$mid', not $id"; }
+  local name; name=$(env_get "$tmp/tenant.env" CONTESTSCORE_TENANT_NAME)
+  local args=("$id" --name "${name:-${id^^}}" --adopt-env "$tmp/tenant.env" --json)
+  [[ -f "$tmp/qsos.db" ]] && args+=(--import-db "$tmp/qsos.db")
+  local out
+  if ! out=$(cmd_create "${args[@]}"); then
+    rm -rf "$tmp"
+    die "migrate-in: creating tenant $id failed (see above)"
+  fi
+  rm -rf "$tmp"
+  local port; port=$(sed -n 's/.*"port":\([0-9]*\).*/\1/p' <<<"$out")
+  [[ "$live" == 1 ]] || cmd_suspend "$id" >&2
+  # Never the token: this output is stored in the ops dashboard's audit trail.
+  printf '{"id":"%s","port":%s,"was_live":%s}\n' "$id" "${port:-0}" "$([[ "$live" == 1 ]] && echo true || echo false)"
+}
+
 cmd_delete() {
   local id; id=$(need_id "${1:-}")
   [[ "${2:-}" == "--confirm" && "${3:-}" == "$id" ]] || die "delete: repeat the id: delete $id --confirm $id"
@@ -306,5 +391,7 @@ case "${1:-}" in
   resume)  shift; cmd_resume "$@" ;;
   export)  shift; cmd_export "$@" ;;
   delete)  shift; cmd_delete "$@" ;;
+  migrate-out) shift; cmd_migrate_out "$@" ;;
+  migrate-in)  shift; cmd_migrate_in "$@" ;;
   *) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

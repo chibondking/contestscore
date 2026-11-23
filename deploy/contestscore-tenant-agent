@@ -11,6 +11,10 @@
 #   contestscore-tenant-agent create <id> <name>      JSON {id,port,url,token}
 #   contestscore-tenant-agent suspend|resume|restart <id>
 #   contestscore-tenant-agent delete <id>             (data moved aside, not rm)
+#   contestscore-tenant-agent migrate-out <id>        tar.gz of the tenant on stdout
+#   contestscore-tenant-agent migrate-in <id>         ... from stdin; JSON {id,port,was_live}
+#                                                     (ops repo docs/design/55: the bundle
+#                                                     only ever travels through pipes)
 #
 # Writes run through `systemd-run --wait --pipe`: the agent's unit is
 # ProtectSystem=strict, and that read-only view of /opt and /etc is
@@ -45,5 +49,9 @@ case "${1:-}" in
     (($# == 2)) || die "usage: delete <id>"
     id_ok "$2"
     run delete "$2" --confirm "$2" ;;
-  *) die "unknown command '${1:-}' (list|create|suspend|resume|restart|delete)" ;;
+  migrate-out|migrate-in)
+    (($# == 2)) || die "usage: $1 <id>"
+    id_ok "$2"
+    run "$1" "$2" ;;  # systemd-run --pipe carries stdin/stdout through
+  *) die "unknown command '${1:-}' (list|create|suspend|resume|restart|delete|migrate-out|migrate-in)" ;;
 esac
