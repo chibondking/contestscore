@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'  # match production (wt2p-vpserver-chi runs 22)
+          node-version: '22'  # match production (wt2p-vps-tor1 and wt2p-vps-score-sfo2 run 22)
       - run: npm install
       - run: npm test
 
@@ -38,8 +38,15 @@ jobs:
     needs: test
     runs-on: self-hosted
     steps:
-      - name: Deploy to scoreboard.wt2p.us
+      # Every box that runs contestscore tenants (ops repo docs/design/55): the
+      # DEPLOY_HOSTS secret, space-separated, else the single DEPLOY_HOST. A
+      # box reached over the tailnet (wt2p-vps-score-sfo2, public SSH closed)
+      # is fine: the runner container goes out through its host's tailscale0.
+      # Each box is deployed and reported on its own, so one failing box
+      # doesn't hide or block the others; the job fails if any did.
+      - name: Deploy to every contestscore box
         env:
+          DEPLOY_HOSTS: ${{ secrets.DEPLOY_HOSTS }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -47,7 +54,20 @@ jobs:
           install -m 700 -d ~/.ssh
           install -m 600 /dev/null ~/.ssh/deploy_key
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-          # The server-side forced command ignores whatever we ask for here
-          # and always runs contestscore-deploy.sh -- see its header comment.
-          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" true
+          hosts="${DEPLOY_HOSTS:-$DEPLOY_HOST}"
+          [ -n "$hosts" ] || { echo "no DEPLOY_HOSTS or DEPLOY_HOST secret"; exit 1; }
+          failed=""
+          for h in $hosts; do
+            echo "::group::deploy to $h"
+            ssh-keyscan -H "$h" >> ~/.ssh/known_hosts 2>/dev/null
+            # The server-side forced command ignores whatever we ask for here
+            # and always runs contestscore-deploy.sh -- see its header comment.
+            if ssh -i ~/.ssh/deploy_key -o ConnectTimeout=20 "$DEPLOY_USER@$h" true; then
+              echo "deployed: $h"
+            else
+              echo "::error::deploy to $h failed"
+              failed="$failed $h"
+            fi
+            echo "::endgroup::"
+          done
+          [ -z "$failed" ] || { echo "failed on:$failed"; exit 1; }
