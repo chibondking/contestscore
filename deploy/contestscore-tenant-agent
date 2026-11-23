@@ -26,7 +26,7 @@ set -euo pipefail
 TOOL=/usr/local/sbin/contestscore-tenant
 die() { echo "contestscore-tenant-agent: $*" >&2; exit 2; }
 [[ $EUID -eq 0 ]] || die "run via sudo"
-id_ok() { [[ "${1:-}" =~ ^[a-z0-9]{3,10}$ ]] || die "invalid tenant id '${1:-}'"; }
+id_ok() { [[ "${1:-}" =~ ^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$ ]] || die "invalid tenant id '${1:-}'"; }
 # Fixed unit-name prefix so the ops agent knows these short-lived units
 # are expected (node.yaml security.expected_unit_prefixes: cstenant-op-).
 run() { exec systemd-run --quiet --wait --pipe --collect --service-type=exec --unit="cstenant-op-$(date +%s%N)" "$TOOL" "$@"; }
