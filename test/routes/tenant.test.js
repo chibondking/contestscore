@@ -42,10 +42,14 @@ describe('getTenant', () => {
   it('uses CONTESTSCORE_TENANT_NAME when given', () => {
     assert.equal(getTenant({ CONTESTSCORE_TENANT: 'nw8s', CONTESTSCORE_TENANT_NAME: ' NW8S Club ' }).name, 'NW8S Club');
   });
-  it('rejects anything that is not 3-10 letters/digits', () => {
-    for (const bad of ['k9', 'k9ct/p', '../etc', 'a'.repeat(11)]) {
+  it('rejects anything that is not 3-10 letters/digits/hyphens', () => {
+    for (const bad of ['k9', 'k9ct/p', '../etc', 'a'.repeat(11), '-k9ct', 'k9ct-', 'wt2p_w6', 'wt2p w6']) {
       assert.throws(() => getTenant({ CONTESTSCORE_TENANT: bad }), /callsign-like/);
     }
+  });
+  it('accepts a hyphen inside the id (a portable call like WT2P/W6)', () => {
+    assert.deepEqual(getTenant({ CONTESTSCORE_TENANT: 'wt2p-w6' }), { call: 'WT2P-W6', name: 'WT2P-W6' });
+    assert.equal(getTenant({ CONTESTSCORE_TENANT: 'a-b' }).call, 'A-B');
   });
 });
 

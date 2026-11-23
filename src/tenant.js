@@ -17,12 +17,14 @@
 //    ContestPulse's authenticated HTTPS ingest.
 //  * GET /api/features carries { tenant: { call, name } }.
 
-const CALL_RE = /^[a-z0-9]{3,10}$/i;
+// 3-10 letters, digits and hyphens, not first or last (wt2p-w6 for WT2P/W6):
+// it is also a DNS label (<id>-score.<domain>) and a systemd instance name.
+const CALL_RE = /^[a-z0-9][a-z0-9-]{1,8}[a-z0-9]$/i;
 
 function getTenant(env = process.env) {
   const raw = String(env.CONTESTSCORE_TENANT || '').trim();
   if (!raw) return null;
-  if (!CALL_RE.test(raw)) throw new Error(`CONTESTSCORE_TENANT "${raw}" is not a callsign-like id (3-10 letters/digits)`);
+  if (!CALL_RE.test(raw)) throw new Error(`CONTESTSCORE_TENANT "${raw}" is not a callsign-like id (3-10 letters, digits or hyphens; no hyphen first or last)`);
   const call = raw.toUpperCase();
   const name = String(env.CONTESTSCORE_TENANT_NAME || '').trim() || call;
   return { call, name };
