@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run the contestscore TUI against an instance on this box.
 #
-#   cstui           the default tenant (wt2p), on its own HTTP_PORT
+#   cstui           wt2p if this box has it, else the box's only tenant
 #   cstui nw8s      that tenant instead
 #   cstui --list    every tenant on this box, with its port
 #   cstui wt2p --once   extra flags pass straight through to the TUI
@@ -37,12 +37,33 @@ case ${1-} in
     ;;
 esac
 
-id=$DEFAULT_TENANT
+# /opt/contestscore is 750 contestscore: a login user can't even see whether
+# tenants/ exists, so every look inside goes through sudo. (A plain [[ -d ]]
+# here was always false for a login user, so cstui fell back to port 3000 --
+# which only worked while wt2p happened to be the tenant on 3000.)
+tenant_box=0
+sudo -u contestscore test -d "$TENANTS" && tenant_box=1
+
+id=""
 if [[ ${1-} && ${1-} != -* ]]; then id=$1; shift; fi
+if [[ -z $id && $tenant_box == 1 ]]; then
+  mapfile -t here < <(sudo -u contestscore bash -c \
+    'for f in "$1"/*/tenant.env; do [[ -f $f ]] && { d=${f%/tenant.env}; echo "${d##*/}"; }; done' _ "$TENANTS")
+  if printf '%s\n' "${here[@]}" | grep -qx "$DEFAULT_TENANT"; then
+    id=$DEFAULT_TENANT
+  elif ((${#here[@]} == 1)); then
+    id=${here[0]}
+  elif ((${#here[@]} == 0)); then
+    echo "cstui: no tenants on this box" >&2; exit 1
+  else
+    echo "cstui: which tenant? $(printf '%s ' "${here[@]}")-- e.g. cstui ${here[0]}" >&2; exit 1
+  fi
+fi
+id=${id:-$DEFAULT_TENANT}
 # Goes into a sudo bash -c below, so don't take anything but an id shape.
 [[ $id =~ ^[A-Za-z0-9_-]+$ ]] || { echo "cstui: bad tenant id '$id'" >&2; exit 1; }
 
-if [[ -d $TENANTS ]]; then
+if [[ $tenant_box == 1 ]]; then
   port=$(sudo -u contestscore bash -c \
     'grep -h "^HTTP_PORT=" "$1/tenant.env" 2>/dev/null | head -1 | cut -d= -f2' _ "$TENANTS/$id")
   [[ -n ${port:-} ]] || { echo "cstui: no tenant '$id' here -- try: cstui --list" >&2; exit 1; }
