@@ -29,8 +29,8 @@
 #                                              stop, disable, move the dir to
 #                                              tenants/.deleted/<id>-<ts> (not rm)
 #
-# <id>: 3-10 letters, digits and hyphens, not starting or ending with one
-# (a callsign, usually, e.g. wt2p-w6 for WT2P/W6; upper case is fine, it's
+# <id>: 3-32 letters, digits and hyphens, not starting or ending with one
+# (a callsign, usually -- wt2p-w6 for WT2P/W6, dl1abc-ok3, rs100ana; upper case is fine, it's
 # lower-cased). Each tenant
 # gets /opt/contestscore/tenants/<id>/{tenant.env,data/}, a loopback HTTP
 # port (3200-3299 unless --port), its own ingest/analyzer token, and
@@ -66,13 +66,13 @@ fi
 die() { echo "contestscore-tenant: $*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || die "run as root (sudo)"
 
-valid_id() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]{1,8}[a-z0-9]$ ]]; }
+valid_id() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$ ]]; }
 need_id() {
   # Callsigns are usually typed in capitals; ids (unit names, hostnames,
   # directories) are always lower-case, so normalize instead of refusing.
   local id="${1:-}"
   id="${id,,}"
-  valid_id "$id" || die "invalid tenant id '${1:-}' (3-10 letters, digits or hyphens; no hyphen first or last)"
+  valid_id "$id" || die "invalid tenant id '${1:-}' (3-32 letters, digits or hyphens; no hyphen first or last)"
   printf '%s' "$id"
 }
 unit() { printf 'contestscore@%s.service' "$1"; }
