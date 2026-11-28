@@ -11,16 +11,52 @@
 //                                stop/start ALL outgoing HamQTH lookups (persisted)
 //   DELETE /lookup/cache         bearer HAMDATA_TOKEN + X-Confirm: yes -- clear the
 //                                shared callsign cache (never solar data)
+//   GET  /lookup/export?after_ts=&after_call=&limit=
+//                                cache rows oldest-first after a (cached_at, call)
+//                                cursor -- for syncing the cache between boxes
+//   POST /lookup/import          bearer HAMDATA_TOKEN: merge rows from another box
+//                                (newer cached_at wins; `hamdata-ctl import-cache`)
+//
+// Cache sync: the ops dashboard's agent on each box pulls new rows from the
+// other boxes (through the dashboard) and imports them here, and exports
+// this box's new rows for the others (ops repo docs/design/63). hamdata
+// itself never talks to another box.
 
 const express = require('express');
 const { getDb } = require('../src/db');
-const { getSolarSince, clearCallsignCache, countCallsignCache } = require('../src/db/queries');
+const {
+  getSolarSince, clearCallsignCache, countCallsignCache, exportCallsignCache, importCallsignCache,
+} = require('../src/db/queries');
 const { latestSolar } = require('../src/solar');
 const { stripSuffix } = require('../src/lookup');
 
 const CALL_RE = /^[A-Z0-9]{3,15}$/;
+const SOURCE_RE = /^[a-z0-9_-]{1,20}$/;
+const TS_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+const MAX_IMPORT = 1000;
+const MAX_DATA = 4096;
+const FUTURE_SLACK_MS = 10 * 60 * 1000;
 
-function createApp({ broker, solar, env = process.env }) {
+// One row from another box, or null if it isn't one we'd have written
+// ourselves: a base call, a provider name, a datetime('now')-shaped stamp
+// that isn't in the future (a skewed clock must not win forever), and a JSON
+// object no bigger than a real lookup record.
+function validImportRow(r, nowMs) {
+  if (!r || typeof r !== 'object') return null;
+  const { call, source, cached_at: ts, data } = r;
+  if (typeof call !== 'string' || !CALL_RE.test(call)) return null;
+  if (typeof source !== 'string' || !SOURCE_RE.test(source)) return null;
+  if (typeof ts !== 'string' || !TS_RE.test(ts)) return null;
+  const ms = new Date(ts.replace(' ', 'T') + 'Z').getTime();
+  if (!Number.isFinite(ms) || ms > nowMs + FUTURE_SLACK_MS) return null;
+  if (typeof data !== 'string' || data.length > MAX_DATA) return null;
+  let obj;
+  try { obj = JSON.parse(data); } catch { return null; }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  return { call, source, cached_at: ts, data };
+}
+
+function createApp({ broker, solar, env = process.env, now = Date.now }) {
   const app = express();
 
   function requireToken(req, res, next) {
@@ -65,6 +101,33 @@ function createApp({ broker, solar, env = process.env }) {
     return res.json({ cleared: clearCallsignCache() });
   });
 
+  // Before /lookup/:call -- EXPORT is a valid-looking callsign.
+  app.get('/lookup/export', (req, res) => {
+    const afterTs = String(req.query.after_ts || '');
+    const afterCall = String(req.query.after_call || '');
+    if (afterTs && !TS_RE.test(afterTs)) return res.status(400).json({ error: 'after_ts: YYYY-MM-DD HH:MM:SS' });
+    if (afterCall && !CALL_RE.test(afterCall)) return res.status(400).json({ error: 'after_call: a callsign' });
+    const { rows, more } = exportCallsignCache({ afterTs, afterCall, limit: req.query.limit });
+    const last = rows[rows.length - 1];
+    return res.json({
+      rows, more, next: last ? { ts: last.cached_at, call: last.call } : null, cache: countCallsignCache(),
+    });
+  });
+
+  app.post('/lookup/import', requireToken, express.json({ limit: '8mb' }), (req, res) => {
+    const list = req.body && Array.isArray(req.body.rows) ? req.body.rows : null;
+    if (!list) return res.status(400).json({ error: 'body: { rows: [...] }' });
+    if (list.length > MAX_IMPORT) return res.status(413).json({ error: `at most ${MAX_IMPORT} rows per import` });
+    const nowMs = now();
+    const ok = [];
+    for (const r of list) {
+      const v = validImportRow(r, nowMs);
+      if (v) ok.push(v);
+    }
+    const applied = ok.length ? importCallsignCache(ok) : 0;
+    return res.json({ received: list.length, applied, rejected: list.length - ok.length, cache: countCallsignCache() });
+  });
+
   app.get('/lookup/:call', async (req, res) => {
     const call = stripSuffix(req.params.call);
     if (!CALL_RE.test(call)) return res.status(400).json({ error: 'invalid callsign' });
@@ -78,4 +141,4 @@ function createApp({ broker, solar, env = process.env }) {
   return app;
 }
 
-module.exports = { createApp };
+module.exports = { createApp, validImportRow };
