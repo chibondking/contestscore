@@ -28,4 +28,14 @@ describe('pages: shared partials', () => {
       assert.equal(/#include/.test(html), false, page);
     }
   });
+
+  it('stamps every local script and stylesheet with the build, leaves CDN URLs alone', () => {
+    for (const page of ['index.html', 'map.html', 'stats.html', 'admin.html']) {
+      const html = buildPage(page, undefined, 'abc1234');
+      const local = html.match(/(?:src|href)="\/(?:js|css)\/[^"]+"/g) || [];
+      assert.ok(local.length > 0, page);
+      for (const u of local) assert.match(u, /\?v=abc1234"$/, `${page}: ${u}`);
+      assert.match(html, /src="https:\/\/cdn\.jsdelivr\.net\/npm\/alpinejs@3\/dist\/cdn\.min\.js"/);
+    }
+  });
 });
