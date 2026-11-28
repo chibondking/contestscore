@@ -15,6 +15,11 @@ const cosb = {
     if (q.contest === 'BOOM') throw new Error('COSB /contest/: HTTP 503');
     return { contest: { id: 56, name: 'CQ WW CW' }, sections: [] };
   },
+  contestStatus: async (q) => {
+    asked.push(q);
+    return { contest: q.contest === 'CQ-WW-CW' ? { id: 56, name: 'CQ WW CW', status: 'on_air' } : null, fetched_at: 'x' };
+  },
+  contests: async () => ({ fetched_at: 'x', contests: [{ id: 56, name: 'CQ WW CW', status: 'on_air' }] }),
 };
 
 before(async () => {
@@ -47,5 +52,14 @@ describe('hamdata /cosb/standings', () => {
     const r = await fetch(`http://127.0.0.1:${s.address().port}/cosb/standings?contest=CQ-WW-CW`);
     assert.equal(r.status, 503);
     await new Promise((r2) => s.close(r2));
+  });
+
+  it('contest status and the stored list', async () => {
+    const client = createHamdataClient({ url: base });
+    assert.equal((await client.cosbContestStatus({ contest: 'CQ-WW-CW' })).contest.status, 'on_air');
+    assert.equal((await client.cosbContestStatus({ contest: 'NAQP-CW' })).contest, null);
+    assert.equal((await fetch(`${base}/cosb/contest-status`)).status, 400);
+    const list = await (await fetch(`${base}/cosb/contests`)).json();
+    assert.equal(list.contests[0].id, 56);
   });
 });

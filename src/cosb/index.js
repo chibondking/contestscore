@@ -112,7 +112,7 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
   if (!source) {
     if (cfg.hamdataUrl) {
       const hd = createHamdataClient({ url: cfg.hamdataUrl, fetchImpl: deps.fetchImpl });
-      source = { standings: (q) => hd.cosbStandings(q) };
+      source = { standings: (q) => hd.cosbStandings(q), contestStatus: (q) => hd.cosbContestStatus(q) };
     } else {
       source = createCosbSource({ fetchImpl: deps.fetchImpl, now });
     }
@@ -179,6 +179,7 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
   }
 
   let pending = null; // newest XML not yet sent
+  let contestState = null; // last { contest, fetched_at } from contestStatus
   let lastPostAt = 0;
   let pubTimer = null;
   let posting = false;
@@ -207,6 +208,26 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
     pending = null;
     posting = true;
     lastPostAt = now();
+    const at = new Date(lastPostAt).toISOString();
+    // COSB takes posts only while the contest is on air (CJ, 2026-11-28):
+    // ask first, and skip -- not fail -- when it isn't. If the status can't
+    // be had (COSB or hamdata down), post anyway and let COSB decide.
+    const loggerContest = (body.match(/<contest>([^<]*)<\/contest>/i) || [])[1] || '';
+    if (source.contestStatus) {
+      try {
+        contestState = await source.contestStatus({ contest: loggerContest, contestId: cfg.contestId });
+        const c = contestState && contestState.contest;
+        if (!c || c.status !== 'on_air') {
+          const why = c ? `${c.name} is ${c.status === 'coming' ? 'not on air yet' : 'closed'} on COSB` : `COSB has no contest for ${loggerContest || 'this log'}`;
+          lastResult = { at, ok: false, skipped: true, status: 'not_on_air', message: why };
+          posting = false;
+          schedule();
+          return lastResult;
+        }
+      } catch (err) {
+        console.error(`cosb: contest status: ${err.message}`);
+      }
+    }
     try {
       const res = await doFetch(postUrl, {
         method: 'POST',
@@ -227,10 +248,10 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
         if (j && j.status_message) msg = String(j.status_message).slice(0, 200);
       } catch { /* not JSON */ }
       const ok = res.ok && status === 200;
-      lastResult = { at: new Date(lastPostAt).toISOString(), ok, status, message: msg };
+      lastResult = { at, ok, status, message: msg };
       if (!ok) console.error(`cosb: publish: ${status} ${msg}`);
     } catch (err) {
-      lastResult = { at: new Date(lastPostAt).toISOString(), ok: false, status: null, message: err.message };
+      lastResult = { at, ok: false, status: null, message: err.message };
       console.error(`cosb: publish: ${err.message}`);
     } finally {
       posting = false;
@@ -248,6 +269,7 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
       from_env: pc.from_env,
       min_interval_sec: PUBLISH_MIN_MS / 1000,
       last: lastResult,
+      contest: contestState ? contestState.contest : null,
     };
   }
 

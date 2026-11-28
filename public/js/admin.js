@@ -100,6 +100,15 @@ function admin() {
       return l.ok ? `OK ${t}` : `${l.message || 'failed'} ${t}`;
     },
 
+    // The COSB contest the log maps to and its status -- posts are only
+    // sent while it's on air.
+    cosbContestLabel() {
+      const c = this.cosbPublish && this.cosbPublish.contest;
+      if (!c) return '—';
+      const st = { on_air: 'on air', coming: 'coming', closed: 'closed' }[c.status] || c.status || '?';
+      return `${c.name || '#' + c.id} (${st})`;
+    },
+
     async saveCosb(enabled) {
       if (!this.token || this.cosbBusy) return;
       this.cosbBusy = true;

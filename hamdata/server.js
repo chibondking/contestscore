@@ -45,7 +45,7 @@ if (broker.getStatus().paused) console.warn('hamdata: outgoing lookups are STOPP
 const port = Number(process.env.HAMDATA_PORT) || 3100;
 const host = process.env.HAMDATA_HOST || '127.0.0.1';
 // One COSB reader for the whole box (src/cosb/source.js).
-const cosb = createCosbSource();
+const cosb = createCosbSource({ store: { getSetting, setSetting } });
 
 createApp({ broker, solar, cosb, env: process.env }).listen(port, host, () => {
   console.log(`hamdata running at http://${host}:${port}`);

@@ -91,6 +91,22 @@ function resolveContest(loggerContest, list, supported) {
     || null;
 }
 
+// The COSB contest a logger contest name maps to, whatever its status --
+// on air first, then coming, then the most recent closed one (the picker
+// lists newest first). COSB accepts posts only while a contest is on air,
+// so the publisher asks this before sending. null = COSB doesn't know it.
+const STATUS_RANK = { on_air: 0, coming: 1, closed: 2 };
+function findContest(loggerContest, list, supported) {
+  const key = contestKey(loggerContest);
+  if (!key) return null;
+  const names = new Set(
+    supported.filter((s) => contestKey(s.loggerId) === key).map((s) => contestKey(s.name)),
+  );
+  const hits = list.filter((c) => names.has(contestKey(c.name)) || contestKey(c.name) === key);
+  if (!hits.length) return null;
+  return hits.reduce((best, c) => ((STATUS_RANK[c.status] ?? 3) < (STATUS_RANK[best.status] ?? 3) ? c : best));
+}
+
 // The scoreboard page: one table per category, each opened by a
 // <tr class="title5"> header ("M/M HP", "SO-ALL LP (A) CW", ...) and
 // followed by <tr class="tbl1|tbl2"> station rows:
@@ -152,4 +168,4 @@ function parseRow(chunk) {
   };
 }
 
-module.exports = { parseContestList, parseSupported, parseScoreboard, resolveContest, contestKey };
+module.exports = { parseContestList, parseSupported, parseScoreboard, resolveContest, findContest, contestKey };

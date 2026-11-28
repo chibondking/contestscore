@@ -65,7 +65,14 @@ function createHamdataClient({ url, fetchImpl, timeoutMs = TIMEOUT_MS } = {}) {
     return getJson(`/cosb/standings?${q}`);
   }
 
-  return { lookup, solarSince, lookupStatus, cosbStandings };
+  // -> { contest: { id, name, status, url } | null, fetched_at }
+  async function cosbContestStatus({ contest, contestId } = {}) {
+    const q = new URLSearchParams({ contest: contest || '' });
+    if (contestId) q.set('contest_id', String(contestId));
+    return getJson(`/cosb/contest-status?${q}`);
+  }
+
+  return { lookup, solarSince, lookupStatus, cosbStandings, cosbContestStatus };
 }
 
 module.exports = { createHamdataClient, resolveHamdataUrl };

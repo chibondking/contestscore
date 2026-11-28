@@ -587,7 +587,9 @@ each switched on per scoreboard from the **Admin** page (both off by default):
   be posting to COSB (from the logger, or with the switch below).
 - **Publish to COSB** — sends your logger's score to COSB at most every
   2 minutes, with your COSB login. Leave it off if your logger already
-  posts to COSB itself.
+  posts to COSB itself. Posts go only while COSB has the contest on air
+  (it rejects them otherwise); the Admin page shows the COSB contest and
+  its status, and "Last post" says why a post was skipped.
 
 `COSB_ENABLED=false` hides both; `COSB_CONTEST_ID=<id>` (the number in a
 COSB scoreboard URL) pins the contest if your logger's contest name isn't

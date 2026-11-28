@@ -244,3 +244,76 @@ describe('COSB source caching', () => {
     assert.deepEqual(await src.standings({ contest: 'NAQP-CW' }), { contest: null });
   });
 });
+
+describe('publisher: only while the COSB contest is on air', () => {
+  const XML = Buffer.from('<dynamicresults><contest>CQ-WW-CW</contest><call>K9CT</call></dynamicresults>');
+  function svcWith(statusFn) {
+    const posts = [];
+    const svc = createCosbService({
+      env: { COSB_USER: 'K9CT', COSB_PASSWORD: 'pw' },
+      deps: {
+        source: { standings: async () => ST, contestStatus: statusFn },
+        getLatestScore: () => null,
+        fetchImpl: async (url, opts) => { posts.push(opts.body); return { ok: true, status: 200, text: async () => '{"status":200,"status_message":"OK"}' }; },
+        ...fakeSettings(),
+      },
+    });
+    return { svc, posts };
+  }
+
+  it('skips (not fails) when the contest is closed or unknown, with the reason', async () => {
+    const asked = [];
+    const { svc, posts } = svcWith(async (q) => { asked.push(q); return { contest: { id: 56, name: 'CQ WW CW', status: 'closed' } }; });
+    svc.onScore({}, XML);
+    const r = await svc.flush();
+    assert.equal(posts.length, 0);
+    assert.deepEqual([r.ok, r.skipped, r.status], [false, true, 'not_on_air']);
+    assert.match(r.message, /CQ WW CW is closed/);
+    assert.deepEqual(asked, [{ contest: 'CQ-WW-CW', contestId: null }]);
+    assert.equal(svc.getPublishStatus().contest.status, 'closed');
+    svc.stop();
+
+    const u = svcWith(async () => ({ contest: null }));
+    u.svc.onScore({}, XML);
+    assert.match((await u.svc.flush()).message, /no contest for CQ-WW-CW/);
+    u.svc.stop();
+  });
+
+  it('posts when on air, and when the status check itself fails', async () => {
+    const a = svcWith(async () => ({ contest: { id: 56, name: 'CQ WW CW', status: 'on_air' } }));
+    a.svc.onScore({}, XML);
+    assert.equal((await a.svc.flush()).ok, true);
+    assert.equal(a.posts.length, 1);
+    a.svc.stop();
+
+    const b = svcWith(async () => { throw new Error('hamdata down'); });
+    b.svc.onScore({}, XML);
+    assert.equal((await b.svc.flush()).ok, true);
+    assert.equal(b.posts.length, 1);
+    b.svc.stop();
+  });
+});
+
+describe('COSB source: contest list kept in the store', () => {
+  it('persists the list, seeds a new source from it, and serves it while COSB is down', async () => {
+    const st = fakeSettings();
+    let t = 0;
+    let up = true;
+    const pages = { '/contest/': fx('contests.html'), '/settings/': fx('supported.html') };
+    const fetchImpl = async (url) => {
+      if (!up) return { ok: false, status: 503, text: async () => '' };
+      return { ok: true, status: 200, text: async () => pages[url.replace('https://cosb.test', '')] };
+    };
+    const a = createCosbSource({ now: () => t, base: 'https://cosb.test', fetchImpl, store: st });
+    const s1 = await a.contestStatus({ contest: 'CQ-WW-CW' });
+    assert.deepEqual([s1.contest.id, s1.contest.status], [56, 'on_air']);
+    assert.ok(JSON.parse(st.getSetting('cosb_contests')).value.length > 0);
+
+    up = false;
+    t += 24 * 3600000; // a day later, COSB down, fresh process
+    const b = createCosbSource({ now: () => t, base: 'https://cosb.test', fetchImpl, store: st });
+    const s2 = await b.contestStatus({ contest: 'CQ-WW-CW' });
+    assert.equal(s2.contest.id, 56);
+    assert.equal((await b.contests()).contests.find((c) => c.id === 113).status, 'coming');
+  });
+});
