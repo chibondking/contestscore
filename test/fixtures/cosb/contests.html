@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>Contest Online ScoreBoard </title>
+<meta charset="UTF-8" />
+<meta content="width=device-width, initial-scale=1" name="viewport">
+<link href="/css/_styles_main.css" rel="stylesheet" type="text/css">
+
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+<meta name="msapplication-TileColor" content="#da532c">
+<meta name="theme-color" content="#ffffff">
+
+</head>
+
+<body>
+<div id="center" style="width: 1210px; margin-right: auto; margin-left: auto;">
+
+<div id="myHeader" class="header" style=" ">
+	<div style="float:left; width: 395px;  margin-top: 0px; margin-left: 10px; height:39px;" class="title1">Contest Online ScoreBoard &nbsp; 
+<a href="/scoreboard/?mobile_view=yes" title ="Minimize your scoreboard window! Click to switch to mobile version"><img 
+src="/images/mobile.png" width="24px" height="24px" onMouseOver="this.src='/images/mobile_red.png';" onMouseOut="this.src='/images/mobile.png';" valign="center" align="center"  style="border: 0;"></a></div>
+	<div style="float:left; width: 140px;  margin-top: 12px;" class="title3">28 Nov 2026 05:19 UTC</div>
+	<div style="float:left; width: 335px;  margin-top: 12px;" class="title4"></div>
+	<div style="float:left; width: 230px;  margin-top: 12px;" class="title3"></div>
+	<div style="float:left; width: 80px;  margin-left: 18px; margin-top: 12px;" class="title4"><a target="_blanc" title="NOAA Space Weather Dashboard" href="https://www.spaceweather.gov/communities/space-weather-enthusiasts-dashboard">SFI:91 Kp:4</a></div> 
+
+<!-- header 2nd row starts -->
+	
+	<div  style="float:left; width: 100%; height: 30px;">
+	<div style="float:left; width: 360px; margin-left: 10px;">		
+ 	<form action="/scoreboard" name="contest_form">
+		<select name='contest_id' style="color: red;" id='contest' onchange="this.form.submit()"><option value='100'  style='color: darkblue;'>Closed: OK1WC Memorial (MWC)</option>
+<option value='547'  style='color: darkblue;'>Closed: Tuesday's Telegraphy</option>
+<option value='4'  style='color: darkblue;'>Closed: CWops Mini-CWT 1</option>
+<option value='189'  style='color: darkblue;'>Closed: MINITEST</option>
+<option value='34'  style='color: darkblue;'>Closed: CWops Mini-CWT 2</option>
+<option value='305'  style='color: darkblue;'>Closed: UKEICC 80m CW</option>
+<option value='35'  style='color: darkblue;'>Closed: CWops Mini-CWT 3</option>
+<option value='36'  style='color: darkblue;'>Closed: CWops Mini-CWT 4</option>
+<option value='291'  style='color: darkblue;'>Closed: RSGB 80m Autumn, CW</option>
+<option value='497'  style='color: darkblue;'>Closed: NCCC FT4 Sprint</option>
+<option value='508'  style='color: darkblue;'>Closed: Weekly RTTY</option>
+<option value='6'  style='color: darkblue;'>Closed: NCCC NA CW Sprint</option>
+<option value='428'  style='color: darkblue;'>Closed: K1USN Slow Speed Fri</option>
+<option value='56'   selected  style='color: red;'>On air: CQ WW CW</option>
+<option value='462'  style='color: green;'>Coming: ICWC-MST 1 </option>
+<option value='463'  style='color: green;'>Coming: ICWC-MST 2 </option>
+<option value='464'  style='color: green;'>Coming: ICWC-MST 3 </option>
+<option value='465'  style='color: green;'>Coming: A1 Club AWT </option>
+<option value='113'  style='color: green;'>Coming: ARRL 160 Meter </option>
+<option value='538'  style='color: green;'>Coming: CQ RJ RTTY DX </option>
+<option value='116'  style='color: green;'>Coming: PRO CW Contest </option>
+<option value='521'  style='color: green;'>Coming: FT Challenge </option>
+</select>&nbsp;<input type = "submit"  id="submit1" value="Go">
+		</form>
+	</div>
+	<div style="float:left;  width: 20px; padding: 5px;">&nbsp;</div>
+	<div class="title4" style="float:left;  width: 255px; padding: 5px;"></div>
+	<div class="title3" style="float:left;  width: 290px; padding: 5px;"></div>
+	<div class="title3" style="float:left;  margin-top: -6px; width: 175px;"><a href="http://www.icomamerica.com/en/amateur/" title="Icom America" target="_blank"><img border="0" 
+		width="158px" height="31px" src="/images/powered_by_icom_classic.png"></a></div>
+	<div class="title3" style="float:left;  margin-top: -9px; width: 60px;"><a href="/archive/wrtc.php" title="WRTC 2030 Roadmap Archive"><img border="0" width="60px" height="41px" src="/images/wrtc2030.png"></a></div>
+	</div>
+
+<!-- menu starts -->
+
+
+	<div id="menu" style="float:left; width: 1200px; height: 20px; background-color: black; padding: 1px;">
+
+	<div style="float:left; width: 50px;" class="top_menu"><a href="/scoreboard/?contest_id=56">Home</a></div>
+
+	<div style="float:left; width: 60px;" class="top_menu">
+	<a href='/profile/'>Login</a>	</div>
+
+	<div  style="float:left; width: 50px;" class="top_menu"><a href="/filter/" title="Refine your scoreboard scope by removing unwanted categories">Filter</a></div>
+	<div  style="float:left; width: 50px;" class="top_menu"><a href="/view/" title="Change the way scoreboard is displayed">View</a></div>
+	<div  style="float:left; width: 80px;" class="top_menu"><a href="/scoreboard/?contest_id=56&filter=flush"
+ title="Clear all Filter and View setting in case if you can not find some entries may be hidden">Clear Filter</a></div>	
+	<div  style="float:left; width: 80px;" class="top_menu">
+<a href="/scoreboard?contest_id=56&view=breakdown" title ="Click to see bands breakdown data" >Breakdown</a></div>
+	<div  style="float:left; width: 50px;" class="top_menu"><a href="/clubs/" title ="Club competition page" target="_blank">Clubs</a></div>
+	<div  style="float:left; width: 50px;" class="top_menu"><a href="/teams/" title ="Team competition page" target="_blank">Teams</a></div>
+
+	<div  style="float:left; width: 90px;" class="top_menu"><a href="/form/" title ="Manual Scoreboard Posting. Upload your score manually by the web site form.">Manual post</a></div>
+	<div  style="float:left; width: 90px;" class="top_menu_red"><a href="https://leaders.hfsignals.live/?contest="  title ="Leaderboard" target=_blank>Leaderboard</a></div>
+	<div  style="float:left; width: 60px;" class="top_menu_red"><a href="https://contestscope.com/?contest="  title ="ContestScope Dashboard and Analysis Tools" target=_blank>Analyze</a></div>
+
+	<div  style="float:left; width: 80px;" class="top_menu"><a href="/form/announced.php"  title ="Show announced Contest DX operations" >Announced</a></div>
+	<div  style="float:left; width: 50px;" class="top_menu"><a href="/archive/" >Archive</a></div>
+	<!--  -->
+
+	<div  style="float:right; width: 40px;" class="top_menu"><a href="https://blog.contestonlinescore.com" target="_blank" title="Click to read the latest COSB news">Blog</a></div>
+	<div  style="float:right; width: 40px;" class="top_menu"><a href="https://blog.contestonlinescore.com/documents/" target="blank">Help</a></div>
+	<div  style="float:right; width: 60px;" class="top_menu"><a href="/settings/" title ="Supported" >Contests</a></div>
+</div> <!-- menu -->
+</div> <!-- header -->
+
+<div class="content" style="width: 1200px; ">
+
+<!-- content start -->	
+<form action="/scoreboard" name="contest_form"><div align="center"><font class="title1">Choose your contest</font><br><br>
+		<table align="center" border="0" style="font-family:Arial, Helvetica, sans-serif;"><tr><td width="7%"></td><td width="93%"></td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='100'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: OK1WC Memorial (MWC)</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='547'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: Tuesday's Telegraphy</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='4'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: CWops Mini-CWT 1</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='189'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: MINITEST</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='34'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: CWops Mini-CWT 2</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='305'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: UKEICC 80m CW</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='35'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: CWops Mini-CWT 3</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='36'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: CWops Mini-CWT 4</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='291'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: RSGB 80m Autumn, CW</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='497'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: NCCC FT4 Sprint</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='508'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: Weekly RTTY</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='6'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: NCCC NA CW Sprint</td></tr><tr><td style='color: darkblue; text-align: left;'><input type='radio' name='contest_id' value='428'  onchange='this.form.submit();'  
+					></td><td style='color: darkblue; text-align: left; white-space: nowrap;'>Closed: K1USN Slow Speed Fri</td></tr><tr><td style='color: red; text-align: left;'><input type='radio' name='contest_id' value='56'   checked  ></td>
+						<td style='color: red; text-align: left; white-space: nowrap;'>On air: CQ WW CW</td></tr><tr><td style='color: green; text-align: left;'><input type='radio' name='contest_id' value='462'  onchange='this.form.submit();'  
+					></td><td style='color: green; text-align: left; white-space: nowrap;'>Coming: ICWC-MST 1</td></tr><tr><td style='color: green; text-align: left;'><input type='radio' name='contest_id' value='463'  onchange='this.form.submit();'  
+					></td><td style='color: green; text-align: left; white-space: nowrap;'>Coming: ICWC-MST 2</td></tr><tr><td style='color: green; text-align: left;'><input type='radio' name='contest_id' value='464'  onchange='this.form.submit();'  
+					></td><td style='color: green; text-align: left; white-space: nowrap;'>Coming: ICWC-MST 3</td></tr><tr><td style='color: green; text-align: left;'><input type='radio' name='contest_id' value='465'  onchange='this.form.submit();'  
+					></td><td style='color: green; text-align: left; white-space: nowrap;'>Coming: A1 Club AWT</td></tr><tr><td style='color: green; text-align: left;'><input type='radio' name='contest_id' value='113'  onchange='this.form.submit();'  
+					></td><td style='color: green; text-align: left; white-space: nowrap;'>Coming: ARRL 160 Meter</td></tr><tr><td style='color: green; text-align: left;'><input type='radio' name='contest_id' value='538'  onchange='this.form.submit();'  
+					></td><td style='color: green; text-align: left; white-space: nowrap;'>Coming: CQ RJ RTTY DX</td></tr><tr><td style='color: green; text-align: left;'><input type='radio' name='contest_id' value='116'  onchange='this.form.submit();'  
+					></td><td style='color: green; text-align: left; white-space: nowrap;'>Coming: PRO CW Contest</td></tr><tr><td style='color: green; text-align: left;'><input type='radio' name='contest_id' value='521'  onchange='this.form.submit();'  
+					></td><td style='color: green; text-align: left; white-space: nowrap;'>Coming: FT Challenge</td></tr></table>
+		<br><input type = "submit"  id="submit1" value="Go">
+		</form></div>	
+	
+<table style="width: 100%" cellpadding="0" cellspasing="0" border="0">
+  <tr class="title_copy_2">
+    <td td width= "2%"> &nbsp;</td>
+    <td height="20px" width= "30%" align ="left"> &nbsp <a href= "/contact/" target ="_blank">Contact us</a>
+		 &nbsp;   &nbsp;  <a href= "/terms/" target ="_blank">Terms & Conditions</a></td>
+    <td height="20px" width= "68%" align ="right" > &nbsp; Copyright &copy; contestonlinescore.com 2017-2026.  &nbsp; All rights reserved. &nbsp;   &nbsp; </td>
+		</tr></table>
+<!-- content stop  -->
+
+</div>  <!-- center content -->
+
+<script>
+window.onscroll = function() {myFunction()};
+
+var header = document.getElementById("myHeader");
+var sticky = header.offsetTop;
+
+function myFunction() {
+  if (window.pageYOffset >= sticky) {
+    header.classList.add("sticky");
+  } else {
+    header.classList.remove("sticky");
+  }
+}
+</script>
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-2396461-3', 'auto');
+  ga('send', 'pageview');
+
+</script>
+</body>
+</html>

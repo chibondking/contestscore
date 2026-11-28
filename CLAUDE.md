@@ -96,6 +96,29 @@ passed that test so far:
   `compare.js` keep their own `bandLabel`; **change one, change the
   other.** No Admin page (destructive and token-gated -- no business
   behind a keystroke), no world map, no busts panel. See `tui/README.md`;
+- **contestonlinescore.com (COSB)** (`src/cosb/`, CJ 2026-11-28, mid-CQ
+  WW; the old Node-RED dashboard read COSB too) -- two parts, **both
+  opt-in per board** from the Admin page (CJ: "have this be opt-in. to
+  turn on/off per board"):
+  - **Standings card** (`settings.cosb_standings`): this station's rank
+    in its COSB category, the top 3 and the two stations either side,
+    with the gap in points. COSB has no read API, so `src/cosb/parse.js`
+    reads its HTML (fixtures captured live, `test/fixtures/cosb/`); a
+    layout change yields no sections and the card hides, never wrong
+    numbers. The logger's `<contest>` (CQ-WW-CW) is matched to COSB's
+    on-air contest through COSB's supported-contests table
+    (`COSB_CONTEST_ID` pins it). Polled every 2 min while a score is
+    recent (30 min), through hamdata on a tenant box (one fetch per
+    contest per box, `GET /cosb/standings`), else directly. COSB's
+    operator is fine with a 2-minute poll (CJ works with him on RTC).
+    The card only appears once COSB lists the call, below the log.
+  - **Publishing** (`cosb_publish`/`cosb_user`/`cosb_password`): forwards
+    the logger's own `<dynamicresults>` (the exact XML COSB's gateway
+    takes; `<rtc>` unwrapped) to `contestonlinescore.com/post/` with
+    Basic auth, at most once per 2 min. The password never leaves the
+    server; `COSB_USER`/`COSB_PASSWORD` in the environment override the
+    Admin settings. Off if the logger already posts to COSB itself.
+  `COSB_ENABLED=false` turns the whole feature off for an instance;
 - **hamdata** (`hamdata/`, 2026-10-08) -- not a feature, plumbing: one
   shared process doing solar + callsign lookup for several contestscore
   instances on one VPS (the multi-tenant plan lives in the ops repo's
@@ -942,6 +965,10 @@ can't drift:
   `503 { code: 'paused' }`. Operator tool: `deploy/hamdata-ctl`
   (`status|stop-lookups|start-lookups|clear-cache|import-cache`, installed to
   `/usr/local/sbin` by the deploy script).
+- **COSB standings** (2026-11-28): `GET /cosb/standings?contest=<logger
+  name>[&contest_id=N]` -- one `src/cosb/source.js` reader for the box
+  (scoreboard cached 2 min, on-air list 10 min, supported table a day;
+  fetches only when asked). No token: public data, loopback only.
 - `hamdata/import-solar.js` -- one-time seed of hamdata's history from an
   existing instance's DB.
 

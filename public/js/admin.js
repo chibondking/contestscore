@@ -24,6 +24,20 @@ function admin() {
     bustsMessage: '',
     bustsMessageIsError: false,
 
+    // COSB standings card switch (GET /api/cosb `standings_switch`).
+    cosbStandings: null,
+    cosbStandingsBusy: false,
+    cosbStandingsMessage: '',
+    cosbStandingsMessageIsError: false,
+
+    // COSB publishing (GET /api/cosb `publish`). null until loaded.
+    cosbPublish: null,
+    cosbUser: '',
+    cosbPassword: '',
+    cosbBusy: false,
+    cosbMessage: '',
+    cosbMessageIsError: false,
+
     cacheBusy: false,
     cacheMessage: '',
     cacheMessageIsError: false,
@@ -38,6 +52,80 @@ function admin() {
       this.fetchLookupStatus();
       this.fetchCty();
       this.fetchBustsHidden();
+      this.fetchCosb();
+    },
+
+    async fetchCosb() {
+      try {
+        const body = await fetch('/api/cosb').then((r) => r.json());
+        this.cosbPublish = body.publish;
+        this.cosbStandings = body.standings_switch;
+        if (body.publish && !this.cosbUser) this.cosbUser = body.publish.user || '';
+      } catch (err) {
+        console.error('Failed to load COSB settings:', err);
+      }
+    },
+
+    async setCosbStandings(enabled) {
+      if (!this.token || this.cosbStandingsBusy) return;
+      this.cosbStandingsBusy = true;
+      this.cosbStandingsMessage = '';
+      try {
+        const res = await fetch('/api/cosb/standings', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) {
+          this.cosbStandings = { available: body.available, enabled: body.enabled };
+          this.cosbStandingsMessage = body.enabled ? 'Standings card on.' : 'Standings card off.';
+          this.cosbStandingsMessageIsError = false;
+        } else {
+          this.cosbStandingsMessage = `Save failed: ${body.error || res.status}`;
+          this.cosbStandingsMessageIsError = true;
+        }
+      } catch (err) {
+        this.cosbStandingsMessage = `Save failed: ${err.message}`;
+        this.cosbStandingsMessageIsError = true;
+      } finally {
+        this.cosbStandingsBusy = false;
+      }
+    },
+
+    cosbLastLabel() {
+      const l = this.cosbPublish && this.cosbPublish.last;
+      if (!l) return '—';
+      const t = (l.at || '').slice(11, 16) + 'z';
+      return l.ok ? `OK ${t}` : `${l.message || 'failed'} ${t}`;
+    },
+
+    async saveCosb(enabled) {
+      if (!this.token || this.cosbBusy) return;
+      this.cosbBusy = true;
+      this.cosbMessage = '';
+      try {
+        const res = await fetch('/api/cosb/publish', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled, user: this.cosbUser.trim().toUpperCase(), password: this.cosbPassword }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) {
+          this.cosbPublish = body;
+          this.cosbPassword = '';
+          this.cosbMessage = body.enabled ? 'Publishing to COSB.' : 'COSB publishing off.';
+          this.cosbMessageIsError = false;
+        } else {
+          this.cosbMessage = `Save failed: ${body.error || res.status}`;
+          this.cosbMessageIsError = true;
+        }
+      } catch (err) {
+        this.cosbMessage = `Save failed: ${err.message}`;
+        this.cosbMessageIsError = true;
+      } finally {
+        this.cosbBusy = false;
+      }
     },
 
     async fetchBustsHidden() {

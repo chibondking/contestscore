@@ -19,6 +19,7 @@ const { resolveLookupConfig } = require('../src/lookup');
 const { createHamqthClient } = require('../src/lookup/hamqth');
 const { createLookupBroker } = require('./broker');
 const { createApp } = require('./app');
+const { createCosbSource } = require('../src/cosb/source');
 
 // hamdata is the thing that talks to hamqsl/HamQTH, so it must never itself
 // be pointed at a hamdata (that'd be a loop).
@@ -43,6 +44,9 @@ if (broker.getStatus().paused) console.warn('hamdata: outgoing lookups are STOPP
 
 const port = Number(process.env.HAMDATA_PORT) || 3100;
 const host = process.env.HAMDATA_HOST || '127.0.0.1';
-createApp({ broker, solar, env: process.env }).listen(port, host, () => {
+// One COSB reader for the whole box (src/cosb/source.js).
+const cosb = createCosbSource();
+
+createApp({ broker, solar, cosb, env: process.env }).listen(port, host, () => {
   console.log(`hamdata running at http://${host}:${port}`);
 });

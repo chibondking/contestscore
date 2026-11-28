@@ -546,6 +546,18 @@ body {
 .bust-call { color: var(--run); font-weight: 700; }
 .busts-note { font-size: 0.8rem; margin: -0.25rem 0 0.75rem; }
 
+/* COSB standings (src/cosb/): our row picked out, a gap in ranks drawn as a
+   thicker rule, points ahead of us in red and behind us in green. */
+.cosb-summary { font-weight: 400; color: var(--muted); margin-left: 0.5rem; font-size: 0.85em; }
+.cosb-link { float: right; font-size: 0.75rem; color: var(--muted); }
+.cosb-table .num { text-align: right; }
+.cosb-table tr.cosb-me td { background: color-mix(in srgb, var(--run) 18%, transparent); font-weight: 700; }
+.cosb-table tr.cosb-break td { border-top: 2px dashed var(--border); }
+.cosb-call { font-weight: 600; }
+.cosb-club { color: var(--muted); font-size: 0.85em; }
+.cosb-ahead { color: var(--red); }
+.cosb-behind { color: var(--green); }
+
 /* Recent QSOs + continent breakdown side panel */
 .log-layout {
   display: flex;

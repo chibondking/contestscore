@@ -575,6 +575,24 @@ reset or by `DELETE /api/db` — a later feature will
 chart contest rate against conditions for a from-live analysis. Set
 `SOLAR_ENABLED=false` to turn the poll and the header chip off.
 
+## contestonlinescore.com (COSB)
+
+Two optional extras for the [Contest Online ScoreBoard](https://contestonlinescore.com/),
+each switched on per scoreboard from the **Admin** page (both off by default):
+
+- **Standings card** — where your station stands in its COSB category
+  during a contest: your rank, the leaders, the stations just above and
+  below you, and the gap in points. Refreshed every 2 minutes while scores
+  are arriving. It appears once COSB lists your call, so the station has to
+  be posting to COSB (from the logger, or with the switch below).
+- **Publish to COSB** — sends your logger's score to COSB at most every
+  2 minutes, with your COSB login. Leave it off if your logger already
+  posts to COSB itself.
+
+`COSB_ENABLED=false` hides both; `COSB_CONTEST_ID=<id>` (the number in a
+COSB scoreboard URL) pins the contest if your logger's contest name isn't
+matched. With hamdata, COSB is fetched once per contest for the whole box.
+
 ## hamdata (several instances on one box)
 
 If you run **one** contestscore, skip this (setup steps for the

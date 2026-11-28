@@ -10,7 +10,9 @@ const { handleAnyBuffer } = require('./dispatch');
 async function handleScoreBuffer(buf, emitter, source) {
   try {
     const data = await parseScore(buf);
-    emitter.emit('score:update', data);
+    // The raw bytes ride along for src/cosb/'s publisher, which forwards
+    // the logger's own <dynamicresults> to contestonlinescore.com unchanged.
+    emitter.emit('score:update', data, buf);
   } catch (err) {
     console.error(`scoreListener parse error from ${source}: ${err.message}`);
     console.error('raw:', buf.toString().slice(0, 200));

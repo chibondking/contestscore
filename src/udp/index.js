@@ -10,6 +10,7 @@ const { freqToBand, publicQso } = require('../parsers/util');
 const { enrichGeo, gridToLatLon, resolveLatLonEnriched } = require('../analyze/geo');
 const { createLookupService, stripSuffix } = require('../lookup');
 const { getTenant } = require('../tenant');
+const { createCosbService } = require('../cosb');
 const config = require('../../config/default.json');
 
 const emitter = new EventEmitter();
@@ -30,6 +31,11 @@ function getLookupService() { return lookupService; }
 // lookupService above.
 let udpListeners = null;
 function getUdpListeners() { return udpListeners; }
+
+// contestonlinescore.com standings + publishing (src/cosb/), started with
+// the listeners so it can hear score:update. null when never started.
+let cosbService = null;
+function getCosbService() { return cosbService; }
 
 // Per CLAUDE.md: parser/packet errors must never crash the server. A DB
 // write can also fail (e.g. a genuine natural-key collision from two
@@ -140,6 +146,8 @@ function startListeners(io) {
   // Back-fill lookups for QSOs already logged (server restarted mid-contest).
   lookup.prime();
 
+  cosbService = createCosbService({ io, emitter }).start();
+
   // A hosted (tenant) scoreboard only ever receives data over authenticated
   // HTTPS from ContestPulse (/api/ingest/*, which feeds this same emitter).
   // N1MM's UDP broadcasts never reach a VPS, and an open UDP socket there
@@ -169,4 +177,4 @@ function startListeners(io) {
   return listeners;
 }
 
-module.exports = { startListeners, emitter, getLookupService, getUdpListeners };
+module.exports = { startListeners, emitter, getLookupService, getUdpListeners, getCosbService };
