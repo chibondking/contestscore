@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { createCosbService, buildView, dynamicResultsXml } = require('../../src/cosb');
+const { createCosbService, buildView, dynamicResultsXml, sqliteMs } = require('../../src/cosb');
 const { createCosbSource } = require('../../src/cosb/source');
 const { parseScoreboard } = require('../../src/cosb/parse');
 
@@ -42,6 +42,16 @@ describe('buildView', () => {
   it('not on the board / no contest', () => {
     assert.equal(buildView(ST, 'N0CALL').status, 'not_listed');
     assert.equal(buildView({ contest: null }, 'K9CT').status, 'no_contest');
+  });
+});
+
+describe('sqliteMs', () => {
+  it('reads both the ISO stamp and the SQLite datetime as UTC', () => {
+    const t = Date.parse('2026-11-28T07:10:19Z');
+    assert.equal(sqliteMs('2026-11-28T07:10:19.000Z'), t);
+    assert.equal(sqliteMs('2026-11-28 07:10:19'), t);
+    assert.equal(sqliteMs('2026-11-28T08:10:19+01:00'), t);
+    assert.ok(Number.isNaN(sqliteMs(null)));
   });
 });
 
@@ -92,7 +102,9 @@ describe('standings poller', () => {
 
   it('polls only while a score is recent, and builds our view', async () => {
     const asked = [];
-    let captured = '2026-11-28 05:19:00';
+    // ISO, as insertScoreBreakdown() stamps it (the live bug: this was
+    // read as SQLite's format and never counted as recent).
+    let captured = '2026-11-28T05:19:00.123Z';
     const svc = createCosbService({
       env: {},
       deps: {
@@ -107,7 +119,7 @@ describe('standings poller', () => {
     assert.equal(v.rank, 11);
     assert.deepEqual(asked, [{ contest: 'CQ-WW-CW', contestId: null }]);
 
-    captured = '2026-11-28 04:00:00'; // contest over an hour ago
+    captured = '2026-11-28T04:00:00.000Z'; // contest over an hour ago
     assert.equal((await svc.poll()).status, 'idle');
     assert.equal(asked.length, 1);
   });

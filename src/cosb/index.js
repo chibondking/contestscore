@@ -43,10 +43,14 @@ function resolveCosbConfig(env = process.env) {
   };
 }
 
-// SQLite datetime('now') -> ms ("YYYY-MM-DD HH:MM:SS", UTC, no zone marker).
+// A score's captured_at -> ms. insertScoreBreakdown() stamps an ISO string
+// ("2026-11-28T07:10:19.816Z"); an older SQLite datetime('now') value
+// ("2026-11-28 07:10:19", UTC, no zone marker) is read as UTC too.
 function sqliteMs(s) {
   if (!s) return NaN;
-  return new Date(String(s).replace(' ', 'T') + 'Z').getTime();
+  const str = String(s).trim();
+  if (/[zZ]|[+-]\d\d:?\d\d$/.test(str.slice(10))) return new Date(str).getTime();
+  return new Date(str.replace(' ', 'T') + 'Z').getTime();
 }
 
 // The panel's view of one COSB scoreboard for one station: its category,
@@ -284,4 +288,4 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
   return api;
 }
 
-module.exports = { createCosbService, resolveCosbConfig, buildView, dynamicResultsXml, KEYS };
+module.exports = { createCosbService, resolveCosbConfig, buildView, dynamicResultsXml, sqliteMs, KEYS };
