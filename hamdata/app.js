@@ -56,7 +56,7 @@ function validImportRow(r, nowMs) {
   return { call, source, cached_at: ts, data };
 }
 
-function createApp({ broker, solar, env = process.env, now = Date.now }) {
+function createApp({ broker, solar, cosb = null, env = process.env, now = Date.now }) {
   const app = express();
 
   function requireToken(req, res, next) {
@@ -126,6 +126,25 @@ function createApp({ broker, solar, env = process.env, now = Date.now }) {
     }
     const applied = ok.length ? importCallsignCache(ok) : 0;
     return res.json({ received: list.length, applied, rejected: list.length - ok.length, cache: countCallsignCache() });
+  });
+
+  // contestonlinescore.com standings for one logger contest name, fetched
+  // once for every scoreboard on the box (src/cosb/source.js caches the
+  // scoreboard 2 min, the on-air list 10 min). No token: it's public data,
+  // and hamdata listens on loopback only.
+  app.get('/cosb/standings', async (req, res) => {
+    if (!cosb) return res.status(503).json({ error: 'COSB not configured', code: 'disabled' });
+    const contest = String(req.query.contest || '');
+    const id = req.query.contest_id ? Number(req.query.contest_id) : null;
+    if (!/^[A-Za-z0-9 ._/-]{0,40}$/.test(contest) || (id != null && !(Number.isInteger(id) && id > 0 && id < 1e6))) {
+      return res.status(400).json({ error: 'invalid contest' });
+    }
+    if (!contest && !id) return res.status(400).json({ error: 'contest or contest_id required' });
+    try {
+      res.json(await cosb.standings({ contest, contestId: id }));
+    } catch (err) {
+      res.status(502).json({ error: err.message });
+    }
   });
 
   app.get('/lookup/:call', async (req, res) => {

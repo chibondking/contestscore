@@ -732,6 +732,10 @@ function dashboard() {
     // Server-derived from the live log + cache, so a call fixed in the
     // logger drops off on the next fetch (the 60s poll or a lookup:result).
     busts: [],
+    // contestonlinescore.com standings for this station (GET /api/cosb,
+    // cosb:update every ~2 min while a contest is live). The card shows
+    // only when status is 'ok' -- this station found in a COSB category.
+    cosb: { status: 'idle' },
     // Latest space-weather reading from GET /api/solar / solar:update.
     // { updated: null } until the first server-side fetch lands.
     solar: { updated: null },
@@ -820,6 +824,10 @@ function dashboard() {
         this.touch();
       });
 
+      socket.on('cosb:update', (data) => {
+        if (data) this.cosb = data;
+      });
+
       socket.on('bridge:status', (data) => {
         const idx = this.bridges.findIndex((b) => b.station_id === data.station_id);
         if (idx >= 0) this.bridges[idx] = data;
@@ -844,6 +852,7 @@ function dashboard() {
       this.fetchFeatures();
       this.fetchBusts();
       this.fetchSolar();
+      this.fetchCosb();
       // Map: a viewer's own show/hide choice, and the ocean for the active
       // theme (the theme toggle reloads the page, so reading it once here
       // is enough -- same as the Chart.js colors).
@@ -1663,6 +1672,7 @@ function dashboard() {
       if (this.socketConnects > 1) {
         this.fetchInitialState();
         this.fetchBusts();
+        this.fetchCosb();
       }
       this.touch();
     },
@@ -1819,6 +1829,43 @@ function dashboard() {
       if (!loggedAt) return '—';
       const d = new Date(loggedAt.replace(' ', 'T') + 'Z');
       return Number.isNaN(d.getTime()) ? '—' : `${d.toISOString().slice(11, 16)}z`;
+    },
+
+    async fetchCosb() {
+      try {
+        const res = await fetch('/api/cosb').then((r) => r.json());
+        if (res && res.standings) this.cosb = res.standings;
+      } catch (err) {
+        console.error('Failed to load COSB standings:', err);
+      }
+    },
+
+    // "+12,345" / "-830" / "—": a row's points ahead of (+) or behind (-) us.
+    cosbGap(r) {
+      if (!r || r.me) return '';
+      if (r.gap == null) return '—';
+      const s = Math.abs(r.gap).toLocaleString('en-US');
+      return r.gap > 0 ? `+${s}` : r.gap < 0 ? `-${s}` : '0';
+    },
+
+    cosbNum(v) { return v == null ? '—' : Number(v).toLocaleString('en-US'); },
+
+    // Header line: "#11 of 37 · M/2 HP · 52,000 behind the leader".
+    cosbSummary() {
+      const c = this.cosb;
+      if (!c || c.status !== 'ok') return '';
+      const lead = c.rank === 1 ? 'leading'
+        : c.leader_gap != null ? `${Number(c.leader_gap).toLocaleString('en-US')} behind the leader` : '';
+      return [`#${c.rank} of ${c.count}`, c.section, lead].filter(Boolean).join(' · ');
+    },
+
+    cosbTitle() {
+      const c = this.cosb || {};
+      const bits = ['contestonlinescore.com'];
+      if (c.contest && c.contest.name) bits.push(c.contest.name);
+      if (c.updated) bits.push(`board ${c.updated}`);
+      if (c.error) bits.push(`last refresh failed: ${c.error}`);
+      return bits.join(' · ');
     },
 
     async fetchSolar() {

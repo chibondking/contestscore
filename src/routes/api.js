@@ -11,7 +11,8 @@ const {
 const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
 const { resolveLookupConfig, stripSuffix } = require('../lookup');
-const { getLookupService, getUdpListeners } = require('../udp');
+const { getLookupService, getUdpListeners, getCosbService } = require('../udp');
+const { resolveCosbConfig } = require('../cosb');
 const { resolveSolarConfig, latestSolar } = require('../solar');
 const { freqToBand, publicQso } = require('../parsers/util');
 const { getDb } = require('../db');
@@ -93,6 +94,7 @@ router.get('/features', (req, res) => {
   res.json({
     lookup: { provider: lk.enabled ? lk.provider : 'none', enabled: lk.enabled },
     solar: { enabled: resolveSolarConfig().enabled },
+    cosb: { enabled: resolveCosbConfig().enabled },
     tenant: (() => { try { return getTenant(); } catch { return null; } })(),
   });
 });
@@ -326,6 +328,53 @@ function setBustsHidden(hidden) {
 }
 router.post('/busts/hide', setBustsHidden(true));
 router.post('/busts/show', setBustsHidden(false));
+
+// GET /api/cosb -- this station's contestonlinescore.com standings (see
+// src/cosb/) plus the publishing status. Never includes the COSB password.
+router.get('/cosb', (req, res) => {
+  const svc = getCosbService();
+  if (!svc) return res.json({ standings: { status: 'disabled' }, standings_switch: null, publish: null });
+  res.json({ standings: svc.getView(), standings_switch: svc.getStandingsStatus(), publish: svc.getPublishStatus() });
+});
+
+// POST /api/cosb/standings { enabled } -- the Admin page's per-board switch
+// for the COSB Standings card (off by default). Token as the other switches.
+router.post('/cosb/standings', async (req, res) => {
+  if (!checkToken(req, res)) return;
+  const svc = getCosbService();
+  if (!svc) return res.status(503).json({ error: 'COSB service not running' });
+  if (!svc.getStandingsStatus().available) {
+    return res.status(409).json({ error: 'COSB is turned off for this server (COSB_ENABLED=false)' });
+  }
+  await svc.setStandings(Boolean((req.body || {}).enabled)).catch(() => {});
+  res.json({ ...svc.getStandingsStatus(), standings: svc.getView() });
+});
+
+// POST /api/cosb/publish { enabled, user, password? } -- the Admin page's
+// "Publish to COSB" switch and login. Same optional-token posture as the
+// other Admin switches. An empty password keeps the stored one. Refused
+// when COSB_USER/COSB_PASSWORD are set in the environment (they win).
+router.post('/cosb/publish', (req, res) => {
+  if (!checkToken(req, res)) return;
+  const svc = getCosbService();
+  if (!svc) return res.status(503).json({ error: 'COSB service not running' });
+  if (svc.getPublishStatus().from_env) {
+    return res.status(409).json({ error: 'Set by COSB_USER/COSB_PASSWORD in the environment' });
+  }
+  const b = req.body || {};
+  const user = b.user == null ? undefined : String(b.user).trim();
+  if (user !== undefined && user !== '' && !/^[A-Z0-9/]{3,15}$/i.test(user)) {
+    return res.status(400).json({ error: 'COSB login should be a callsign' });
+  }
+  if (b.password != null && String(b.password).length > 200) {
+    return res.status(400).json({ error: 'Password too long' });
+  }
+  const enabled = b.enabled == null ? undefined : Boolean(b.enabled);
+  const cur = svc.getPublishStatus();
+  if (enabled && !(user || cur.user)) return res.status(400).json({ error: 'Set the COSB login first' });
+  if (enabled && !(b.password || cur.has_password)) return res.status(400).json({ error: 'Set the COSB password first' });
+  res.json(svc.setPublish({ enabled, user, password: b.password ? String(b.password) : '' }));
+});
 
 // DELETE /api/db  requires X-Confirm: yes, plus a bearer token whenever
 // CONTESTSCORE_API_TOKEN is set. On a LAN-only install with no token

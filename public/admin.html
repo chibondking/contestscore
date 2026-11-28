@@ -166,6 +166,100 @@
       <p x-show="bustsMessage" :style="'margin-top:1rem; color:' + (bustsMessageIsError ? 'var(--red)' : 'var(--green)')" x-text="bustsMessage"></p>
     </section>
 
+    <section class="card card--wide" id="cosb-standings">
+      <h2>COSB Standings Card</h2>
+      <p class="empty" style="margin-bottom:1rem">
+        Shows where this station stands on the Contest Online ScoreBoard
+        (contestonlinescore.com) during a contest: its rank in its category,
+        the leaders, and the stations just above and below, refreshed every
+        2 minutes. It appears only once COSB lists this call -- the station
+        has to be posting there (from the logger, or with Publish below).
+        Off unless you turn it on.
+      </p>
+      <template x-if="cosbStandings && !cosbStandings.available">
+        <p class="empty">COSB is turned off for this server.</p>
+      </template>
+      <template x-if="cosbStandings && cosbStandings.available">
+        <div>
+          <div class="score-row" style="margin-bottom:1rem">
+            <div class="metric">
+              <span class="metric__value" x-text="cosbStandings.enabled ? 'On' : 'Off'"></span>
+              <span class="metric__label">Standings card</span>
+            </div>
+          </div>
+          <button
+            @click="setCosbStandings(!cosbStandings.enabled)"
+            :disabled="!token || cosbStandingsBusy"
+            style="padding:0.6em 1.2em; border-radius:4px; border:none; font-family:inherit; font-weight:bold; cursor:pointer;"
+            :style="(!token || cosbStandingsBusy) ? 'background:var(--border); color:var(--muted); cursor:not-allowed;' : (cosbStandings.enabled ? 'background:var(--red); color:#fff;' : 'background:var(--green); color:#000;')"
+          >
+            <span x-text="cosbStandingsBusy ? 'Saving…' : (cosbStandings.enabled ? 'Turn off' : 'Turn on')"></span>
+          </button>
+        </div>
+      </template>
+      <p x-show="!token" class="empty" style="margin-top:0.5rem">Paste the admin token above to enable this.</p>
+      <p x-show="cosbStandingsMessage" :style="'margin-top:1rem; color:' + (cosbStandingsMessageIsError ? 'var(--red)' : 'var(--green)')" x-text="cosbStandingsMessage"></p>
+    </section>
+
+    <section class="card card--wide" id="cosb-publish">
+      <h2>Publish to contestonlinescore.com</h2>
+      <p class="empty" style="margin-bottom:1rem">
+        Sends this station's score to the Contest Online ScoreBoard (COSB)
+        -- the same score your logger broadcasts, at most once every
+        <span x-text="(cosbPublish && cosbPublish.min_interval_sec / 60) || 2"></span> minutes.
+        Use your COSB login (register at contestonlinescore.com first).
+        If your logger already posts to COSB itself, leave this off. The
+        password is kept on this server and never shown again.
+      </p>
+
+      <template x-if="cosbPublish && cosbPublish.from_env">
+        <p class="empty">Set by the server's environment (COSB_USER) -- publishing as <strong x-text="cosbPublish.user"></strong>.</p>
+      </template>
+
+      <template x-if="cosbPublish && !cosbPublish.from_env">
+        <div>
+          <div class="score-row" style="margin-bottom:1rem">
+            <div class="metric">
+              <span class="metric__value" x-text="cosbPublish.enabled ? 'On' : 'Off'"></span>
+              <span class="metric__label">Publishing</span>
+            </div>
+            <div class="metric">
+              <span class="metric__value" x-text="cosbLastLabel()"></span>
+              <span class="metric__label">Last post</span>
+            </div>
+          </div>
+          <div style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-bottom:1rem">
+            <label>COSB login (callsign)
+              <input type="text" x-model="cosbUser" autocomplete="off" spellcheck="false"
+                     style="display:block; margin-top:0.25rem; padding:0.5rem; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-family:inherit; text-transform:uppercase">
+            </label>
+            <label>Password
+              <input type="password" x-model="cosbPassword" autocomplete="new-password"
+                     :placeholder="cosbPublish.has_password ? '(saved -- leave blank to keep)' : ''"
+                     style="display:block; margin-top:0.25rem; padding:0.5rem; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-family:inherit">
+            </label>
+          </div>
+          <button
+            @click="saveCosb(!cosbPublish.enabled)"
+            :disabled="!token || cosbBusy"
+            style="padding:0.6em 1.2em; border-radius:4px; border:none; font-family:inherit; font-weight:bold; cursor:pointer;"
+            :style="(!token || cosbBusy) ? 'background:var(--border); color:var(--muted); cursor:not-allowed;' : (cosbPublish.enabled ? 'background:var(--red); color:#fff;' : 'background:var(--green); color:#000;')"
+          >
+            <span x-text="cosbBusy ? 'Saving…' : (cosbPublish.enabled ? 'Stop publishing' : 'Start publishing')"></span>
+          </button>
+          <button
+            x-show="cosbPublish.enabled"
+            @click="saveCosb(true)"
+            :disabled="!token || cosbBusy"
+            style="margin-left:0.5rem; padding:0.6em 1.2em; border-radius:4px; border:1px solid var(--border); background:transparent; color:inherit; font-family:inherit; cursor:pointer;"
+          >Save login</button>
+        </div>
+      </template>
+
+      <p x-show="!token" class="empty" style="margin-top:0.5rem">Paste the admin token above to enable this.</p>
+      <p x-show="cosbMessage" :style="'margin-top:1rem; color:' + (cosbMessageIsError ? 'var(--red)' : 'var(--green)')" x-text="cosbMessage"></p>
+    </section>
+
     <section class="card card--wide" id="cache">
       <h2>Callsign Lookup Cache</h2>
       <p class="empty" style="margin-bottom:1rem">

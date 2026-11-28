@@ -428,6 +428,38 @@
       </div>
     </section>
 
+    <!-- contestonlinescore.com standings: this station's rank in its COSB
+         category, the leaders and the stations either side (src/cosb/).
+         Only when COSB lists this call -- no card otherwise. Below the log
+         on purpose: context, not the live result. -->
+    <section class="card card--wide" id="cosb" x-show="cosb.status === 'ok'">
+      <h2>
+        Standings
+        <span class="cosb-summary" x-text="cosbSummary()"></span>
+        <a class="cosb-link" :href="cosb.contest && cosb.contest.url" target="_blank" rel="noopener"
+           :title="cosbTitle()">COSB</a>
+        <span class="bridge-badge bridge-badge--stale" x-show="cosb.error" :title="cosb.error">stale</span>
+      </h2>
+      <table class="qso-table cosb-table">
+        <thead>
+          <tr><th>#</th><th>Call</th><th class="num">Score</th><th class="num">QSOs</th><th class="num">Mults</th><th class="num">Gap</th><th>Club</th></tr>
+        </thead>
+        <tbody>
+          <template x-for="r in (cosb.rows || [])" :key="r.rank + r.call">
+            <tr :class="{ 'cosb-me': r.me, 'cosb-break': r.break }">
+              <td x-text="r.rank"></td>
+              <td class="cosb-call" x-text="r.call + (r.op ? ' (' + r.op + ')' : '')"></td>
+              <td class="num" x-text="cosbNum(r.score)"></td>
+              <td class="num" x-text="cosbNum(r.qsos)"></td>
+              <td class="num" x-text="cosbNum(r.mult)"></td>
+              <td class="num" :class="{ 'cosb-ahead': r.gap > 0, 'cosb-behind': r.gap < 0 }" x-text="cosbGap(r)"></td>
+              <td class="cosb-club" x-text="r.club || ''"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </section>
+
     <!-- Possible busts: callsigns HamQTH doesn't recognise. Only rendered
          when live lookup is enabled (features.lookup.enabled from
          /api/features) AND there's at least one -- an empty card would just

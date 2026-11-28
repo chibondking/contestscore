@@ -57,7 +57,15 @@ function createHamdataClient({ url, fetchImpl, timeoutMs = TIMEOUT_MS } = {}) {
     return getJson('/lookup/status');
   }
 
-  return { lookup, solarSince, lookupStatus };
+  // -> COSB standings for a logger contest name (src/cosb/source.js's
+  // standings()), fetched and cached once for the whole box by hamdata.
+  async function cosbStandings({ contest, contestId } = {}) {
+    const q = new URLSearchParams({ contest: contest || '' });
+    if (contestId) q.set('contest_id', String(contestId));
+    return getJson(`/cosb/standings?${q}`);
+  }
+
+  return { lookup, solarSince, lookupStatus, cosbStandings };
 }
 
 module.exports = { createHamdataClient, resolveHamdataUrl };
