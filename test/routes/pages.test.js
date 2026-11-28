@@ -16,12 +16,16 @@ describe('pages: shared partials', () => {
     assert.equal(buildPage('p.html', dir), '<main>\n  <div>box</div>\n\n</main>\n');
   });
 
-  it('index.html and map.html carry the same map card, and nothing left unfilled', () => {
-    const card = fs.readFileSync(path.join(__dirname, '../../public/partials/map-panel.html'), 'utf8');
+  it('index.html and map.html carry the same map card and mult bell, nothing left unfilled', () => {
+    const read = (f) => fs.readFileSync(path.join(__dirname, '../../public/partials', f), 'utf8');
+    const parts = [read('map-panel.html'), read('mult-bell.html')];
     for (const page of ['index.html', 'map.html']) {
-      const html = buildPage(page);
-      assert.ok(html.includes(card), page);
-      assert.equal(/#include/.test(html.replace(card, '')), false, page);
+      let html = buildPage(page);
+      for (const p of parts) {
+        assert.ok(html.includes(p), page);
+        html = html.replace(p, '');
+      }
+      assert.equal(/#include/.test(html), false, page);
     }
   });
 });

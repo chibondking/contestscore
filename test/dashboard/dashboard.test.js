@@ -12,7 +12,7 @@ const { parseContact } = require('../../src/parsers/contact');
 // The same files, in the same order, as index.html (plus map.html's
 // map-tv.js, so both pages' components are covered).
 const sandbox = vm.createContext({});
-for (const f of ['component.js', 'live-feed.js', 'map-panel.js', 'multbell.js', 'dashboard.js', 'map-tv.js']) {
+for (const f of ['component.js', 'live-feed.js', 'map-panel.js', 'multbell.js', 'mult-bell-panel.js', 'dashboard.js', 'map-tv.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../../public/js', f), 'utf8'), sandbox);
 }
 const dashboard = sandbox.dashboard;
@@ -825,7 +825,8 @@ describe('component parts (component.js)', () => {
     for (const k of ['mapPoints', 'mapDotsSvg', 'sectionMapSvg', 'lastWorked', 'hudCosb', 'dxccCount', 'initLiveFeed']) {
       assert.equal(String(tv[k]), String(d[k]), k);
     }
-    assert.equal(tv.maybeRingMultBell, undefined); // dashboard-only parts stay out
+    assert.equal(String(tv.maybeRingMultBell), String(d.maybeRingMultBell)); // the same bell
+    assert.equal(tv.followTable, undefined); // dashboard-only parts stay out
     tv.qsos = [qso({})];
     d.qsos = [qso({})];
     assert.equal(tv.mapHud(), true); // top row isn't on this page
