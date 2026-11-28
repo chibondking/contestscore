@@ -8,23 +8,18 @@ const { servePage } = require('./pages');
 const app = express();
 
 app.use(express.json());
-// Pages with shared partials (src/pages.js), ahead of express.static so the
-// raw files' "#include" comments are never served as-is.
+// Every page through src/pages.js (shared partials, versioned script and
+// style URLs), ahead of express.static so a raw page is never served.
 app.get(['/', '/index.html'], servePage('index.html'));
 app.get(['/map', '/map.html'], servePage('map.html'));
+for (const page of ['charts', 'stats', 'solar', 'admin']) app.get(`/${page}.html`, servePage(`${page}.html`));
+// The analyzer upload page and every /analyze/<id> result link are the
+// same page; analyze.js reads the id off the path.
+app.get(['/analyze', '/analyze/:id', '/analyze.html'], servePage('analyze.html'));
+// Log-vs-log comparison: /compare?a=<id>&b=<id> (compare.js reads the query).
+app.get(['/compare', '/compare.html'], servePage('compare.html'));
 app.use(express.static(path.join(__dirname, '../public')));
 
-// The analyzer upload page and every /analyze/<id> result link are served
-// by the same static shell; analyze.js reads the id off the path. Declared
-// before the routers so it can't be shadowed, after express.static so a
-// real /analyze.html still wins.
-app.get(['/analyze', '/analyze/:id'], (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/analyze.html'));
-});
-// Log-vs-log comparison: /compare?a=<id>&b=<id> (compare.js reads the query).
-app.get('/compare', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/compare.html'));
-});
 
 // Mounted before apiRouter's express.json() would matter: these routes
 // parse their own raw body (see routes/ingest.js) and express.json() only
