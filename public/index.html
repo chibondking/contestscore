@@ -244,6 +244,7 @@
         <span class="cosb-summary" x-text="cosbSummary()"></span>
         <a class="cosb-link" :href="cosb.contest && cosb.contest.url" target="_blank" rel="noopener"
            :title="cosbTitle()">COSB</a>
+        <span class="cosb-updated" x-text="cosbUpdatedLabel()"></span>
         <span class="bridge-badge bridge-badge--stale" x-show="cosb.error" :title="cosb.error">stale</span>
       </h2>
       <table class="qso-table cosb-table">
@@ -275,6 +276,7 @@
         Following
         <a class="cosb-link" :href="cosb.contest && cosb.contest.url" target="_blank" rel="noopener"
            :title="cosbTitle()">COSB</a>
+        <span class="cosb-updated" x-text="cosbUpdatedLabel()"></span>
         <span class="bridge-badge bridge-badge--stale" x-show="cosb.error" :title="cosb.error">stale</span>
       </h2>
       <table class="qso-table cosb-table">
