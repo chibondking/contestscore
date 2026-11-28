@@ -264,6 +264,31 @@
       <p x-show="cosbMessage" :style="'margin-top:1rem; color:' + (cosbMessageIsError ? 'var(--red)' : 'var(--green)')" x-text="cosbMessage"></p>
     </section>
 
+    <!-- Hidden until the server accepts the admin token (GET
+         /api/cosb/follow): the list is set only here; the results show to
+         everyone on the dashboard's Following card. -->
+    <section class="card card--wide" id="cosb-follow" x-show="cosbFollow !== null" x-cloak>
+      <h2>COSB: Stations to Follow</h2>
+      <p class="empty" style="margin-bottom:1rem">
+        Up to three calls to compare against on the dashboard's Following
+        card: each one's COSB score, rank and category, its gap to this
+        station and to the one just above it. Any category. Needs the COSB
+        Standings Card on.
+      </p>
+      <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem;">
+        <template x-for="(c, i) in cosbFollowInputs" :key="i">
+          <input type="text" x-model="cosbFollowInputs[i]" placeholder="CALL" maxlength="15" autocapitalize="characters"
+                 style="width:9rem; padding:0.5rem; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; font-family:var(--font-mono); text-transform:uppercase;">
+        </template>
+      </div>
+      <button @click="saveCosbFollow()" :disabled="cosbFollowBusy"
+              style="padding:0.6em 1.2em; border-radius:4px; border:none; font-family:inherit; font-weight:bold; cursor:pointer;"
+              :style="cosbFollowBusy ? 'background:var(--border); color:var(--muted); cursor:not-allowed;' : 'background:var(--green); color:#000;'">
+        <span x-text="cosbFollowBusy ? 'Saving…' : 'Save'"></span>
+      </button>
+      <p x-show="cosbFollowMessage" :style="'margin-top:1rem; color:' + (cosbFollowMessageIsError ? 'var(--red)' : 'var(--green)')" x-text="cosbFollowMessage"></p>
+    </section>
+
     <section class="card card--wide" id="cache">
       <h2>Callsign Lookup Cache</h2>
       <p class="empty" style="margin-bottom:1rem">

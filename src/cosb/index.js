@@ -32,7 +32,11 @@ const POST_TIMEOUT_MS = 20000;
 const TOP_N = 3;
 const AROUND = 2;
 
-const KEYS = { standings: 'cosb_standings', publish: 'cosb_publish', user: 'cosb_user', password: 'cosb_password' };
+const KEYS = {
+  standings: 'cosb_standings', publish: 'cosb_publish', user: 'cosb_user', password: 'cosb_password',
+  follow: 'cosb_follow', // JSON array: up to FOLLOW_MAX calls to compare against
+};
+const FOLLOW_MAX = 3;
 
 function resolveCosbConfig(env = process.env) {
   const id = parseInt(env.COSB_CONTEST_ID || '', 10);
@@ -53,14 +57,44 @@ function sqliteMs(s) {
   return new Date(str.replace(' ', 'T') + 'Z').getTime();
 }
 
+// One call anywhere on the board -> { sec, row } or null.
+function findStation(st, call) {
+  for (const sec of (st && st.sections) || []) {
+    const row = sec.rows.find((r) => r.call === call);
+    if (row) return { sec, row };
+  }
+  return null;
+}
+
+// The stations the board follows (Admin, CJ 2026-11-28), each found
+// wherever it is on COSB -- any category, not only ours -- with its gap to
+// us in points (positive = ahead of us). Not on the board: found: false.
+function followRows(st, call, follow) {
+  const mine = findStation(st, String(call || '').toUpperCase());
+  const myScore = mine && mine.row.score != null ? mine.row.score : null;
+  return (follow || []).map((c) => {
+    const hit = findStation(st, c);
+    if (!hit) return { call: c, found: false };
+    const { sec, row } = hit;
+    return {
+      call: c, found: true, op: row.op, section: sec.label, rank: row.rank, count: sec.rows.length,
+      score: row.score, qsos: row.qsos, mult: row.mult, last: row.last,
+      gap: row.score != null && myScore != null ? row.score - myScore : null,
+    };
+  });
+}
+
 // The panel's view of one COSB scoreboard for one station: its category,
 // the top TOP_N and the AROUND stations either side of it, each with its
 // gap to us in points (positive = ahead of us). `break` marks a row that
 // doesn't follow on from the one before (a "..." in the table).
-function buildView(st, call) {
+function buildView(st, call, follow = []) {
   if (!st || !st.contest) return { status: 'no_contest' };
   const me = String(call || '').toUpperCase();
-  const base = { contest: st.contest, updated: st.updated || null, fetched_at: st.fetched_at || null };
+  const base = {
+    contest: st.contest, updated: st.updated || null, fetched_at: st.fetched_at || null,
+    follow: followRows(st, me, follow),
+  };
   for (const sec of st.sections || []) {
     const i = sec.rows.findIndex((r) => r.call === me);
     if (i < 0) continue;
@@ -124,6 +158,19 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
 
   const standingsOn = () => get(KEYS.standings) === '1';
 
+  // The followed calls, as stored (Admin). Bad JSON reads as none.
+  function getFollow() {
+    try {
+      const v = JSON.parse(get(KEYS.follow) || '[]');
+      return Array.isArray(v) ? v.slice(0, FOLLOW_MAX) : [];
+    } catch { return []; }
+  }
+
+  // The last board and call, so a change to the follow list shows at once
+  // instead of on the next poll.
+  let lastSt = null;
+  let lastCall = null;
+
   async function poll() {
     if (!cfg.enabled || polling) return view;
     if (!standingsOn()) {
@@ -138,7 +185,9 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
     polling = true;
     try {
       const st = await source.standings({ contest: score.contest, contestId: cfg.contestId });
-      view = { ...buildView(st, score.call), logger_contest: score.contest };
+      lastSt = st;
+      lastCall = score.call;
+      view = { ...buildView(st, score.call, getFollow()), logger_contest: score.contest };
     } catch (err) {
       // Keep the last good table, flagged, rather than blanking the panel.
       view = { ...view, error: err.message, error_at: new Date(now()).toISOString() };
@@ -160,6 +209,18 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
     if (!on) { view = { status: 'off' }; emit(); return view; }
     view = { status: 'idle' };
     return poll();
+  }
+
+  // Admin: the calls to follow. `calls` is already validated (routes/api.js);
+  // stored uppercase, deduped, at most FOLLOW_MAX.
+  function setFollow(calls) {
+    const list = [...new Set((calls || []).map((c) => String(c).trim().toUpperCase()).filter(Boolean))].slice(0, FOLLOW_MAX);
+    set(KEYS.follow, JSON.stringify(list));
+    if (lastSt && view.contest) {
+      view = { ...view, follow: followRows(lastSt, lastCall, list) };
+      emit();
+    }
+    return list;
   }
 
   // ---- publishing ------------------------------------------------------
@@ -304,10 +365,10 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
   }
 
   const api = {
-    start, stop, poll, getView, getStandingsStatus, setStandings,
+    start, stop, poll, getView, getStandingsStatus, setStandings, getFollow, setFollow,
     getPublishStatus, setPublish, onScore, flush, config: cfg,
   };
   return api;
 }
 
-module.exports = { createCosbService, resolveCosbConfig, buildView, dynamicResultsXml, sqliteMs, KEYS };
+module.exports = { createCosbService, resolveCosbConfig, buildView, followRows, dynamicResultsXml, sqliteMs, KEYS, FOLLOW_MAX };

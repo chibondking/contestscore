@@ -122,6 +122,11 @@ passed that test so far:
     asks the contest's status (hamdata `/cosb/contest-status`) and is
     skipped, with the reason as the Admin page's "Last post", unless it's
     on air; a failed status check posts anyway (CJ, 2026-11-28).
+  - **Following** (`cosb_follow`, CJ 2026-11-28): up to 3 calls the board
+    compares against, found in any COSB category, shown on the dashboard's
+    Following card with each one's gap to us and to the station above.
+    Set only from the Admin page, whose section stays hidden until
+    `GET /api/cosb/follow` accepts the token; the card itself is public.
   `COSB_ENABLED=false` turns the whole feature off for an instance;
 - **hamdata** (`hamdata/`, 2026-10-08) -- not a feature, plumbing: one
   shared process doing solar + callsign lookup for several contestscore

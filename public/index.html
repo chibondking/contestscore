@@ -296,6 +296,38 @@
       </table>
     </section>
 
+    <!-- Following: the stations this board follows on COSB (set on the
+         Admin page), with us, highest score first: each one's gap to us and
+         to the station just above it. Any category -- a rival in another
+         class is still worth watching. -->
+    <section class="card card--wide" id="cosb-follow" x-show="(cosb.follow || []).length > 0">
+      <h2>
+        Following
+        <a class="cosb-link" :href="cosb.contest && cosb.contest.url" target="_blank" rel="noopener"
+           :title="cosbTitle()">COSB</a>
+        <span class="bridge-badge bridge-badge--stale" x-show="cosb.error" :title="cosb.error">stale</span>
+      </h2>
+      <table class="qso-table cosb-table">
+        <thead>
+          <tr><th>Call</th><th>Category</th><th class="num">Score</th><th class="num">QSOs</th><th class="num">Mults</th><th class="num">vs us</th><th class="num">vs next up</th></tr>
+        </thead>
+        <tbody>
+          <template x-for="r in followTable()" :key="r.call">
+            <tr :class="{ 'cosb-me': r.me }">
+              <td class="cosb-call" x-text="r.call + (r.op ? ' (' + r.op + ')' : '')"></td>
+              <td x-text="'#' + r.rank + ' of ' + r.count + ' · ' + r.section"></td>
+              <td class="num" x-text="cosbNum(r.score)"></td>
+              <td class="num" x-text="cosbNum(r.qsos)"></td>
+              <td class="num" x-text="cosbNum(r.mult)"></td>
+              <td class="num" :class="{ 'cosb-ahead': r.gap > 0, 'cosb-behind': r.gap < 0 }" x-text="cosbGap(r)"></td>
+              <td class="num" :class="{ 'cosb-behind': r.up < 0 }" x-text="r.up == null ? '' : cosbGap({ gap: r.up })"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <p class="empty" x-show="followMissing().length" x-text="'Not on COSB yet: ' + followMissing().join(', ')"></p>
+    </section>
+
     <!-- Possible busts: callsigns HamQTH doesn't recognise. Only rendered
          when live lookup is enabled (features.lookup.enabled from
          /api/features) AND there's at least one -- an empty card would just
