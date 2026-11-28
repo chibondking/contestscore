@@ -12,6 +12,10 @@
 #   hamdata-ctl start-lookups   turn them back on
 #   hamdata-ctl clear-cache     forget the shared callsign cache (solar data
 #                               is never touched -- it is never deleted)
+#   hamdata-ctl import-cache    merge cache rows from another box, JSON
+#                               {"rows":[...]} on stdin (newer cached_at
+#                               wins) -- what the ops agent runs to sync the
+#                               cache between boxes (ops docs/design/63)
 
 set -euo pipefail
 ENV_FILE=/opt/contestscore/hamdata/hamdata.env
@@ -32,5 +36,6 @@ case "${1:-}" in
   stop-lookups)  call POST /lookup/pause | show; echo "Outgoing HamQTH lookups STOPPED for every scoreboard (cached calls still resolve)." ;;
   start-lookups) call POST /lookup/resume | show; echo "Outgoing HamQTH lookups running." ;;
   clear-cache)   call DELETE /lookup/cache -H 'X-Confirm: yes' | show ;;
-  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  import-cache)  call POST /lookup/import -H 'Content-Type: application/json' --data-binary @- ;;
+  *) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

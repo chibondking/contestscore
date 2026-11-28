@@ -925,12 +925,22 @@ can't drift:
   `/lookup/status`, `/lookup/:call`; `POST /lookup/pause|resume` need
   `HAMDATA_TOKEN` (fail closed). Binds `127.0.0.1:3100` by default.
   `DELETE /lookup/cache` (token + `X-Confirm`) clears the shared cache.
+- **Cache sync between boxes** (CJ, 2026-11-27): `GET /lookup/export`
+  pages the cache oldest-first after a `(cached_at, call)` cursor;
+  `POST /lookup/import` (token; `hamdata-ctl import-cache`, rows on stdin)
+  merges another box's rows -- newer `cached_at` wins, a tie goes to found
+  over not-found, and an imported row **keeps its original `cached_at`** so
+  the TTL stays honest. Rows are validated (base call, provider name, no
+  future stamp, JSON object <= 4 KB). hamdata never talks to another box:
+  the ops dashboard's agent on each box relays rows through the dashboard
+  (ops repo `docs/design/63-callsign-cache-sync.md`), so boxes come and go
+  with no peer list here.
 - **Global stop** (CJ, 2026-10-09: HamQTH lookups use the operator's own
   account): `POST /lookup/pause` stops ALL outgoing lookups for every
   instance, persisted in hamdata's `settings`, so a restart never turns
   them back on. Cache hits are still answered; misses get
   `503 { code: 'paused' }`. Operator tool: `deploy/hamdata-ctl`
-  (`status|stop-lookups|start-lookups|clear-cache`, installed to
+  (`status|stop-lookups|start-lookups|clear-cache|import-cache`, installed to
   `/usr/local/sbin` by the deploy script).
 - `hamdata/import-solar.js` -- one-time seed of hamdata's history from an
   existing instance's DB.

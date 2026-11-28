@@ -210,6 +210,7 @@ for every club at once:
 sudo hamdata-ctl stop-lookups     # nothing goes to HamQTH; stays stopped across restarts
 sudo hamdata-ctl start-lookups
 sudo hamdata-ctl clear-cache      # forget the shared callsign cache
+# import-cache (JSON on stdin) is for the ops agent's cache sync between boxes
 sudo hamdata-ctl status
 ```
 

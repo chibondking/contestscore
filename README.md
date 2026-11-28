@@ -595,6 +595,10 @@ itself.
   script): `stop-lookups` stops every outgoing HamQTH lookup for all
   instances (it's your HamQTH account) and stays stopped across restarts —
   cached callsigns still resolve; `start-lookups`; `clear-cache`; `status`.
+- **More than one box**: with the ops dashboard's agent on each box, the
+  shared callsign cache syncs between boxes automatically (`/lookup/export`
+  and `/lookup/import`; newer lookup wins), so a call looked up on one box
+  isn't looked up again on another.
 - Seed hamdata with an existing instance's solar history once:
   `HAMDATA_DB_PATH=... node hamdata/import-solar.js path/to/qsos.db`.
 

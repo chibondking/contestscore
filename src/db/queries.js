@@ -292,6 +292,27 @@ function prepare() {
       "SELECT call FROM callsign_cache WHERE source = 'hamqth' AND json_extract(data, '$.found') = 0"
     ),
 
+    // Cache sync between boxes (hamdata's /lookup/export + /lookup/import,
+    // driven by the ops dashboard's agents -- ops docs/design/63). Rows come
+    // out oldest-first by (cached_at, call), a keyset cursor, so a page
+    // boundary inside one second loses nothing.
+    exportCallsigns: db.prepare(`
+      SELECT call, data, source, cached_at FROM callsign_cache
+      WHERE cached_at > @ts OR (cached_at = @ts AND call > @call)
+      ORDER BY cached_at, call LIMIT @limit
+    `),
+    // An imported row keeps the cached_at it was looked up at (so the TTL in
+    // src/lookup/ttl.js stays honest) and only replaces a local row that is
+    // older -- or the same age and not-found while the import is found.
+    mergeCallsign: db.prepare(`
+      INSERT INTO callsign_cache (call, data, source, cached_at) VALUES (@call, @data, @source, @cached_at)
+      ON CONFLICT(call) DO UPDATE SET data = excluded.data, source = excluded.source, cached_at = excluded.cached_at
+      WHERE excluded.cached_at > callsign_cache.cached_at
+         OR (excluded.cached_at = callsign_cache.cached_at
+             AND json_valid(excluded.data) AND json_extract(excluded.data, '$.found') IS NOT 0
+             AND json_valid(callsign_cache.data) AND json_extract(callsign_cache.data, '$.found') = 0)
+    `),
+
     // Space weather (src/solar/). Append-only and NEVER deleted -- not by
     // clearAll, not by age, not by anything (CJ, 2026-10-09). There is
     // deliberately no DELETE on solar_snapshots anywhere in this codebase;
@@ -343,7 +364,7 @@ function prepare() {
 }
 
 // Call this when the DB is replaced (e.g. between integration tests).
-function resetStatements() { Q = null; }
+function resetStatements() { Q = null; _importTx = null; }
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -501,6 +522,29 @@ function countCallsignCache() {
   const { total, not_found: notFound } = prepare().countCallsignCache.get();
   return { total, found: total - notFound, not_found: notFound };
 }
+// Cache sync (ops docs/design/63). exportCallsignCache pages the cache
+// oldest-first after a (cached_at, call) cursor; importCallsignCache merges
+// rows from other boxes in one transaction and says how many changed
+// anything. Callers validate rows first (hamdata/app.js).
+const EXPORT_MAX = 1000;
+function exportCallsignCache({ afterTs = '', afterCall = '', limit = 500 } = {}) {
+  const n = Math.min(Math.max(Number(limit) || 500, 1), EXPORT_MAX);
+  const rows = prepare().exportCallsigns.all({ ts: String(afterTs), call: String(afterCall), limit: n + 1 });
+  const more = rows.length > n;
+  return { rows: more ? rows.slice(0, n) : rows, more };
+}
+let _importTx = null;
+function importCallsignCache(rows) {
+  if (!_importTx) {
+    const stmt = prepare().mergeCallsign;
+    _importTx = getDb().transaction((list) => {
+      let applied = 0;
+      for (const r of list) applied += stmt.run(r).changes;
+      return applied;
+    });
+  }
+  return _importTx(rows);
+}
 function getNotFoundCalls() { return prepare().getNotFoundCalls.all().map((r) => r.call); }
 
 function insertSolarSnapshot(r = {}) {
@@ -582,6 +626,7 @@ function pruneAnalyzedLogs({ keep = 0, ttlDays = 1826 } = {}) {
 
 module.exports = {
   upsertQso, deleteQso, getQsos, getPersistedQso, clearQsos, clearCallsignCache, getQsoRate,
+  exportCallsignCache, importCallsignCache,
   upsertRadio, getRadios,
   insertScoreBreakdown, getLatestScore, getScoreHistory, getScoreBreakdown,
   getSetting, setSetting,
