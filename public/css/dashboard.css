@@ -1301,18 +1301,27 @@ body {
 .secmap-needed-label { font-family: var(--font-ui); }
 
 /* ---------------------------------------------------------------------
-   Map TV (/map, map.html): the map card filling the screen under the
-   header, for a wall display. The card and HUD are the dashboard's own
-   (public/partials/map-panel.html); only the sizing differs here. */
-.map-tv__main { padding: 0.75rem 1rem; }
-.map-tv #worldmap { margin: 0; }
-/* The whole map in view without scrolling: the map area (map + HUD) is
-   sized to the maps' own 2:1 shape -- as wide as the card allows, but no
-   wider than twice the height left under the header and card title -- and
-   centred. Capping only the SVG's height (the first try) left the box full
-   width, the map letterboxed in it with ocean bands and zone lines running
-   off both sides (CJ's screenshot, 2026-11-28). */
-.map-tv .map-stage { width: min(100%, calc((100vh - 10rem) * 2)); margin: 0 auto; }
+   Map TV (/map, map.html): the map filling the screen under the header,
+   for a wall display. The card and HUD are the dashboard's own
+   (public/partials/map-panel.html); only the sizing differs here.
+
+   The page is exactly one screen tall (a flex column, nothing scrolls) and
+   the map takes all the room under the header and the card's title row.
+   The maps are 2:1 and a TV is about 16:9, so the map fills the width and
+   is cut off at the bottom -- up to a sixth of it, which is Antarctica
+   (below ~60 S) -- rather than leaving bands either side (CJ, 2026-11-28:
+   "still doesn't fill the screen"). Only a screen much wider than 2.4:1
+   gets ocean at the sides. The map box is a size container so the SVG can
+   be sized against its height (cqh). */
+body.map-tv { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.map-tv .header { flex: none; }
+.map-tv__main { flex: 1; min-height: 0; display: flex; padding: 0.5rem 0.75rem; }
+.map-tv #worldmap { flex: 1; min-height: 0; display: flex; flex-direction: column; margin: 0; padding: 0.5rem 0.75rem; }
+.map-tv #worldmap > h2, .map-tv .map-bands { flex: none; }
+.map-tv .map-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.map-tv #worldmap-body, .map-tv #secmap-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.map-tv .map-box { flex: 1; min-height: 0; container-type: size; overflow: hidden; }
+.map-tv .worldmap-svg { width: min(100cqw, calc(100cqh * 2.4)); height: auto; margin: 0 auto; }
 /* Readable across a room. */
 .map-tv .map-hud { transform: scale(1.4); transform-origin: top left; max-width: calc(70% - 1.2rem); }
 @media (max-width: 640px) { .map-tv .map-hud { transform: none; max-width: calc(100% - 0.6rem); } }
