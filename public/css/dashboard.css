@@ -1300,9 +1300,13 @@ body {
    (public/partials/map-panel.html); only the sizing differs here. */
 .map-tv__main { padding: 0.75rem 1rem; }
 .map-tv #worldmap { margin: 0; }
-/* The whole map in view: as wide as fits, never taller than the screen
-   below the header. The SVGs keep their aspect ratio (meet), centred. */
-.map-tv .worldmap-svg { max-height: calc(100vh - 9rem); }
+/* The whole map in view without scrolling: the map area (map + HUD) is
+   sized to the maps' own 2:1 shape -- as wide as the card allows, but no
+   wider than twice the height left under the header and card title -- and
+   centred. Capping only the SVG's height (the first try) left the box full
+   width, the map letterboxed in it with ocean bands and zone lines running
+   off both sides (CJ's screenshot, 2026-11-28). */
+.map-tv .map-stage { width: min(100%, calc((100vh - 10rem) * 2)); margin: 0 auto; }
 /* Readable across a room. */
 .map-tv .map-hud { transform: scale(1.4); transform-origin: top left; max-width: calc(70% - 1.2rem); }
 @media (max-width: 640px) { .map-tv .map-hud { transform: none; max-width: calc(100% - 0.6rem); } }
