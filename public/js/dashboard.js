@@ -694,6 +694,11 @@ function dashboard() {
     // really set in init() -- this factory runs before any DOM/storage
     // exists in the tests' sandbox, so it can't read either here.
     showWorldMap: true,
+    // False once the Score/Rate/Radios row has scrolled up under the
+    // sticky header (watchTopRow()) -- the map then carries the map HUD:
+    // last worked, score and rate (CJ, 2026-11-28: focus on the map but
+    // keep that data there).
+    topRowVisible: true,
     // The viewer's map pick, { contest, view } or null -- see mapView().
     // Per viewer, under MAPVIEW_KEY; set in init().
     mapViewPick: null,
@@ -876,6 +881,47 @@ function dashboard() {
       setInterval(() => this.fetchBusts(), 60000);
       // Drives the header's live "updated Xs ago" ticker.
       setInterval(() => { this.now = Date.now(); }, 1000);
+      this.watchTopRow();
+    },
+
+    // Is any of .top-row still visible below the sticky header? The header
+    // wraps to more lines on a narrow window, so its height is measured
+    // again on resize. No IntersectionObserver (old browser): the HUD just
+    // never shows, the page is as it was.
+    watchTopRow() {
+      if (typeof IntersectionObserver === 'undefined') return;
+      const row = document.querySelector('.top-row');
+      if (!row) return;
+      let obs = null;
+      const observe = () => {
+        if (obs) obs.disconnect();
+        const header = document.querySelector('.header');
+        const top = header ? header.offsetHeight : 0;
+        obs = new IntersectionObserver(([e]) => { this.topRowVisible = e.isIntersecting; },
+          { rootMargin: `-${top}px 0px 0px 0px` });
+        obs.observe(row);
+      };
+      observe();
+      let t = null;
+      window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(observe, 200); });
+    },
+
+    // The newest QSO that counts (X-QSOs skipped; a QTC is shown, chipped).
+    lastWorked() {
+      return this.qsos.find((q) => isCountedQso(q)) || null;
+    },
+
+    // The map HUD shows once the top row is out of sight and a QSO is
+    // logged (with none, the world map itself isn't drawn).
+    mapHud() {
+      return !this.topRowVisible && this.lastWorked() != null;
+    },
+
+    // The shortest rate window, for the HUD: { value, label } or null.
+    hudRate() {
+      const r = this.rate && this.rate[0];
+      if (!r || r.rate_per_hour == null) return null;
+      return { value: r.rate_per_hour, label: (r.minutes ?? '?') + ' min' };
     },
 
     touch() {

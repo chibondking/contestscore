@@ -832,3 +832,31 @@ describe('scoreSparklineValues', () => {
     assert.equal(d.scoreIntervalMinutes(), 5);
   });
 });
+
+describe('map HUD', () => {
+  it('last worked is the newest QSO that counts; a QTC still shows', () => {
+    const d = dashboard();
+    d.qsos = [qso({ call: 'X1X', is_claimed_qso: 0 }), qso({ call: 'OH0X', exchange1: 'SQTC' }), qso({ call: 'DL1ABC' })];
+    assert.equal(d.lastWorked().call, 'OH0X');
+    assert.equal(d.isQtc(d.lastWorked()), true);
+    d.qsos = [];
+    assert.equal(d.lastWorked(), null);
+  });
+
+  it('shows only once the top row is out of sight and a QSO is logged', () => {
+    const d = dashboard();
+    d.score = { total: 100 };
+    assert.equal(d.mapHud(), false); // top row visible
+    d.topRowVisible = false;
+    assert.equal(d.mapHud(), false); // nothing logged yet
+    d.qsos = [qso({ is_mult1: 1 })];
+    assert.equal(d.mapHud(), true);
+  });
+
+  it('rate: the shortest window, or nothing', () => {
+    const d = dashboard();
+    assert.equal(d.hudRate(), null);
+    d.rate = [{ minutes: 10, rate_per_hour: 142 }, { minutes: 60, rate_per_hour: 120 }];
+    assert.deepEqual({ ...d.hudRate() }, { value: 142, label: '10 min' });
+  });
+});
