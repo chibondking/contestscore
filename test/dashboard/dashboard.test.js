@@ -9,9 +9,10 @@ const { parseContact } = require('../../src/parsers/contact');
 // CLAUDE.md), so load it the way a browser would and pull the `dashboard`
 // factory off the resulting global scope. Only the factory is defined at load
 // time; io/Chart/Alpine are touched inside init(), which these tests never call.
-// multbell.js first, the same order index.html loads them in.
+// The same files, in the same order, as index.html (plus map.html's
+// map-tv.js, so both pages' components are covered).
 const sandbox = vm.createContext({});
-for (const f of ['multbell.js', 'dashboard.js']) {
+for (const f of ['component.js', 'live-feed.js', 'map-panel.js', 'multbell.js', 'dashboard.js', 'map-tv.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../../public/js', f), 'utf8'), sandbox);
 }
 const dashboard = sandbox.dashboard;
@@ -549,9 +550,9 @@ describe('section map (ARRL Sweepstakes / Field Day)', () => {
   });
 });
 
-describe('section map: index.html viewBox', () => {
+describe('section map: map card viewBox (partials/map-panel.html)', () => {
   it("is static and matches sections.json (a bound :viewBox is lowercased and ignored)", () => {
-    const html = fs.readFileSync(path.join(__dirname, '../../public/index.html'), 'utf8');
+    const html = fs.readFileSync(path.join(__dirname, '../../public/partials/map-panel.html'), 'utf8');
     const m = JSON.parse(fs.readFileSync(path.join(__dirname, '../../public/img/map/sections.json'), 'utf8'));
     assert.ok(!/:viewBox/i.test(html), 'no bound viewBox anywhere');
     assert.ok(html.includes(`viewBox="0 0 ${m.width} ${m.height}"`));
@@ -636,7 +637,7 @@ describe('map export (Save PNG)', () => {
   });
 
   it('the map header has a Save PNG button, wired to exportMap()', () => {
-    const html = fs.readFileSync(path.join(__dirname, '../../public/index.html'), 'utf8');
+    const html = fs.readFileSync(path.join(__dirname, '../../public/partials/map-panel.html'), 'utf8');
     assert.equal((html.match(/@click="exportMap\(\)"/g) || []).length, 1);
     assert.equal(typeof dashboard().exportMap, 'function');
   });
@@ -770,9 +771,10 @@ describe('US/VE map view for non-section contests', () => {
 describe('onSocketConnect', () => {
   function stub() {
     const d = dashboard();
-    const calls = { state: 0, busts: 0 };
-    d.fetchInitialState = () => { calls.state += 1; };
-    d.fetchBusts = () => { calls.busts += 1; };
+    const calls = { state: 0, cosb: 0, reconnect: 0 };
+    d.fetchLiveState = () => { calls.state += 1; };
+    d.fetchCosb = () => { calls.cosb += 1; };
+    d.onLive('reconnect', () => { calls.reconnect += 1; });
     d.touch = () => {};
     return { d, calls };
   }
@@ -782,6 +784,7 @@ describe('onSocketConnect', () => {
     d.onSocketConnect();
     assert.equal(d.connected, true);
     assert.equal(calls.state, 0);
+    assert.equal(calls.reconnect, 0);
   });
 
   it('reloads the whole state on every reconnect, since missed events are not replayed', () => {
@@ -790,10 +793,43 @@ describe('onSocketConnect', () => {
     d.connected = false; // disconnect
     d.onSocketConnect();
     assert.equal(d.connected, true);
-    assert.equal(calls.state, 1);
-    assert.equal(calls.busts, 1);
+    assert.deepEqual({ ...calls }, { state: 1, cosb: 1, reconnect: 1 });
     d.onSocketConnect();
     assert.equal(calls.state, 2);
+  });
+});
+
+describe('component parts (component.js)', () => {
+  it('compose keeps getters live and lets a later part override', () => {
+    let n = 0;
+    const c = sandbox.compose({ a: 1, get n() { return n; } }, { a: 2 });
+    assert.equal(c.a, 2);
+    n = 5;
+    assert.equal(c.n, 5);
+  });
+
+  it('feed events reach every listener, per component', () => {
+    const a = dashboard();
+    const b = dashboard();
+    const seen = [];
+    a.onLive('cleared', () => seen.push('a1'));
+    a.onLive('cleared', () => seen.push('a2'));
+    b.onLive('cleared', () => seen.push('b'));
+    a.emitLive('cleared');
+    assert.deepEqual(seen, ['a1', 'a2']);
+  });
+
+  it('Map TV is the same feed and map, HUD always on', () => {
+    const tv = sandbox.mapTv();
+    const d = dashboard();
+    for (const k of ['mapPoints', 'mapDotsSvg', 'sectionMapSvg', 'lastWorked', 'hudCosb', 'dxccCount', 'initLiveFeed']) {
+      assert.equal(String(tv[k]), String(d[k]), k);
+    }
+    assert.equal(tv.maybeRingMultBell, undefined); // dashboard-only parts stay out
+    tv.qsos = [qso({})];
+    d.qsos = [qso({})];
+    assert.equal(tv.mapHud(), true); // top row isn't on this page
+    assert.equal(d.mapHud(), false); // the dashboard waits for the scroll
   });
 });
 

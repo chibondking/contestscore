@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Applied before first paint so a viewer who chose light (or wt2p) never
+       sees a flash of the default -- dark is the default (no localStorage entry) and needs
+       no attribute at all. See chrome.js for the toggle that sets/persists
+       this key. -->
+  <script>
+    try {
+      var theme = localStorage.getItem('contestpulse_theme');
+      if (theme === 'light' || theme === 'wt2p') {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+    } catch {}
+  </script>
+  <title>Map TV · ContestPulse</title>
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <!-- Plain scripts before Alpine's deferred one: io must exist when
+       Alpine starts the component (same as index.html). -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+</head>
+<!-- Map TV: the map card full screen for a wall display (map-tv.js). -->
+<body class="map-tv" x-data="mapTv()" x-init="init()">
+
+  <header class="header" data-page="map">
+    <span class="utc-clock" x-text="utcClock()" title="UTC"></span>
+    <span class="station-call" x-show="stationCall()" x-text="stationCall()" title="Transmitted call"></span>
+    <span class="updated" x-text="'updated ' + secondsSinceUpdate() + 's ago'"></span>
+    <span class="status" :class="connected ? 'status--ok' : 'status--err'">
+      <span x-text="connected ? 'live' : 'disconnected'"></span>
+    </span>
+  </header>
+
+  <main class="map-tv__main">
+    <!-- #include map-panel -->
+  </main>
+
+  <script src="/js/chrome.js"></script>
+  <script src="/js/component.js"></script>
+  <script src="/js/live-feed.js"></script>
+  <script src="/js/map-panel.js"></script>
+  <script src="/js/map-tv.js"></script>
+</body>
+</html>
