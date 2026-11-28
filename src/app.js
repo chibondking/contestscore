@@ -3,10 +3,15 @@ const path = require('path');
 const apiRouter = require('./routes/api');
 const ingestRouter = require('./routes/ingest');
 const analyzeRouter = require('./routes/analyze');
+const { servePage } = require('./pages');
 
 const app = express();
 
 app.use(express.json());
+// Pages with shared partials (src/pages.js), ahead of express.static so the
+// raw files' "#include" comments are never served as-is.
+app.get(['/', '/index.html'], servePage('index.html'));
+app.get(['/map', '/map.html'], servePage('map.html'));
 app.use(express.static(path.join(__dirname, '../public')));
 
 // The analyzer upload page and every /analyze/<id> result link are served

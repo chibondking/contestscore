@@ -29,6 +29,7 @@ const THEME_KEY = 'contestpulse_theme';
 (function () {
   const NAV_LINKS = [
     { page: 'dashboard', href: '/', label: 'Dashboard' },
+    { page: 'map', href: '/map', label: 'Map TV' },
     { page: 'charts', href: '/charts.html', label: 'Charts' },
     { page: 'stats', href: '/stats.html', label: 'Stats' },
     { page: 'solar', href: '/solar.html', label: 'Solar' },
