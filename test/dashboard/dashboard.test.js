@@ -940,3 +940,15 @@ describe('followTable (Following card)', () => {
     assert.deepEqual([...d.followMissing()], ['W3CC']);
   });
 });
+
+describe('cosbUpdatedLabel', () => {
+  it("COSB's board time in UTC and how long ago", () => {
+    const d = dashboard();
+    assert.equal(d.cosbUpdatedLabel(), '');
+    d.cosb = { updated: '28 Nov 2026 07:16 UTC' };
+    d.now = Date.parse('2026-11-28T07:19:30Z');
+    assert.equal(d.cosbUpdatedLabel(), 'updated 07:16z · 3 min ago');
+    d.now = Date.parse('2026-11-28T07:16:20Z');
+    assert.equal(d.cosbUpdatedLabel(), 'updated 07:16z · just now');
+  });
+});

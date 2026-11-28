@@ -335,5 +335,18 @@ function liveFeed() {
       if (c.error) bits.push(`last refresh failed: ${c.error}`);
       return bits.join(' · ');
     },
+
+    // When COSB last updated its board, for the cards and the map HUD:
+    // "updated 07:16z · 3 min ago". COSB stamps the board in UTC
+    // ("28 Nov 2026 07:16 UTC"); '' when there's no board time.
+    cosbUpdatedLabel() {
+      const u = this.cosb && this.cosb.updated;
+      const m = /(\d{2}):(\d{2}) UTC$/.exec(String(u || ''));
+      if (!m) return '';
+      const t = Date.parse(String(u).replace(' UTC', ' GMT'));
+      const mins = Number.isFinite(t) ? Math.max(0, Math.floor((this.now - t) / 60000)) : null;
+      const ago = mins == null ? '' : mins < 1 ? ' · just now' : ` · ${mins} min ago`;
+      return `updated ${m[1]}:${m[2]}z${ago}`;
+    },
   };
 }

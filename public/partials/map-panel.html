@@ -83,7 +83,7 @@
       <b x-text="hudCosb() ? hudCosb().call : ''"></b>
       <b x-text="hudCosb() ? '#' + hudCosb().rank : ''"></b>
       <span x-text="hudCosb() ? 'of ' + hudCosb().count : ''"></span>
-      <small x-text="hudCosb() ? hudCosb().section + ' · COSB' : ''"></small>
+      <small x-text="hudCosb() ? hudCosb().section + ' · COSB ' + cosbUpdatedLabel() : ''"></small>
     </div>
   </div>
   <template x-if="showWorldMap && mapView() !== 'world'">
