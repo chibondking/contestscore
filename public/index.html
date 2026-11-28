@@ -130,6 +130,12 @@
             <span class="metric__value" x-text="score.total ?? '—'"></span>
             <span class="metric__label">Total</span>
           </div>
+          <!-- Countries worked, counted live from the log (dxccCount()), so
+               it never dims with the score snapshot. -->
+          <div class="metric metric--live" x-show="dxccCount() != null" title="DXCC entities (countries) worked">
+            <span class="metric__value" x-text="dxccCount()"></span>
+            <span class="metric__label">DXCC</span>
+          </div>
         </div>
         <div class="sparkline">
           <canvas id="scoreSparkline" x-effect="renderScoreSparkline()"></canvas>
@@ -260,6 +266,7 @@
           <span><b x-text="score.qsos ?? '—'"></b> QSOs</span>
           <span><b x-text="score.mults ?? '—'"></b> mults</span>
           <span><b x-text="score.total ?? '—'"></b> pts</span>
+          <span x-show="dxccCount() != null"><b x-text="dxccCount()"></b> DXCC</span>
           <span x-show="hudRate()"><b x-text="hudRate() ? hudRate().value : ''"></b>/hr <small x-text="hudRate() ? '(' + hudRate().label + ')' : ''"></small></span>
         </div>
       </div>

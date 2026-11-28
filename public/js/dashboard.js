@@ -906,6 +906,17 @@ function dashboard() {
       window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(observe, 200); });
     },
 
+    // DXCC entities (countries) worked: distinct N1MM country prefixes
+    // over the QSOs that count, QTCs left out (relayed traffic, not a
+    // contact). null when the logger sends no prefix -- the metric hides.
+    dxccCount() {
+      const s = new Set();
+      for (const q of this.qsos) {
+        if (q.countryprefix && isCountedQso(q) && !this.isQtc(q)) s.add(q.countryprefix);
+      }
+      return s.size ? s.size : null;
+    },
+
     // The newest QSO that counts (X-QSOs skipped; a QTC is shown, chipped).
     lastWorked() {
       return this.qsos.find((q) => isCountedQso(q)) || null;
