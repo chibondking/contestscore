@@ -298,10 +298,11 @@ readable). The dashboard (`/`) and Map TV (`/map`) are built from the same
 parts, composed with `compose()` in `public/js/component.js`:
 `liveFeed()` (`live-feed.js`: QSOs, score, rate, COSB, the socket; other
 parts react through `onLive(event, fn)`), `mapPanel()` (`map-panel.js`: the
-world/section maps and the HUD), plus each page's own bit (`dashboard.js`,
-`map-tv.js`). The map card's markup has one copy,
-`public/partials/map-panel.html`, which `src/pages.js` fills into each page
-at its `<!-- #include map-panel -->` line -- those two pages are served by
+world/section maps and the HUD), `multBellPanel()` (`mult-bell-panel.js`:
+the mult bell, same per-browser settings on both pages), plus each page's
+own bit (`dashboard.js`, `map-tv.js`). Their markup has one copy each in
+`public/partials/` (`map-panel.html`, `mult-bell.html`), which
+`src/pages.js` fills into each page at its `<!-- #include NAME -->` line -- those two pages are served by
 that route, not straight from `express.static`. A new page that shows the
 map or the live numbers composes these parts; it doesn't copy them.
 
@@ -356,13 +357,14 @@ contestscore/
     compare.html            # two analyses side by side
     admin.html              # DB reset UI
     map.html                # Map TV: the map card full screen (wall display)
-    partials/map-panel.html # the map card, included into index.html + map.html (src/pages.js)
+    partials/               # map-panel.html, mult-bell.html: included into index.html + map.html (src/pages.js)
     js/
       component.js          # compose(): pages are built from the parts below
       live-feed.js          # liveFeed(): QSOs/score/rate/COSB + socket, onLive() events
       map-panel.js          # mapPanel(): world + section maps, the HUD
+      mult-bell-panel.js    # multBellPanel(): the mult bell + header control (both pages)
       dashboard.js          # the dashboard: feed + map + radios, sparklines, bell, busts...
-      map-tv.js             # Map TV (/map): feed + map, full screen, HUD always on
+      map-tv.js             # Map TV (/map): feed + map + bell, full screen, HUD always on
       multbell.js           # multDingCount(): mult bell strikes; also required by tui/
       charts.js             # Chart.js; ?log=<id> loads a saved analysis instead of the live feed
       stats.js              # stats tables; same ?log=<id> hook

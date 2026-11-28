@@ -28,6 +28,7 @@
   <header class="header" data-page="map">
     <span class="utc-clock" x-text="utcClock()" title="UTC"></span>
     <span class="station-call" x-show="stationCall()" x-text="stationCall()" title="Transmitted call"></span>
+    <!-- #include mult-bell -->
     <span class="updated" x-text="'updated ' + secondsSinceUpdate() + 's ago'"></span>
     <span class="status" :class="connected ? 'status--ok' : 'status--err'">
       <span x-text="connected ? 'live' : 'disconnected'"></span>
@@ -42,6 +43,8 @@
   <script src="/js/component.js"></script>
   <script src="/js/live-feed.js"></script>
   <script src="/js/map-panel.js"></script>
+  <script src="/js/multbell.js"></script>
+  <script src="/js/mult-bell-panel.js"></script>
   <script src="/js/map-tv.js"></script>
 </body>
 </html>

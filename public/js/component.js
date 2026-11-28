@@ -8,14 +8,16 @@
 //                             current
 //   mapPanel()  map-panel.js  the map card: world / US-VE / ARRL section
 //                             maps and the HUD overlaid on them
+//   multBellPanel()           the mult bell and its header control
+//               mult-bell-panel.js
 //
 // plus whatever only that page has. The dashboard is
 // compose(liveFeed(), mapPanel(), {...the rest of the dashboard}); the Map
 // TV page is compose(liveFeed(), mapPanel(), {...a few TV settings}). Two
 // pages that show the same thing run the same code.
 //
-// The map card's markup is shared the same way: one copy in
-// public/partials/map-panel.html, filled into each page by the server
+// Their markup is shared the same way: one copy each in public/partials/
+// (map-panel.html, mult-bell.html), filled into each page by the server
 // (src/pages.js).
 
 // Merge parts left to right into one object. Uses property descriptors, not

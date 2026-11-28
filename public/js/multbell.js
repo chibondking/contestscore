@@ -1,5 +1,6 @@
-// Mult bell strike count, shared by the dashboard (public/js/dashboard.js,
-// loaded first by index.html) and the TUI (tui/index.js, via require). A
+// Mult bell strike count, shared by the pages' bell (public/js/
+// mult-bell-panel.js, loaded after this) and the TUI (tui/index.js, via
+// require). A
 // classic script like every other page script -- no type="module", see
 // CLAUDE.md -- with a guarded module.exports so Node can load it too.
 
