@@ -668,6 +668,31 @@ function dashboard() {
 
     cosbNum(v) { return v == null ? '—' : Number(v).toLocaleString('en-US'); },
 
+    // The Following card's rows: the followed stations COSB lists, plus us
+    // when we're on the board, highest score first. `gap` is to us (+ =
+    // ahead of us); `up` is to the row above (- = behind it).
+    followTable() {
+      const c = this.cosb || {};
+      const rows = (c.follow || []).filter((f) => f.found).map((f) => ({ ...f, me: false }));
+      const me = c.status === 'ok' ? (c.rows || []).find((r) => r.me) : null;
+      if (me && !rows.some((r) => r.call === me.call)) {
+        rows.push({
+          call: me.call, op: me.op, section: c.section, rank: me.rank, count: c.count,
+          score: me.score, qsos: me.qsos, mult: me.mult, gap: 0, me: true,
+        });
+      }
+      rows.sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity));
+      return rows.map((r, i) => {
+        const above = rows[i - 1];
+        return { ...r, up: above && above.score != null && r.score != null ? r.score - above.score : null };
+      });
+    },
+
+    // Followed calls COSB doesn't list (yet).
+    followMissing() {
+      return ((this.cosb && this.cosb.follow) || []).filter((f) => !f.found).map((f) => f.call);
+    },
+
     // Header line: "#11 of 37 · M/2 HP · 52,000 behind the leader".
     cosbSummary() {
       const c = this.cosb;

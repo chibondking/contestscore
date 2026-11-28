@@ -921,3 +921,21 @@ describe('hudCosb', () => {
     assert.deepEqual({ ...d.hudCosb() }, { call: 'WT2P', rank: 131, count: 298, section: 'SO-ALL HP (A) CW' });
   });
 });
+
+describe('followTable (Following card)', () => {
+  it('us and the followed stations, highest first, with gaps to us and to the one above', () => {
+    const d = dashboard();
+    d.cosb = {
+      status: 'ok', section: 'M/2 HP', count: 37,
+      rows: [{ rank: 11, call: 'K9CT', score: 600, qsos: 800, mult: 300, me: true }],
+      follow: [
+        { call: 'W1AA', found: true, section: 'M/2 HP', rank: 5, count: 37, score: 900, gap: 300 },
+        { call: 'W2BB', found: true, section: 'M/M HP', rank: 20, count: 18, score: 400, gap: -200 },
+        { call: 'W3CC', found: false },
+      ],
+    };
+    const t = d.followTable();
+    assert.deepEqual(t.map((r) => [r.call, r.me, r.up]), [['W1AA', false, null], ['K9CT', true, -300], ['W2BB', false, -200]]);
+    assert.deepEqual([...d.followMissing()], ['W3CC']);
+  });
+});

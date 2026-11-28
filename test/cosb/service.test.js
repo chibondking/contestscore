@@ -317,3 +317,45 @@ describe('COSB source: contest list kept in the store', () => {
     assert.equal((await b.contests()).contests.find((c) => c.id === 113).status, 'coming');
   });
 });
+
+describe('following other stations', () => {
+  const NOW = Date.parse('2026-11-28T05:20:00Z');
+  const m2 = BOARD.sections.find((s) => s.label === 'M/2 HP').rows;
+  const mm = BOARD.sections.find((s) => s.label === 'M/M HP').rows;
+
+  it('finds each followed call in any category, with its gap to us', () => {
+    const k9ct = m2.find((r) => r.call === 'K9CT');
+    const v = buildView(ST, 'K9CT', [m2[0].call, mm[0].call, 'N0CALL']);
+    assert.equal(v.follow.length, 3);
+    const [a, b, c] = v.follow;
+    assert.deepEqual([a.found, a.section, a.rank, a.gap], [true, 'M/2 HP', 1, m2[0].score - k9ct.score]);
+    assert.deepEqual([b.section, b.count], ['M/M HP', mm.length]);
+    assert.deepEqual(c, { call: 'N0CALL', found: false });
+  });
+
+  it('still lists them when we are not on the board -- no gap', () => {
+    const v = buildView(ST, 'N0CALL', [m2[0].call]);
+    assert.equal(v.status, 'not_listed');
+    assert.equal(v.follow[0].found, true);
+    assert.equal(v.follow[0].gap, null);
+  });
+
+  it('setFollow stores up to three, deduped, and updates the view at once', async () => {
+    const st = on();
+    const svc = createCosbService({
+      env: {},
+      deps: {
+        now: () => NOW,
+        source: { standings: async () => ST },
+        getLatestScore: () => ({ contest: 'CQ-WW-CW', call: 'K9CT', captured_at: '2026-11-28T05:19:00Z' }),
+        ...st,
+      },
+    });
+    await svc.poll();
+    assert.deepEqual(svc.getView().follow, []);
+    const list = svc.setFollow(['k1abc', 'K1ABC', m2[0].call.toLowerCase(), 'W1X', 'W2X']);
+    assert.deepEqual(list, ['K1ABC', m2[0].call, 'W1X']);
+    assert.deepEqual(svc.getFollow(), list);
+    assert.equal(svc.getView().follow[1].rank, 1); // no poll needed
+  });
+});

@@ -590,6 +590,10 @@ each switched on per scoreboard from the **Admin** page (both off by default):
   posts to COSB itself. Posts go only while COSB has the contest on air
   (it rejects them otherwise); the Admin page shows the COSB contest and
   its status, and "Last post" says why a post was skipped.
+- **Following** — up to three stations to compare against (any category),
+  set on the Admin page once the admin token is in: a Following card on the
+  dashboard shows each one's score, rank and gap to you and to the station
+  just above it.
 
 `COSB_ENABLED=false` hides both; `COSB_CONTEST_ID=<id>` (the number in a
 COSB scoreboard URL) pins the contest if your logger's contest name isn't

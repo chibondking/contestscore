@@ -38,6 +38,14 @@ function admin() {
     cosbMessage: '',
     cosbMessageIsError: false,
 
+    // COSB stations to follow (GET /api/cosb/follow). null = hidden: no
+    // token yet, or the server refused it.
+    cosbFollow: null,
+    cosbFollowInputs: ['', '', ''],
+    cosbFollowBusy: false,
+    cosbFollowMessage: '',
+    cosbFollowMessageIsError: false,
+
     cacheBusy: false,
     cacheMessage: '',
     cacheMessageIsError: false,
@@ -53,6 +61,50 @@ function admin() {
       this.fetchCty();
       this.fetchBustsHidden();
       this.fetchCosb();
+      this.fetchCosbFollow();
+    },
+
+    // Shows the follow section only once the server accepts the token.
+    async fetchCosbFollow() {
+      if (!this.token) { this.cosbFollow = null; return; }
+      try {
+        const res = await fetch('/api/cosb/follow', { headers: { Authorization: `Bearer ${this.token}` } });
+        if (!res.ok) { this.cosbFollow = null; return; }
+        const body = await res.json();
+        this.cosbFollow = body.calls || [];
+        this.cosbFollowInputs = [0, 1, 2].map((i) => this.cosbFollow[i] || '');
+      } catch {
+        this.cosbFollow = null;
+      }
+    },
+
+    async saveCosbFollow() {
+      if (this.cosbFollowBusy) return;
+      this.cosbFollowBusy = true;
+      this.cosbFollowMessage = '';
+      try {
+        const calls = this.cosbFollowInputs.map((c) => c.trim().toUpperCase()).filter(Boolean);
+        const res = await fetch('/api/cosb/follow', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ calls }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) {
+          this.cosbFollow = body.calls;
+          this.cosbFollowInputs = [0, 1, 2].map((i) => body.calls[i] || '');
+          this.cosbFollowMessage = body.calls.length ? `Following ${body.calls.join(', ')}.` : 'Not following anyone.';
+          this.cosbFollowMessageIsError = false;
+        } else {
+          this.cosbFollowMessage = `Save failed: ${body.error || res.status}`;
+          this.cosbFollowMessageIsError = true;
+        }
+      } catch (err) {
+        this.cosbFollowMessage = `Save failed: ${err.message}`;
+        this.cosbFollowMessageIsError = true;
+      } finally {
+        this.cosbFollowBusy = false;
+      }
     },
 
     async fetchCosb() {
@@ -186,6 +238,9 @@ function admin() {
       } catch {
         // ignore -- not worth surfacing an error just for a remembered token
       }
+      // Re-check the token for the follow section, once typing pauses.
+      clearTimeout(this._followCheck);
+      this._followCheck = setTimeout(() => this.fetchCosbFollow(), 400);
     },
 
     async fetchCounts() {

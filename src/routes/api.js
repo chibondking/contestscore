@@ -12,7 +12,7 @@ const { getStatuses } = require('../state/bridgeStatus');
 const { getVersionInfo } = require('../version');
 const { resolveLookupConfig, stripSuffix } = require('../lookup');
 const { getLookupService, getUdpListeners, getCosbService } = require('../udp');
-const { resolveCosbConfig } = require('../cosb');
+const { resolveCosbConfig, FOLLOW_MAX } = require('../cosb');
 const { resolveSolarConfig, latestSolar } = require('../solar');
 const { freqToBand, publicQso } = require('../parsers/util');
 const { getDb } = require('../db');
@@ -374,6 +374,31 @@ router.post('/cosb/publish', (req, res) => {
   if (enabled && !(user || cur.user)) return res.status(400).json({ error: 'Set the COSB login first' });
   if (enabled && !(b.password || cur.has_password)) return res.status(400).json({ error: 'Set the COSB password first' });
   res.json(svc.setPublish({ enabled, user, password: b.password ? String(b.password) : '' }));
+});
+
+// GET/POST /api/cosb/follow -- the stations this board follows on COSB
+// (up to FOLLOW_MAX), shown with their gaps on the dashboard's Following
+// card. The results are public (the card); the list is set only from the
+// Admin page, and its section there stays hidden until this GET accepts the
+// token (CJ, 2026-11-28: protected, hidden without the key).
+router.get('/cosb/follow', (req, res) => {
+  if (!checkToken(req, res)) return;
+  const svc = getCosbService();
+  if (!svc) return res.status(503).json({ error: 'COSB service not running' });
+  res.json({ calls: svc.getFollow(), max: FOLLOW_MAX });
+});
+
+router.post('/cosb/follow', (req, res) => {
+  if (!checkToken(req, res)) return;
+  const svc = getCosbService();
+  if (!svc) return res.status(503).json({ error: 'COSB service not running' });
+  const raw = (req.body || {}).calls;
+  if (!Array.isArray(raw)) return res.status(400).json({ error: 'calls must be a list' });
+  const calls = raw.map((c) => String(c == null ? '' : c).trim().toUpperCase()).filter(Boolean);
+  if (calls.length > FOLLOW_MAX) return res.status(400).json({ error: `At most ${FOLLOW_MAX} stations` });
+  const bad = calls.find((c) => !/^[A-Z0-9/]{3,15}$/.test(c));
+  if (bad) return res.status(400).json({ error: `Not a callsign: ${bad}` });
+  res.json({ calls: svc.setFollow(calls), max: FOLLOW_MAX, standings: svc.getView() });
 });
 
 // DELETE /api/db  requires X-Confirm: yes, plus a bearer token whenever
