@@ -331,10 +331,13 @@ router.post('/busts/show', setBustsHidden(false));
 
 // GET /api/cosb -- this station's contestonlinescore.com standings (see
 // src/cosb/) plus the publishing status. Never includes the COSB password.
+// ?scope=cont:EU | zone:5 ranks within that part of the world (src/cosb/
+// scope.js); anything else is the whole board.
 router.get('/cosb', (req, res) => {
   const svc = getCosbService();
   if (!svc) return res.json({ standings: { status: 'disabled' }, standings_switch: null, publish: null });
-  res.json({ standings: svc.getView(), standings_switch: svc.getStandingsStatus(), publish: svc.getPublishStatus() });
+  const scope = typeof req.query.scope === 'string' ? req.query.scope : '';
+  res.json({ standings: svc.getView(scope), standings_switch: svc.getStandingsStatus(), publish: svc.getPublishStatus() });
 });
 
 // POST /api/cosb/standings { enabled } -- the Admin page's per-board switch

@@ -359,3 +359,33 @@ describe('following other stations', () => {
     assert.equal(svc.getView().follow[1].rank, 1); // no poll needed
   });
 });
+
+describe('scoped standings view', () => {
+  const NOW = Date.parse('2026-11-28T05:20:00Z');
+  it('getView(scope) ranks within the scope; the pushed view stays the whole board', async () => {
+    // Everyone in M/2 HP is "NA" except calls starting with D (EU).
+    const locate = (c) => ({ continent: c.startsWith('D') ? 'EU' : 'NA', zone: c.startsWith('D') ? 14 : 5 });
+    const svc = createCosbService({
+      env: {},
+      deps: {
+        now: () => NOW, locate,
+        source: { standings: async () => ST },
+        getLatestScore: () => ({ contest: 'CQ-WW-CW', call: 'K9CT', captured_at: '2026-11-28T05:19:00Z' }),
+        ...on(),
+      },
+    });
+    const world = await svc.poll();
+    assert.equal(world.scope, 'world');
+    assert.ok(world.scopes.continents.some((o) => o.scope === 'cont:NA'));
+    const m2 = BOARD.sections.find((s) => s.label === 'M/2 HP').rows;
+    const naAhead = m2.filter((r) => r.score > m2.find((x) => x.call === 'K9CT').score && !r.call.startsWith('D')).length;
+    const na = svc.getView('cont:NA');
+    assert.equal(na.rank, naAhead + 1);
+    assert.equal(na.scope_label, 'NA');
+    const eu = svc.getView('cont:EU');
+    assert.equal(eu.outside, true);
+    assert.equal(eu.rank, null);
+    assert.equal(svc.getView('bogus').scope, 'world');
+    assert.equal(svc.getView().rank, 11);
+  });
+});

@@ -85,6 +85,9 @@ function stripSuffix(raw) {
   return a.length >= b.length ? a : b;
 }
 
+// The Standings card's scope (setCosbScope()), per viewer.
+const COSB_SCOPE_KEY = 'contestpulse_cosb_scope';
+
 function liveFeed() {
   // Listeners by event name. Kept in this closure, not on the component,
   // so Alpine doesn't wrap them in its reactive proxy.
@@ -107,6 +110,9 @@ function liveFeed() {
     // cosb:update every ~2 min while a contest is live). The card shows
     // only when status is 'ok' -- this station found in a COSB category.
     cosb: { status: 'idle' },
+    // The viewer's COSB scope: 'world', 'cont:EU', 'zone:5' (src/cosb/
+    // scope.js). Per viewer, under COSB_SCOPE_KEY; set in initLiveFeed().
+    cosbScope: 'world',
 
     // "Last updated" ticker: lastUpdateAt bumps on every socket event or
     // successful poll; now ticks every second so secondsSinceUpdate()
@@ -182,8 +188,11 @@ function liveFeed() {
         this.touch();
       });
 
+      // The push is the whole-board view; a viewer on a scope asks for theirs.
       socket.on('cosb:update', (data) => {
-        if (data) this.cosb = data;
+        if (!data) return;
+        if (this.cosbScope === 'world') this.cosb = data;
+        else this.fetchCosb();
       });
 
       socket.on('db:cleared', () => {
@@ -194,6 +203,7 @@ function liveFeed() {
         this.touch();
       });
 
+      try { this.cosbScope = localStorage.getItem(COSB_SCOPE_KEY) || 'world'; } catch { /* world */ }
       this.fetchLiveState();
       this.fetchCosb();
       // The rate windows decay purely with elapsed time, so they need to be
@@ -320,11 +330,31 @@ function liveFeed() {
 
     async fetchCosb() {
       try {
-        const res = await fetch('/api/cosb').then((r) => r.json());
-        if (res && res.standings) this.cosb = res.standings;
+        const q = this.cosbScope && this.cosbScope !== 'world' ? `?scope=${encodeURIComponent(this.cosbScope)}` : '';
+        const res = await fetch(`/api/cosb${q}`).then((r) => r.json());
+        const st = res && res.standings;
+        if (!st) return;
+        // A scope saved in an earlier contest that this category doesn't
+        // have: back to the whole board, so the picker and table agree.
+        const choices = st.scopes ? [...st.scopes.continents, ...st.scopes.zones].map((o) => o.scope) : null;
+        if (q && choices && !choices.includes(this.cosbScope)) { this.setCosbScope('world'); return; }
+        this.cosb = st;
       } catch (err) {
         console.error('Failed to load COSB standings:', err);
       }
+    },
+
+    // The Standings card's scope picker. Remembered per viewer.
+    setCosbScope(scope) {
+      this.cosbScope = scope || 'world';
+      try { localStorage.setItem(COSB_SCOPE_KEY, this.cosbScope); } catch { /* not remembered */ }
+      this.fetchCosb();
+    },
+
+    // "NA" / "Zone 5" / '' (whole board): for headers and the HUD.
+    cosbScopeLabel() {
+      const c = this.cosb || {};
+      return c.scope && c.scope !== 'world' ? c.scope_label || '' : '';
     },
 
     cosbTitle() {
