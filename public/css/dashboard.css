@@ -1307,12 +1307,11 @@ body {
 
    The page is exactly one screen tall (a flex column, nothing scrolls) and
    the map takes all the room under the header and the card's title row.
-   The maps are 2:1 and a TV is about 16:9, so the map fills the width and
-   is cut off at the bottom -- up to a sixth of it, which is Antarctica
-   (below ~60 S) -- rather than leaving bands either side (CJ, 2026-11-28:
-   "still doesn't fill the screen"). Only a screen much wider than 2.4:1
-   gets ocean at the sides. The map box is a size container so the SVG can
-   be sized against its height (cqh). */
+   The maps are 2:1 and the room for them is wider than that (16:9 TV,
+   wider still on a monitor), so the map fills the width and is cut off at
+   the bottom -- Antarctica, the far south on a wide monitor -- rather than
+   leaving bands either side (CJ, 2026-11-28: "still doesn't fill the
+   screen"). The top stays, so the time-zone labels do too. */
 body.map-tv { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 .map-tv .header { flex: none; }
 .map-tv__main { flex: 1; min-height: 0; display: flex; padding: 0.5rem 0.75rem; }
@@ -1320,8 +1319,11 @@ body.map-tv { height: 100vh; height: 100dvh; display: flex; flex-direction: colu
 .map-tv #worldmap > h2, .map-tv .map-bands { flex: none; }
 .map-tv .map-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .map-tv #worldmap-body, .map-tv #secmap-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.map-tv .map-box { flex: 1; min-height: 0; container-type: size; overflow: hidden; }
-.map-tv .worldmap-svg { width: min(100cqw, calc(100cqh * 2.4)); height: auto; margin: 0 auto; }
+.map-tv .map-box { flex: 1; min-height: 0; overflow: hidden; }
+/* Always the full width. The 2.4x-height cap left strips either side on a
+   wide monitor (CJ's screenshot: a ~2.5:1 map area); the price is a
+   deeper cut at the bottom there -- Antarctica and the far south. */
+.map-tv .worldmap-svg { width: 100%; height: auto; }
 /* Readable across a room. */
 .map-tv .map-hud { transform: scale(1.4); transform-origin: top left; max-width: calc(70% - 1.2rem); }
 @media (max-width: 640px) { .map-tv .map-hud { transform: none; max-width: calc(100% - 0.6rem); } }
