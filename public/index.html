@@ -269,6 +269,14 @@
           <span x-show="dxccCount() != null"><b x-text="dxccCount()"></b> DXCC</span>
           <span x-show="hudRate()"><b x-text="hudRate() ? hudRate().value : ''"></b>/hr <small x-text="hudRate() ? '(' + hudRate().label + ')' : ''"></small></span>
         </div>
+        <!-- COSB rank, when this board has the standings switched on and
+             COSB lists the station (hudCosb()). -->
+        <div class="map-hud__cosb" x-show="hudCosb()" :title="cosbTitle()">
+          <b x-text="hudCosb() ? hudCosb().call : ''"></b>
+          <b x-text="hudCosb() ? '#' + hudCosb().rank : ''"></b>
+          <span x-text="hudCosb() ? 'of ' + hudCosb().count : ''"></span>
+          <small x-text="hudCosb() ? hudCosb().section + ' · COSB' : ''"></small>
+        </div>
       </div>
       <template x-if="showWorldMap && mapView() !== 'world'">
       <div id="secmap-body" x-init="loadSectionMap()">

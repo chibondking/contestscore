@@ -1916,6 +1916,15 @@ function dashboard() {
       return [`#${c.rank} of ${c.count}`, c.section, lead].filter(Boolean).join(' · ');
     },
 
+    // The map HUD's COSB line: { call, rank, count, section } once COSB
+    // lists this station (the board's standings switch on), else null.
+    hudCosb() {
+      const c = this.cosb;
+      if (!c || c.status !== 'ok' || c.rank == null) return null;
+      const me = (c.rows || []).find((r) => r.me);
+      return { call: (me && me.call) || this.stationCall() || '', rank: c.rank, count: c.count, section: c.section || '' };
+    },
+
     cosbTitle() {
       const c = this.cosb || {};
       const bits = ['contestonlinescore.com'];
