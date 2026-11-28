@@ -966,3 +966,30 @@ describe('multBellState (header button)', () => {
     }
   });
 });
+
+describe('mult bell: last decision, shown in the popover', () => {
+  it('records a new mult as rung, or why not', () => {
+    const d = sandbox.mapTv();
+    d.ding = () => 'running';
+    d.score = { mults: 50 };
+    const fresh = () => new Date(Date.now() - 1000).toISOString().slice(0, 19).replace('T', ' ');
+    d.maybeRingMultBell(qso({ call: 'PJ2T', is_mult2: 1, n1mm_timestamp: fresh() }), true);
+    assert.equal(d.multBellLast.result, 'bell off');
+    d.multBell = { enabled: true, after: 100, volume: 0.6 };
+    d.maybeRingMultBell(qso({ call: 'UW5Y', is_mult2: 1, n1mm_timestamp: fresh() }), true);
+    assert.deepEqual([d.multBellLast.call, d.multBellLast.result], ['UW5Y', 'quiet until 101 mults']);
+    d.multBell = { enabled: true, after: 0, volume: 0.6 };
+    d.maybeRingMultBell(qso({ call: 'GS7V', is_mult2: 1, n1mm_timestamp: fresh() }), true);
+    assert.equal(d.multBellLast.result, 'rang');
+    d.ding = () => 'suspended';
+    d.maybeRingMultBell(qso({ call: '8P5A', is_mult1: 1, n1mm_timestamp: fresh() }), true);
+    assert.equal(d.multBellLast.result, 'rang a moment ago'); // the cooldown
+  });
+
+  it('pages start once: no x-init="init()" next to an init() Alpine already calls', () => {
+    for (const page of ['index.html', 'map.html']) {
+      const html = fs.readFileSync(path.join(__dirname, '../../public', page), 'utf8');
+      assert.equal(/<body[^>]*x-init=/.test(html), false, page);
+    }
+  });
+});

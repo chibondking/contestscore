@@ -27,7 +27,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
-<body x-data="dashboard()" x-init="init()">
+<!-- No x-init="init()": Alpine calls init() itself, and both ran it twice
+     (two sockets, every listener doubled). -->
+<body x-data="dashboard()">
 
   <header class="header" data-page="dashboard">
     <!-- Contesting runs on UTC, not local time -- the operator's own wall

@@ -23,7 +23,9 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 </head>
 <!-- Map TV: the map card full screen for a wall display (map-tv.js). -->
-<body class="map-tv" x-data="mapTv()" x-init="init()">
+<!-- No x-init="init()": Alpine calls init() itself, and both ran it twice
+     (two sockets, every listener doubled). -->
+<body class="map-tv" x-data="mapTv()">
 
   <header class="header" data-page="map">
     <span class="utc-clock" x-text="utcClock()" title="UTC"></span>
