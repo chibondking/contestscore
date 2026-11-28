@@ -4,11 +4,14 @@
 <!-- Mult bell: a desk-bell ding on each new multiplier, per viewer and
      off by default (mult-bell-panel.js, MULTBELL_KEY). -->
 <div class="multbell" @click.outside="multBellOpen = false" @keydown.escape="multBellOpen = false">
-  <button type="button" class="multbell__btn" :class="{ 'multbell__btn--on': multBell.enabled }"
+  <!-- Three states at a glance (multBellState()): off 🔕, on 🔔, and on
+       but the browser is holding sound back until someone clicks the page
+       (after every reload -- easy to miss on a wall display). -->
+  <button type="button" class="multbell__btn" :class="'multbell__btn--' + multBellState()"
           @click="multBellOpen = !multBellOpen" :title="multBellTitle()" :aria-expanded="multBellOpen"
           aria-label="Mult bell settings">
-    <span aria-hidden="true">🔔</span>
-    <span x-text="multBell.enabled ? 'on' : 'off'"></span>
+    <span aria-hidden="true" x-text="multBellState() === 'off' ? '🔕' : '🔔'"></span>
+    <span x-text="{ off: 'off', on: 'on', blocked: 'click for sound' }[multBellState()]"></span>
   </button>
   <div class="multbell__panel" x-show="multBellOpen" x-cloak>
     <label class="multbell__row">

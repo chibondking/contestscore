@@ -952,3 +952,17 @@ describe('cosbUpdatedLabel', () => {
     assert.equal(d.cosbUpdatedLabel(), 'updated 07:16z · just now');
   });
 });
+
+describe('multBellState (header button)', () => {
+  it('off, on, or on-but-blocked until a click -- the same on Map TV', () => {
+    for (const make of [dashboard, sandbox.mapTv]) {
+      const d = make();
+      assert.equal(d.multBellState(), 'off');
+      d.multBell = { enabled: true, after: 0, volume: 0.6 };
+      assert.equal(d.multBellState(), 'on');
+      d.audioBlocked = true;
+      assert.equal(d.multBellState(), 'blocked');
+      assert.match(d.multBellTitle(), /click anywhere/);
+    }
+  });
+});
