@@ -32,6 +32,7 @@
     <p class="multbell__hint multbell__hint--warn" x-show="multBell.enabled && audioBlocked">
       The browser is holding sound back -- click anywhere on this page once to allow it.
     </p>
+    <p class="multbell__hint" x-show="multBellLast" x-text="multBellLast ? 'Last mult: ' + multBellLast.call + ' ' + multBellLast.at + ' — ' + multBellLast.result : ''"></p>
     <p class="multbell__hint">Saved in this browser only.</p>
   </div>
 </div>

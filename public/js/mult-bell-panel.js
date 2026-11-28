@@ -42,13 +42,21 @@ function normalizeMultBell(raw) {
 // contactreplace edit of a QSO already on screen -- an edit isn't a newly
 // worked mult. `multCount` is the contest's mult total including this one.
 // `n1mmAgeMs` is now minus the QSO's own logged timestamp (null if unknown).
-function multBellShouldRing({ settings, isNew, isMult, counted, multCount, n1mmAgeMs, msSinceLastDing }) {
-  if (!settings || !settings.enabled) return false;
-  if (!isNew || !isMult || !counted) return false;
-  if (!(multCount > settings.after)) return false;
-  if (n1mmAgeMs != null && n1mmAgeMs > MULTBELL_MAX_AGE_MS) return false;
-  if (msSinceLastDing != null && msSinceLastDing < MULTBELL_COOLDOWN_MS) return false;
-  return true;
+function multBellShouldRing(args) {
+  return multBellSkipReason(args) === null;
+}
+
+// Why the bell stays quiet for this contact, in words for the bell's
+// popover ("Last mult: ..."), or null when it should ring.
+function multBellSkipReason({ settings, isNew, isMult, counted, multCount, n1mmAgeMs, msSinceLastDing }) {
+  if (!settings || !settings.enabled) return 'bell off';
+  if (!isNew) return 'an edit of a QSO already shown';
+  if (!isMult) return 'not a mult';
+  if (!counted) return 'X-QSO';
+  if (!(multCount > settings.after)) return `quiet until ${settings.after + 1} mults`;
+  if (n1mmAgeMs != null && n1mmAgeMs > MULTBELL_MAX_AGE_MS) return `logged ${Math.round(n1mmAgeMs / 60000)} min ago (backlog)`;
+  if (msSinceLastDing != null && msSinceLastDing < MULTBELL_COOLDOWN_MS) return 'rang a moment ago';
+  return null;
 }
 
 // multDingCount / MULTBELL_STRIKE_GAP_MS live in multbell.js (shared with the TUI).
@@ -114,6 +122,8 @@ function multBellPanel() {
     multBell: { ...MULTBELL_DEFAULTS },
 
     multBellOpen: false,
+    // The last new mult and what the bell did: { call, at, result }.
+    multBellLast: null,
 
     audioBlocked: false,
 
@@ -143,7 +153,7 @@ function multBellPanel() {
     maybeRingMultBell(q, isNew) {
       const now = Date.now();
       const ts = n1mmTimestampMs(q.n1mm_timestamp);
-      const ring = multBellShouldRing({
+      const skip = multBellSkipReason({
         settings: this.multBell,
         isNew,
         isMult: this.isMult(q),
@@ -152,9 +162,15 @@ function multBellPanel() {
         n1mmAgeMs: ts == null ? null : now - ts,
         msSinceLastDing: lastDingAt == null ? null : now - lastDingAt,
       });
-      if (!ring) return;
+      // Every new mult leaves a note in the popover, rung or not -- so "I
+      // didn't hear it" has an answer on the screen.
+      if (isNew && this.isMult(q)) {
+        this.multBellLast = { call: q.call, at: new Date(now).toISOString().slice(11, 16) + 'z', result: skip || 'rang' };
+      }
+      if (skip) return;
       lastDingAt = now;
-      this.ding(multDingCount(q));
+      const played = this.ding(multDingCount(q));
+      if (played && played !== 'running') this.multBellLast = { ...this.multBellLast, result: `rang, but the browser's audio is ${played}` };
     },
 
     // Make (or wake) the audio context. Must first run inside a user
@@ -177,14 +193,17 @@ function multBellPanel() {
       }
     },
 
+    // Returns the audio context's state when it played ('running' = heard),
+    // or null with no audio at all.
     ding(strikes = 1) {
       const ctx = this.ensureAudio();
-      if (!ctx) return;
+      if (!ctx) return null;
       try {
         for (let i = 0; i < Math.max(1, strikes); i += 1) {
           playDeskBell(ctx, this.multBell.volume, (i * MULTBELL_STRIKE_GAP_MS) / 1000);
         }
       } catch { /* no sound, no harm */ }
+      return ctx.state;
     },
 
     saveMultBell() {
