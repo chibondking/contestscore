@@ -431,6 +431,12 @@ function stats() {
         columns.push({ key: 'pts', label: 'Points', num: true });
         columns.push({ key: 'ppq', label: 'Pts/Q', num: true });
       }
+      // DXCC entities worked on each band (CJ, 2026-11-28); the Total row
+      // is the distinct count over the whole log, not the column's sum.
+      // Only when the logger sends a country prefix at all.
+      const withDxcc = qs.some((q) => q.countryprefix);
+      if (withDxcc) columns.push({ key: 'dxcc', label: 'DXCC', num: true });
+      const dxccByBand = new Map();
 
       const blank = () => {
         const o = { q: 0, pts: 0 };
@@ -446,6 +452,10 @@ function stats() {
         e[modeGroup(q.mode)] = (e[modeGroup(q.mode)] || 0) + 1;
         e.q += 1;
         e.pts += Number(q.points) || 0;
+        if (q.countryprefix) {
+          if (!dxccByBand.has(b)) dxccByBand.set(b, new Set());
+          dxccByBand.get(b).add(q.countryprefix);
+        }
       }
 
       const tot = blank();
@@ -455,14 +465,20 @@ function stats() {
           for (const g of groups) tot[g] += e[g] || 0;
           tot.q += e.q;
           tot.pts += e.pts;
-          return { key: b, band: bandLabel(b), ...e, ppq: e.q ? (e.pts / e.q).toFixed(2) : '0' };
+          return {
+            key: b, band: bandLabel(b), ...e, ppq: e.q ? (e.pts / e.q).toFixed(2) : '0',
+            dxcc: dxccByBand.has(b) ? dxccByBand.get(b).size : 0,
+          };
         });
 
       return {
         title: 'Station Summary — QSOs by Band & Mode',
         columns,
         rows,
-        totalRow: { band: 'Total', ...tot, ppq: tot.q ? (tot.pts / tot.q).toFixed(2) : '0' },
+        totalRow: {
+          band: 'Total', ...tot, ppq: tot.q ? (tot.pts / tot.q).toFixed(2) : '0',
+          dxcc: distinct(qs, (q) => q.countryprefix),
+        },
       };
     },
 
@@ -1172,5 +1188,5 @@ function scoreTile(total, selectedOp, isSavedLog) {
 // way lets Node's test runner exercise them directly, with no jsdom/DOM
 // stand-in needed -- see stats.test.js.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { isQtc, modeGroup, dedupeForScoring, presentModeGroups, scoreTile };
+  module.exports = { stats, isQtc, modeGroup, dedupeForScoring, presentModeGroups, scoreTile };
 }

@@ -101,3 +101,27 @@ describe('scoreTile (At a Glance, for 3830)', () => {
     assert.equal(scoreTile(0, 'ALL', false).value, '0');
   });
 });
+
+describe('Station Summary: DXCC per band', () => {
+  const { stats } = require('../../public/js/stats.js');
+  const q = (call, band, countryprefix, t) => ({
+    call, band, mode: 'CW', countryprefix, operator: 'K9CT', points: 3,
+    logged_at: `2026-11-28 0${t}:00:00`,
+  });
+
+  it('counts distinct entities on each band; Total is distinct over the log', () => {
+    const s = stats();
+    s.qsos = [q('DL1A', '20', 'DL', 1), q('DL2B', '20', 'DL', 2), q('F5X', '20', 'F', 3), q('DL1A', '40', 'DL', 4), q('JA1Z', '40', 'JA', 5)];
+    const card = s.summaryCard;
+    assert.ok(card.columns.some((c) => c.key === 'dxcc'));
+    const by = Object.fromEntries(card.rows.map((r) => [r.key, r.dxcc]));
+    assert.deepEqual(by, { 40: 2, 20: 2 });
+    assert.equal(card.totalRow.dxcc, 3); // DL, F, JA -- not 2 + 2
+  });
+
+  it('no DXCC column when the logger sends no country prefix', () => {
+    const s = stats();
+    s.qsos = [q('DL1A', '20', '', 1)];
+    assert.equal(s.summaryCard.columns.some((c) => c.key === 'dxcc'), false);
+  });
+});

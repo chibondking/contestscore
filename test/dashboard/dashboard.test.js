@@ -860,3 +860,17 @@ describe('map HUD', () => {
     assert.deepEqual({ ...d.hudRate() }, { value: 142, label: '10 min' });
   });
 });
+
+describe('dxccCount', () => {
+  it('distinct country prefixes over counted QSOs, QTCs and X-QSOs left out', () => {
+    const d = dashboard();
+    assert.equal(d.dxccCount(), null);
+    d.qsos = [
+      qso({ countryprefix: 'DL' }), qso({ call: 'DL2X', countryprefix: 'DL' }),
+      qso({ call: 'F5X', countryprefix: 'F' }),
+      qso({ call: 'JA1X', countryprefix: 'JA', is_claimed_qso: 0 }),
+      qso({ call: 'OH0X', countryprefix: 'OH0', exchange1: 'SQTC' }),
+    ];
+    assert.equal(d.dxccCount(), 2);
+  });
+});

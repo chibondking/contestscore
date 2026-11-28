@@ -391,10 +391,10 @@ body {
 /* Dim the numbers themselves while scoreStale() is true, not just the
    badge -- a viewer glancing at the big digits from across the room should
    see *something* off even without reading the small-print label. */
-.score-row--stale .metric__value { opacity: 0.45; }
+.score-row--stale .metric:not(.metric--live) .metric__value { opacity: 0.45; }
 
 /* Score */
-.score-row { display: flex; gap: 2rem; }
+.score-row { display: flex; flex-wrap: wrap; gap: 0.75rem 2rem; }
 
 /* Small in-card trend line for Score/Rate -- fills the extra width these
    cards picked up when Feed Status moved into the header. No axes/labels
