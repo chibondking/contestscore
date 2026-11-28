@@ -515,9 +515,11 @@ function dashboard() {
     cosbSummary() {
       const c = this.cosb;
       if (!c || c.status !== 'ok') return '';
+      const scope = this.cosbScopeLabel();
+      if (c.outside) return [`${c.count} in ${scope}`, c.section, 'you are outside this scope'].join(' · ');
       const lead = c.rank === 1 ? 'leading'
         : c.leader_gap != null ? `${Number(c.leader_gap).toLocaleString('en-US')} behind the leader` : '';
-      return [`#${c.rank} of ${c.count}`, c.section, lead].filter(Boolean).join(' · ');
+      return [`#${c.rank} of ${c.count}${scope ? ` in ${scope}` : ''}`, c.section, lead].filter(Boolean).join(' · ');
     },
 
     async fetchSolar() {

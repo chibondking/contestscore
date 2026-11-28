@@ -550,6 +550,7 @@ body {
    thicker rule, points ahead of us in red and behind us in green. */
 .cosb-summary { font-weight: 400; color: var(--muted); margin-left: 0.5rem; font-size: 0.85em; }
 .cosb-link { float: right; font-size: 0.75rem; color: var(--muted); }
+.cosb-scope { float: right; margin-right: 0.75rem; font: inherit; font-size: 0.75rem; text-transform: none; letter-spacing: 0; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0.1rem 0.3rem; }
 .cosb-updated { float: right; margin-right: 0.75rem; font-size: 0.75rem; font-weight: normal; color: var(--muted); text-transform: none; letter-spacing: 0; }
 .cosb-table .num { text-align: right; }
 .cosb-table tr.cosb-me td { background: color-mix(in srgb, var(--run) 18%, transparent); font-weight: 700; }

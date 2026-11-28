@@ -242,6 +242,17 @@
       <h2>
         Standings
         <span class="cosb-summary" x-text="cosbSummary()"></span>
+        <!-- Scope (src/cosb/scope.js): rank among the stations in one
+             continent or CQ zone. Offers only what this category has. -->
+        <select class="cosb-scope" :value="cosbScope" @change="setCosbScope($event.target.value)" aria-label="COSB scope">
+          <option value="world">World</option>
+          <template x-for="o in ((cosb.scopes && cosb.scopes.continents) || [])" :key="o.scope">
+            <option :value="o.scope" :selected="o.scope === cosbScope" x-text="o.label + ' (' + o.count + ')'"></option>
+          </template>
+          <template x-for="o in ((cosb.scopes && cosb.scopes.zones) || [])" :key="o.scope">
+            <option :value="o.scope" :selected="o.scope === cosbScope" x-text="o.label + ' (' + o.count + ')'"></option>
+          </template>
+        </select>
         <a class="cosb-link" :href="cosb.contest && cosb.contest.url" target="_blank" rel="noopener"
            :title="cosbTitle()">COSB</a>
         <span class="cosb-updated" x-text="cosbUpdatedLabel()"></span>
@@ -254,7 +265,7 @@
         <tbody>
           <template x-for="r in (cosb.rows || [])" :key="r.rank + r.call">
             <tr :class="{ 'cosb-me': r.me, 'cosb-break': r.break }">
-              <td x-text="r.rank"></td>
+              <td x-text="r.rank ?? '—'" :title="r.board_rank ? 'COSB rank ' + r.board_rank : ''"></td>
               <td class="cosb-call" x-text="r.call + (r.op ? ' (' + r.op + ')' : '')"></td>
               <td class="num" x-text="cosbNum(r.score)"></td>
               <td class="num" x-text="cosbNum(r.qsos)"></td>

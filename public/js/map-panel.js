@@ -1031,7 +1031,11 @@ function mapPanel() {
       const c = this.cosb;
       if (!c || c.status !== 'ok' || c.rank == null) return null;
       const me = (c.rows || []).find((r) => r.me);
-      return { call: (me && me.call) || this.stationCall() || '', rank: c.rank, count: c.count, section: c.section || '' };
+      const scope = this.cosbScopeLabel();
+      return {
+        call: (me && me.call) || this.stationCall() || '', rank: c.rank, count: c.count,
+        section: scope ? `${c.section || ''} · ${scope}` : c.section || '',
+      };
     },
   };
 }

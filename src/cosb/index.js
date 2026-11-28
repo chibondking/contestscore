@@ -23,6 +23,7 @@
 const { getLatestScore, getSetting, setSetting } = require('../db/queries');
 const { createCosbSource, COSB_BASE } = require('./source');
 const { createHamdataClient, resolveHamdataUrl } = require('../hamdata/client');
+const { isScope, scopeLabel, createLocator, scopeBoard, scopeChoices } = require('./scope');
 const config = require('../../config/default.json');
 
 const POLL_MS = 2 * 60000;
@@ -112,13 +113,17 @@ function buildView(st, call, follow = []) {
         break: n > 0 && k !== idx[n - 1] + 1,
       };
     });
+    // Scoped boards (scope.js) can carry us as an `outside` row: shown,
+    // not counted, not ranked.
+    const lead = sec.rows.find((r) => !r.outside) || sec.rows[0];
     return {
       ...base,
       status: 'ok',
       section: sec.label,
-      count: sec.rows.length,
+      count: sec.rows.filter((r) => !r.outside).length,
       rank: mine.rank,
-      leader_gap: sec.rows[0].score != null && mine.score != null ? sec.rows[0].score - mine.score : null,
+      outside: Boolean(mine.outside),
+      leader_gap: lead.score != null && mine.score != null ? lead.score - mine.score : null,
       rows,
     };
   }
@@ -141,6 +146,13 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
   const get = deps.getSetting || getSetting;
   const set = deps.setSetting || setSetting;
   const postUrl = deps.postUrl || `${COSB_BASE}/post/`;
+
+  // Continent / CQ zone of a call, for scoped standings (scope.js).
+  const locate = deps.locate || (() => {
+    const { resolveCall } = require('../analyze/geo');
+    const { getCachedLocation } = require('../db/queries');
+    return createLocator({ resolveCall, getCachedLocation, now });
+  })();
 
   let source = deps.source || null;
   if (!source) {
@@ -188,6 +200,10 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
       lastSt = st;
       lastCall = score.call;
       view = { ...buildView(st, score.call, getFollow()), logger_contest: score.contest };
+      if (view.status === 'ok') {
+        const sec = st.sections.find((s) => s.label === view.section);
+        view = { ...view, scope: 'world', scope_label: 'World', scopes: scopeChoices(sec, locate) };
+      }
     } catch (err) {
       // Keep the last good table, flagged, rather than blanking the panel.
       view = { ...view, error: err.message, error_at: new Date(now()).toISOString() };
@@ -201,7 +217,23 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
   }
 
   function emit() { if (io) io.emit('cosb:update', getView()); }
-  function getView() { return view; }
+  // The view, or (scope: "cont:EU", "zone:5" -- scope.js) the same view
+  // built from the board cut down to that scope. The followed stations stay
+  // as on the whole board.
+  function getView(scope) {
+    if (!scope || scope === 'world' || !isScope(scope) || !lastSt || view.status !== 'ok') return view;
+    const me = String(lastCall || '').toUpperCase();
+    const scoped = buildView(scopeBoard(lastSt, scope, locate, me), me, []);
+    return {
+      ...scoped,
+      follow: view.follow,
+      logger_contest: view.logger_contest,
+      scope,
+      scope_label: scopeLabel(scope),
+      scopes: view.scopes,
+      ...(view.error ? { error: view.error, error_at: view.error_at } : {}),
+    };
+  }
 
   // Admin page switch for the standings card.
   async function setStandings(on) {
