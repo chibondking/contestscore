@@ -721,6 +721,11 @@ body {
 }
 .multbell__btn:hover { color: var(--text); border-color: var(--muted); }
 .multbell__btn--on { color: var(--accent); border-color: var(--accent); }
+/* On, but no sound until a click: amber and pulsing, so a wall display
+   shows it needs one click after a reload. */
+.multbell__btn--blocked { color: var(--run); border-color: var(--run); animation: multbell-blocked 1.6s ease-in-out infinite; }
+@keyframes multbell-blocked { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .multbell__btn--blocked { animation: none; } }
 .multbell__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .multbell__panel {
   position: absolute;

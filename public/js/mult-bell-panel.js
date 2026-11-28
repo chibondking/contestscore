@@ -193,8 +193,16 @@ function multBellPanel() {
       if (this.multBell.enabled) this.ensureAudio();
     },
 
+    // 'off' | 'on' | 'blocked' (on, but the browser won't play sound until
+    // a click on the page) -- the header button's look and label.
+    multBellState() {
+      if (!this.multBell.enabled) return 'off';
+      return this.audioBlocked ? 'blocked' : 'on';
+    },
+
     multBellTitle() {
       if (!this.multBell.enabled) return 'Mult bell: off';
+      if (this.audioBlocked) return 'Mult bell: on, but the browser is holding sound back -- click anywhere on the page';
       return this.multBell.after > 0
         ? `Mult bell: on after ${this.multBell.after} mults (${this.multCount()} so far)`
         : 'Mult bell: on';
