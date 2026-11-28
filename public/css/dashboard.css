@@ -658,6 +658,9 @@ body {
 .map-hud__score { display: flex; flex-wrap: wrap; gap: 0 0.9rem; font-size: 0.85rem; }
 .map-hud__score b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
 .map-hud__score small { opacity: 0.7; }
+.map-hud__cosb { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.4rem; font-size: 0.85rem; }
+.map-hud__cosb b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.map-hud__cosb small { opacity: 0.7; }
 @keyframes map-hud-new { from { background: var(--green); background: color-mix(in srgb, var(--green) 35%, transparent); } to { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .map-hud__last { animation: none; } }
 @media (max-width: 640px) {

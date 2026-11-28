@@ -874,3 +874,14 @@ describe('dxccCount', () => {
     assert.equal(d.dxccCount(), 2);
   });
 });
+
+describe('hudCosb', () => {
+  it('the station, its rank and the field size once COSB lists it', () => {
+    const d = dashboard();
+    assert.equal(d.hudCosb(), null); // idle
+    d.cosb = { status: 'off' };
+    assert.equal(d.hudCosb(), null);
+    d.cosb = { status: 'ok', rank: 131, count: 298, section: 'SO-ALL HP (A) CW', rows: [{ call: 'K1AR' }, { call: 'WT2P', me: true }] };
+    assert.deepEqual({ ...d.hudCosb() }, { call: 'WT2P', rank: 131, count: 298, section: 'SO-ALL HP (A) CW' });
+  });
+});
