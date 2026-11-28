@@ -240,6 +240,29 @@
           <button type="button" class="map-band" :aria-pressed="mapBand === b" @click="mapBand = b" x-text="bandLabel(b)"></button>
         </template>
       </div>
+      <!-- Map HUD (mapHud()): once Score/Rate/Radios have scrolled up out
+           of sight, the map carries the newest QSO and the score so a
+           viewer can sit on the map. Overlaid on the map's top-left corner
+           (.map-stage is the positioning box for both maps); not part of
+           Save PNG, which draws only the SVG. -->
+      <div class="map-stage">
+      <div class="map-hud" x-show="showWorldMap && mapHud()" x-cloak aria-live="polite">
+        <template x-for="q in (lastWorked() ? [lastWorked()] : [])" :key="q.ext_id ?? q.id ?? (q.call + q.band + q.mode)">
+          <div class="map-hud__last">
+            <span class="map-hud__label">Last worked</span>
+            <span class="map-hud__call" x-text="q.call"></span>
+            <span class="chip chip--mult" x-show="isMult(q)" title="New multiplier (per N1MM)">MULT</span>
+            <span class="chip chip--qtc" x-show="isQtc(q)" title="QTC -- relayed traffic, not a new contact">QTC</span>
+            <span class="map-hud__meta" x-text="[bandLabel(q.band), q.mode].filter(Boolean).join(' ')"></span>
+          </div>
+        </template>
+        <div class="map-hud__score" x-show="score.total != null || hudRate()">
+          <span><b x-text="score.qsos ?? '—'"></b> QSOs</span>
+          <span><b x-text="score.mults ?? '—'"></b> mults</span>
+          <span><b x-text="score.total ?? '—'"></b> pts</span>
+          <span x-show="hudRate()"><b x-text="hudRate() ? hudRate().value : ''"></b>/hr <small x-text="hudRate() ? '(' + hudRate().label + ')' : ''"></small></span>
+        </div>
+      </div>
       <template x-if="showWorldMap && mapView() !== 'world'">
       <div id="secmap-body" x-init="loadSectionMap()">
         <div class="map-box secmap-box" x-show="sectionMapData">
@@ -358,6 +381,7 @@
          x-text="qsos.length === 0 ? 'No QSOs logged yet -- the map appears with the first contact.' : (mapBand === 'all' ? 'No located QSOs yet' : ('No located QSOs on ' + bandLabel(mapBand)))"></p>
       </div>
       </template>
+      </div><!-- .map-stage -->
     </section>
 
     <section class="card card--wide" id="operators" x-show="qsos.length > 0">
