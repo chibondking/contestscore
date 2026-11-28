@@ -147,6 +147,26 @@ function createApp({ broker, solar, cosb = null, env = process.env, now = Date.n
     }
   });
 
+  // The COSB contest list (ids + on-air status), stored in this hamdata's
+  // settings and refreshed from COSB at most every 10 min; and one logger
+  // contest's status, which the scoreboards' publishers check before
+  // posting (COSB rejects posts to a contest that isn't on air).
+  app.get('/cosb/contests', async (_req, res) => {
+    if (!cosb) return res.status(503).json({ error: 'COSB not configured', code: 'disabled' });
+    try { res.json(await cosb.contests()); } catch (err) { res.status(502).json({ error: err.message }); }
+  });
+
+  app.get('/cosb/contest-status', async (req, res) => {
+    if (!cosb) return res.status(503).json({ error: 'COSB not configured', code: 'disabled' });
+    const contest = String(req.query.contest || '');
+    const id = req.query.contest_id ? Number(req.query.contest_id) : null;
+    if (!/^[A-Za-z0-9 ._/-]{0,40}$/.test(contest) || (id != null && !(Number.isInteger(id) && id > 0 && id < 1e6))) {
+      return res.status(400).json({ error: 'invalid contest' });
+    }
+    if (!contest && !id) return res.status(400).json({ error: 'contest or contest_id required' });
+    try { res.json(await cosb.contestStatus({ contest, contestId: id })); } catch (err) { res.status(502).json({ error: err.message }); }
+  });
+
   app.get('/lookup/:call', async (req, res) => {
     const call = stripSuffix(req.params.call);
     if (!CALL_RE.test(call)) return res.status(400).json({ error: 'invalid callsign' });

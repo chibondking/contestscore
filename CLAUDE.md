@@ -118,6 +118,10 @@ passed that test so far:
     Basic auth, at most once per 2 min. The password never leaves the
     server; `COSB_USER`/`COSB_PASSWORD` in the environment override the
     Admin settings. Off if the logger already posts to COSB itself.
+    COSB rejects posts to a contest that isn't on air, so each post first
+    asks the contest's status (hamdata `/cosb/contest-status`) and is
+    skipped, with the reason as the Admin page's "Last post", unless it's
+    on air; a failed status check posts anyway (CJ, 2026-11-28).
   `COSB_ENABLED=false` turns the whole feature off for an instance;
 - **hamdata** (`hamdata/`, 2026-10-08) -- not a feature, plumbing: one
   shared process doing solar + callsign lookup for several contestscore
@@ -969,6 +973,13 @@ can't drift:
   name>[&contest_id=N]` -- one `src/cosb/source.js` reader for the box
   (scoreboard cached 2 min, on-air list 10 min, supported table a day;
   fetches only when asked). No token: public data, loopback only.
+  `GET /cosb/contests` (COSB's whole contest list: ids + on-air status) and
+  `GET /cosb/contest-status?contest=` (one logger contest's COSB contest
+  and status). The contest list and supported table are kept in hamdata's
+  `settings` (`cosb_contests`, `cosb_supported`), so a restart starts from
+  the last known list and serves it while COSB is down. Each box's hamdata
+  refreshes from COSB itself (at most every 10 min), so the boxes agree
+  without a sync path of their own.
 - `hamdata/import-solar.js` -- one-time seed of hamdata's history from an
   existing instance's DB.
 

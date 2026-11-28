@@ -6,7 +6,7 @@ const path = require('node:path');
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  parseContestList, parseSupported, parseScoreboard, resolveContest, contestKey,
+  parseContestList, parseSupported, parseScoreboard, resolveContest, findContest, contestKey,
 } = require('../../src/cosb/parse');
 
 const fx = (f) => fs.readFileSync(path.join(__dirname, '../fixtures/cosb', f), 'utf8');
@@ -84,5 +84,20 @@ describe('contest list + matching', () => {
 
   it('contestKey ignores case and punctuation', () => {
     assert.equal(contestKey('CQ-WW-CW'), contestKey('cq ww cw'));
+  });
+});
+
+describe('findContest (any status, for the publisher)', () => {
+  const sup = parseSupported(fx('supported.html'));
+  it('prefers on air, then coming, then closed; null when COSB has no match', () => {
+    const l = [
+      { id: 4, name: 'CWops Mini-CWT 1', status: 'closed' },
+      { id: 35, name: 'CWops Mini-CWT 3', status: 'coming' },
+    ];
+    assert.equal(findContest('CW-Ops', l, sup).id, 35);
+    l.push({ id: 34, name: 'CWops Mini-CWT 2', status: 'on_air' });
+    assert.equal(findContest('CW-Ops', l, sup).id, 34);
+    assert.equal(findContest('CW-Ops', [l[0]], sup).status, 'closed');
+    assert.equal(findContest('NO-SUCH', l, sup), null);
   });
 });

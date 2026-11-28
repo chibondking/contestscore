@@ -227,6 +227,10 @@
               <span class="metric__value" x-text="cosbLastLabel()"></span>
               <span class="metric__label">Last post</span>
             </div>
+            <div class="metric" x-show="cosbPublish && cosbPublish.contest">
+              <span class="metric__value" x-text="cosbContestLabel()"></span>
+              <span class="metric__label">COSB contest</span>
+            </div>
           </div>
           <div style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-bottom:1rem">
             <label>COSB login (callsign)
