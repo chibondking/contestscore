@@ -389,3 +389,23 @@ describe('scoped standings view', () => {
     assert.equal(svc.getView().rank, 11);
   });
 });
+
+describe('scoped standings: our own zone', () => {
+  it("comes from the logger's score, not the country file's default", async () => {
+    const locate = () => ({ continent: 'NA', zone: 5 }); // cty: every W is zone 5
+    const svc = createCosbService({
+      env: {},
+      deps: {
+        now: () => Date.parse('2026-11-28T05:20:00Z'), locate,
+        source: { standings: async () => ST },
+        getLatestScore: () => ({ contest: 'CQ-WW-CW', call: 'K9CT', cq_zone: '4', captured_at: '2026-11-28T05:19:00Z' }),
+        ...on(),
+      },
+    });
+    const v = await svc.poll();
+    assert.ok(v.scopes.zones.some((o) => o.scope === 'zone:4' && o.count === 1));
+    const z4 = svc.getView('zone:4');
+    assert.deepEqual([z4.rank, z4.count, z4.outside], [1, 1, false]);
+    assert.equal(svc.getView('zone:5').outside, true);
+  });
+});

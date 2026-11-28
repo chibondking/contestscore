@@ -182,6 +182,15 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
   // instead of on the next poll.
   let lastSt = null;
   let lastCall = null;
+  let lastZone = null; // our CQ zone, from the logger's Score broadcast
+
+  // locate(), except our own call takes the zone the logger reports -- the
+  // country file says zone 5 for any W call, and our own call is rarely in
+  // the lookup cache (seen live: WT2P, zone 4, filed under zone 5).
+  function locateHere(call) {
+    const loc = locate(call);
+    return call === String(lastCall || '').toUpperCase() && lastZone ? { ...loc, zone: lastZone } : loc;
+  }
 
   async function poll() {
     if (!cfg.enabled || polling) return view;
@@ -199,10 +208,12 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
       const st = await source.standings({ contest: score.contest, contestId: cfg.contestId });
       lastSt = st;
       lastCall = score.call;
+      const z = parseInt(score.cq_zone, 10);
+      lastZone = z >= 1 && z <= 40 ? z : null;
       view = { ...buildView(st, score.call, getFollow()), logger_contest: score.contest };
       if (view.status === 'ok') {
         const sec = st.sections.find((s) => s.label === view.section);
-        view = { ...view, scope: 'world', scope_label: 'World', scopes: scopeChoices(sec, locate) };
+        view = { ...view, scope: 'world', scope_label: 'World', scopes: scopeChoices(sec, locateHere) };
       }
     } catch (err) {
       // Keep the last good table, flagged, rather than blanking the panel.
@@ -223,7 +234,7 @@ function createCosbService({ io = null, emitter = null, env = process.env, deps 
   function getView(scope) {
     if (!scope || scope === 'world' || !isScope(scope) || !lastSt || view.status !== 'ok') return view;
     const me = String(lastCall || '').toUpperCase();
-    const scoped = buildView(scopeBoard(lastSt, scope, locate, me), me, []);
+    const scoped = buildView(scopeBoard(lastSt, scope, locateHere, me), me, []);
     return {
       ...scoped,
       follow: view.follow,
